@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "revision": 253,
-  "updatedAt": "2026-09-20T17:26:44.424Z",
+  "revision": 254,
+  "updatedAt": "2026-09-20T17:28:23.163Z",
   "teams": [
     {
       "id": 1,
@@ -374,72 +374,6 @@
         {
           "team": 3,
           "player": "Рыбнов Игорь",
-          "type": "goal"
-        }
-      ]
-    },
-    {
-      "id": 7,
-      "teamA": 6,
-      "teamB": 5,
-      "scoreA": null,
-      "scoreB": null,
-      "date": "2026-10-18",
-      "finished": false,
-      "events": [
-        {
-          "team": 6,
-          "player": "Кубышкин Дмитрий",
-          "type": "goal"
-        },
-        {
-          "team": 6,
-          "player": "Кубышкин Дмитрий",
-          "type": "goal"
-        },
-        {
-          "team": 6,
-          "player": "Корнилов Глеб",
-          "type": "goal"
-        },
-        {
-          "team": 5,
-          "player": "Носаков Василий",
-          "type": "goal"
-        },
-        {
-          "team": 5,
-          "player": "Носаков Василий",
-          "type": "goal"
-        },
-        {
-          "team": 5,
-          "player": "Носаков Василий",
-          "type": "goal"
-        },
-        {
-          "team": 5,
-          "player": "Носаков Василий",
-          "type": "goal"
-        },
-        {
-          "team": 5,
-          "player": "Тынянских Александр",
-          "type": "goal"
-        },
-        {
-          "team": 5,
-          "player": "Железняков Лев",
-          "type": "goal"
-        },
-        {
-          "team": 5,
-          "player": "Зимин Михаил",
-          "type": "goal"
-        },
-        {
-          "team": 5,
-          "player": "Дмитров Артем",
           "type": "goal"
         }
       ]
