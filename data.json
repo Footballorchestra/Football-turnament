@@ -1,7 +1,7 @@
 {
   "version": 4,
-  "revision": 239,
-  "updatedAt": "2026-09-20T15:42:16.846Z",
+  "revision": 244,
+  "updatedAt": "2026-09-20T15:50:01.925Z",
   "teams": [
     {
       "id": 1,
@@ -440,11 +440,6 @@
         {
           "team": 5,
           "player": "Дмитров Артем",
-          "type": "goal"
-        },
-        {
-          "team": 6,
-          "player": "Корнилов Глеб",
           "type": "goal"
         }
       ]
