@@ -1,7 +1,7 @@
 {
-  "version": 3,
-  "revision": 238,
-  "updatedAt": "2026-09-20T13:43:42.616Z",
+  "version": 4,
+  "revision": 239,
+  "updatedAt": "2026-09-20T15:42:16.846Z",
   "teams": [
     {
       "id": 1,
@@ -346,9 +346,9 @@
       "id": 6,
       "teamA": 2,
       "teamB": 3,
-      "date": "2026-09-15",
       "scoreA": 3,
       "scoreB": 2,
+      "date": "2026-09-15",
       "finished": true,
       "events": [
         {
@@ -382,9 +382,9 @@
       "id": 7,
       "teamA": 6,
       "teamB": 5,
-      "date": "2026-09-18",
       "scoreA": 3,
       "scoreB": 8,
+      "date": "2026-09-18",
       "finished": true,
       "events": [
         {
@@ -440,6 +440,11 @@
         {
           "team": 5,
           "player": "Дмитров Артем",
+          "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Корнилов Глеб",
           "type": "goal"
         }
       ]
