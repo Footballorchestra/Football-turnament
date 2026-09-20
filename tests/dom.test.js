@@ -136,7 +136,7 @@ function boot(options) {
                 '#admin-matches-list [data-action="match-open"][data-id="' + matchId + '"]'
             ));
         },
-        /** Кнопка отметки игрока в карточке матча: type = 'goal' | 'assist' */
+        /** Кнопка отметки игрока в карточке матча: type = 'goal' | 'yellow' | 'red' */
         markButton: (teamId, player, type) => document.querySelector(
             '.event-btn[data-action="match-event"][data-team="' + teamId + '"][data-player="' + player +
             '"][data-type="' + type + '"]'
@@ -200,7 +200,7 @@ test('навигация: переключение страниц, подсве�
     assert.equal(app.id('mobile-menu').classList.contains('hidden'), true, 'меню закрывается после перехода');
 });
 
-test('турнирная таблица: места, очки, разница мячей и форма', () => {
+test('турнирная таблица: места, очки и разница мячей (без столбца «Форма»)', () => {
     const app = boot();
 
     app.navigate('standings');
@@ -217,15 +217,16 @@ test('турнирная таблица: места, очки, разница м
     assert.equal(cells(rows[0])[0], '1', 'место в первом столбце');
     assert.deepEqual(teamOf(rows[0]), { badge: 'СП', name: 'Спартак' });
     assert.deepEqual(cells(rows[0]).slice(2, 8), ['1', '1', '0', '0', '2–1', '+1'], 'И, В, Н, П, мячи, РМ');
-    assert.equal(cells(rows[0])[9], '3', 'очки лидера');
+    assert.equal(cells(rows[0])[8], '3', 'очки лидера');
 
     assert.equal(teamOf(rows[1]).name, 'Динамо');
-    assert.equal(cells(rows[1])[9], '1');
+    assert.equal(cells(rows[1])[8], '1');
     assert.equal(teamOf(rows[3]).name, 'Локомотив');
-    assert.equal(cells(rows[3])[9], '0');
+    assert.equal(cells(rows[3])[8], '0');
 
-    // Форма показана точками в столбце «Форма» (в компактной строке телефона — свои точки)
-    assert.equal(rows[0].querySelectorAll('td:nth-last-child(2) .form-dot').length, 1, 'форма команды показана точками');
+    // «Формы» в таблице больше нет: последний столбец — очки, точек формы нет
+    assert.equal(rows[0].querySelectorAll('td').length, 9, 'место, команда, И, В, Н, П, мячи, РМ, очки');
+    assert.equal(rows[0].querySelectorAll('.form-dot').length, 0, 'форма команды не показывается');
 });
 
 test('команды: карточки, поиск и состав', () => {
@@ -247,7 +248,7 @@ test('команды: карточки, поиск и состав', () => {
     assert.equal(app.$$('#teams-grid article').length, 4);
 });
 
-test('лучшие игроки: страница собирает голы и голевые передачи с матчей', () => {
+test('лучшие бомбардиры: страница собирает голы и карточки с матчей', () => {
     const app = boot();
 
     // Пока записей нет — понятная подсказка вместо пустой таблицы
@@ -255,15 +256,15 @@ test('лучшие игроки: страница собирает голы и �
     assert.equal(app.activeSection(), 'page-players');
     assert.match(app.id('players-body').textContent, /ещё не отмечены/);
 
-    // Администратор отмечает в карточке матча два гола, пас и гол соперника
+    // Администратор отмечает в карточке матча два гола, жёлтую карточку и гол соперника
     app.login();
     app.openMatch(1);
     app.click(app.markButton(1, 'Иванов А.', 'goal'));
     app.click(app.markButton(1, 'Иванов А.', 'goal'));
-    app.click(app.markButton(1, 'Петров П.', 'assist'));
+    app.click(app.markButton(1, 'Петров П.', 'yellow'));
     app.click(app.markButton(2, 'Кузнецов К.', 'goal'));
 
-    // Страница обновилась: сверху бомбардир, при равных голах выше тот, у кого больше передач
+    // Страница обновилась: сверху бомбардир, при равных голах выше игрок без карточек
     app.navigate('players');
     const rows = Array.from(app.id('players-body').querySelectorAll('tr'));
     const numbers = (row) => Array.from(row.querySelectorAll('td.num')).map((cell) => cell.textContent.trim());
@@ -271,10 +272,10 @@ test('лучшие игроки: страница собирает голы и �
     assert.equal(rows.length, 3, 'показаны только игроки с записями');
     assert.deepEqual(rows.map((row) => row.querySelector('.player-name').textContent),
         ['Иванов А.', 'Кузнецов К.', 'Петров П.']);
-    assert.deepEqual(numbers(rows[0]), ['1', '2', '0'], 'место, голы, пасы');
+    assert.deepEqual(numbers(rows[0]), ['1', '2', '0', '0'], 'место, голы, жёлтые, красные');
     assert.match(rows[0].querySelector('.col-optional').textContent, /Спартак/, 'команда игрока показана');
-    assert.deepEqual(numbers(rows[1]), ['2', '1', '0']);
-    assert.deepEqual(numbers(rows[2]), ['3', '0', '1'], 'пас без голов — ниже гола');
+    assert.deepEqual(numbers(rows[1]), ['2', '1', '0', '0']);
+    assert.deepEqual(numbers(rows[2]), ['3', '0', '1', '0'], 'жёлтая карточка без голов — ниже гола');
 
     // Кнопка в меню ведёт на страницу
     app.click(app.$('[data-nav="players"]'));
@@ -299,6 +300,52 @@ test('матчи: фильтры «все», «завершённые», «пр�
 
     app.click(app.$('[data-filter="all"]'));
     assert.equal(app.$$('#matches-list .match-card').length, 4);
+});
+
+test('матч для посетителей: клик по карточке открывает детальный результат с составами и событиями', () => {
+    const app = boot();
+
+    // Сначала на странице матчей виден список
+    app.navigate('matches');
+    assert.equal(app.id('match-list-view').hidden, false, 'показан список матчей');
+    assert.equal(app.id('match-detail-view').hidden, true, 'детальный результат скрыт');
+    assert.equal(app.$$('#matches-list [data-action="match-public-open"]').length, 4, 'карточки матчей кликабельны');
+
+    // Клик по матчу открывает детальный результат: счёт, кто играл, голы и карточки
+    app.click(app.$('#matches-list [data-action="match-public-open"][data-id="1"]'));
+
+    assert.equal(app.id('match-list-view').hidden, true, 'список матчей скрылся');
+    assert.equal(app.id('match-detail-view').hidden, false, 'показан детальный результат');
+    assert.equal(app.activeSection(), 'page-matches');
+    assert.equal(app.window.location.hash, '#/match/1', 'у матча свой адрес');
+    assert.match(app.id('match-detail').textContent, /Спартак/);
+    assert.match(app.id('match-detail').textContent, /Локомотив/);
+    assert.equal(app.id('match-detail').querySelectorAll('.score-display').length, 1, 'счёт матча показан');
+
+    // Составы обеих команд: три игрока Спартака и два Локомотива
+    const squadRows = Array.from(app.id('match-detail').querySelectorAll('.squad-row'));
+    assert.deepEqual(squadRows.map((row) => row.querySelector('.squad-name').textContent),
+        ['Иванов А.', 'Петров П.', 'Сидоров С.', 'Кузнецов К.', 'Попов П.']);
+    assert.deepEqual(app.id('match-detail').querySelectorAll('.match-detail-team').length, 2);
+
+    // Администратор отмечает гол и жёлтую карточку — они видны в детальном результате
+    app.login();
+    app.openMatch(1);
+    app.click(app.markButton(1, 'Иванов А.', 'goal'));
+    app.click(app.markButton(1, 'Петров П.', 'yellow'));
+
+    app.navigate('matches');
+    app.click(app.$('#matches-list [data-action="match-public-open"][data-id="1"]'));
+
+    const marks = Array.from(app.id('match-detail').querySelectorAll('.squad-mark'));
+    assert.deepEqual(marks.map((mark) => mark.className.replace('squad-mark ', '') + ':' + mark.textContent.trim()),
+        ['squad-mark-goal:1', 'squad-mark-yellow:1'], 'видны гол и жёлтая карточка');
+
+    // Кнопка «Все матчи» возвращает список
+    app.click(app.button('match-public-back'));
+    assert.equal(app.id('match-list-view').hidden, false);
+    assert.equal(app.id('match-detail-view').hidden, true);
+    assert.equal(app.window.location.hash, '#/matches');
 });
 
 test('админка: вход только по паролю, сессия сохраняется, выход работает', () => {
@@ -600,7 +647,7 @@ test('админка: ввод счёта, переоткрытие, правк�
     assert.equal(app.id('admin-match-list-view').hidden, false);
 });
 
-test('админка: в карточке матча отмечаются голы и голевые передачи', () => {
+test('админка: в карточке матча отмечаются голы и карточки', () => {
     const app = boot();
     app.login();
 
@@ -608,9 +655,9 @@ test('админка: в карточке матча отмечаются гол
     assert.match(app.id('admin-match-score').textContent, /Спартак/);
     assert.match(app.id('admin-match-score').textContent, /Локомотив/);
 
-    // Состав обеих команд: у каждого игрока две отметки — мяч и бутса
+    // Состав обеих команд: у каждого игрока три отметки — гол и две карточки
     assert.equal(app.id('admin-match-events').querySelectorAll('.event-row').length, 5);
-    assert.equal(app.id('admin-match-events').querySelectorAll('.event-btn').length, 10);
+    assert.equal(app.id('admin-match-events').querySelectorAll('.event-btn').length, 15);
     assert.equal(app.id('admin-match-events').querySelectorAll('.event-btn.is-active').length, 0, 'записей ещё нет');
 
     // Нажатие на мяч записывает гол, иконка становится активной
@@ -624,29 +671,34 @@ test('админка: в карточке матча отмечаются гол
     app.click(app.markButton(1, 'Иванов А.', 'goal'));
     assert.equal(app.markButton(1, 'Иванов А.', 'goal').querySelector('.event-count').textContent, '2');
 
-    // Голевая передача — отдельная иконка
-    app.click(app.markButton(1, 'Петров П.', 'assist'));
-    assert.deepEqual(app.storedData().matches[0].events[2], { team: 1, player: 'Петров П.', type: 'assist' });
+    // Жёлтая карточка — отдельная отметка, гол при этом не засчитан
+    app.click(app.markButton(1, 'Петров П.', 'yellow'));
+    assert.deepEqual(app.storedData().matches[0].events[2], { team: 1, player: 'Петров П.', type: 'yellow' });
     assert.equal(app.markButton(1, 'Петров П.', 'goal').classList.contains('is-active'), false, 'гол не засчитан');
-    assert.equal(app.markButton(1, 'Петров П.', 'assist').classList.contains('is-active'), true);
+    assert.equal(app.markButton(1, 'Петров П.', 'yellow').classList.contains('is-active'), true);
+    assert.equal(app.markButton(1, 'Петров П.', 'yellow').getAttribute('title'), 'Жёлтая карточка');
 
-    // Гол игрока второй команды
+    // Красная карточка и гол игрока второй команды
+    app.click(app.markButton(2, 'Кузнецов К.', 'red'));
+    assert.equal(app.markButton(2, 'Кузнецов К.', 'red').getAttribute('title'), 'Красная карточка');
     app.click(app.markButton(2, 'Кузнецов К.', 'goal'));
     assert.equal(app.markButton(2, 'Кузнецов К.', 'goal').classList.contains('is-active'), true);
 
     // Подсказка сверяет записанные голы со счётом матча (2:1)
     assert.match(app.id('admin-match-score').textContent, /Записано голов: 3 из 3/);
 
-    // «Убрать последнюю запись» снимает один гол
+    // «Убрать последнюю запись» снимает последний гол первого игрока
     app.click(app.id('admin-match-events').querySelector('[data-action="match-event-undo"]'));
     assert.equal(app.markButton(1, 'Иванов А.', 'goal').querySelector('.event-count').textContent, '1');
-    assert.equal(app.storedData().matches[0].events.length, 3);
+    assert.equal(app.storedData().matches[0].events.length, 4);
 
-    // В списке матчей виден счёт и число записанных голов
+    // В списке матчей виден счёт, число записанных голов и карточек
     app.click(app.button('match-back'));
     const matchRow = app.id('admin-matches-list').querySelector('[data-action="match-open"][data-id="1"]');
     assert.match(matchRow.textContent, /Спартак 2 : 1 Локомотив/);
-    assert.equal(matchRow.querySelector('.admin-row-count').textContent.trim(), '2');
+    assert.equal(matchRow.querySelector('.admin-row-count-goal').textContent.trim(), '2');
+    assert.equal(matchRow.querySelector('.admin-row-count-yellow').textContent.trim(), '1');
+    assert.equal(matchRow.querySelector('.admin-row-count-red').textContent.trim(), '1');
 
     // Переименование игрока переносит его записи на новое имя
     app.openTeam('Спартак');

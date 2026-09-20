@@ -154,7 +154,7 @@ test('adminPasswordMatches: сравнение пароля', () => {
     assert.equal(L.adminPasswordMatches(undefined), false);
 });
 
-test('computeStandings: очки, разница мячей и форма команд', () => {
+test('computeStandings: очки, разница мячей и места команд', () => {
     const data = L.createDefaultData();
     const rows = L.computeStandings(data.teams, data.matches);
 
@@ -167,10 +167,7 @@ test('computeStandings: очки, разница мячей и форма ком
     assert.equal(spartak.goalsFor, 2);
     assert.equal(spartak.goalsAgainst, 1);
     assert.equal(spartak.goalDiff, 1);
-    assert.deepEqual(spartak.form, ['W']);
-
-    assert.equal(rows[1].form.join(''), 'D');
-    assert.equal(rows[3].form.join(''), 'L');
+    assert.equal('form' in spartak, false, 'формы команды в таблице больше нет');
 });
 
 test('computeStandings: сортировка по разнице мячей и по названию', () => {
@@ -354,54 +351,66 @@ test('данные старой версии сайта загружаются �
     assert.deepEqual(L.getStats(loaded.data), { teams: 4, matches: 4, players: 9, finished: 2, upcoming: 2, goals: 5 });
 });
 
-test('события матча: голы и голевые передачи', () => {
+test('события матча: голы и карточки', () => {
     let events = [];
 
     events = L.addEvent(events, 2, 'Петров П.', 'goal');
-    events = L.addEvent(events, 2, 'Петров П.', 'assist');
+    events = L.addEvent(events, 2, 'Петров П.', 'yellow');
+    events = L.addEvent(events, 2, 'Сидоров С.', 'red');
     events = L.addEvent(events, 1, 'Иванов А.', 'goal');
     const twoGoals = L.addEvent(events, 1, 'Иванов А.', 'goal');
 
-    assert.equal(twoGoals.length, 4);
+    assert.equal(twoGoals.length, 5);
     assert.equal(L.playerEventCount(twoGoals, 2, 'Петров П.', 'goal'), 1);
-    assert.equal(L.playerEventCount(twoGoals, 2, 'Петров П.', 'assist'), 1);
+    assert.equal(L.playerEventCount(twoGoals, 2, 'Петров П.', 'yellow'), 1);
+    assert.equal(L.playerEventCount(twoGoals, 2, 'Сидоров С.', 'red'), 1);
     assert.equal(L.playerEventCount(twoGoals, 1, 'Иванов А.', 'goal'), 2);
     assert.equal(L.playerEventCount(twoGoals, 1, 'иванов а.'), 2, 'без типа — все события игрока');
     assert.equal(L.playerEventCount(twoGoals, 9, 'Иванов А.', 'goal'), 0, 'чужая команда — ничего');
+    assert.equal(L.playerEventCount(twoGoals, 2, 'Петров П.', 'red'), 0, 'другой тип события не считается');
     assert.equal(L.countTeamEvents(twoGoals, 1), 2);
-    assert.equal(L.countTeamEvents(twoGoals, 1, 'assist'), 0);
+    assert.equal(L.countTeamEvents(twoGoals, 2, 'yellow'), 1);
+    assert.equal(L.countTeamEvents(twoGoals, 2, 'goal'), 1);
 
-    // Некорректные записи не добавляются
-    assert.equal(L.addEvent(twoGoals, 1, '', 'goal').length, 4);
-    assert.equal(L.addEvent(twoGoals, 1, 'Иванов А.', 'карточка').length, 4);
-    assert.equal(L.addEvent(twoGoals, null, 'Иванов А.', 'goal').length, 4);
+    // Некорректные записи не добавляются (голевых передач в новых данных нет)
+    assert.equal(L.addEvent(twoGoals, 1, '', 'goal').length, 5);
+    assert.equal(L.addEvent(twoGoals, 1, 'Иванов А.', 'карточка').length, 5);
+    assert.equal(L.addEvent(twoGoals, 1, 'Иванов А.', 'assist').length, 5);
+    assert.equal(L.addEvent(twoGoals, null, 'Иванов А.', 'goal').length, 5);
 
     // Убирается последняя запись игрока, исходный список не меняется
     const undone = L.removeLastEvent(twoGoals, 1, 'Иванов А.', 'goal');
     assert.equal(L.playerEventCount(undone, 1, 'Иванов А.', 'goal'), 1);
-    assert.equal(twoGoals.length, 4, 'исходный список не мутируется');
+    assert.equal(L.playerEventCount(L.removeLastEvent(twoGoals, 2, 'Петров П.', 'yellow'), 2, 'Петров П.', 'yellow'), 0);
+    assert.equal(twoGoals.length, 5, 'исходный список не мутируется');
 
     assert.equal(L.isEventType('goal'), true);
-    assert.equal(L.isEventType('assist'), true);
+    assert.equal(L.isEventType('yellow'), true);
+    assert.equal(L.isEventType('red'), true);
+    assert.equal(L.isEventType('assist'), false, 'голевые передачи больше не поддерживаются');
     assert.equal(L.isEventType('карточка'), false);
-    assert.equal(L.eventLabel('assist'), 'Голевой пас');
+    assert.equal(L.eventLabel('goal'), 'Гол');
+    assert.equal(L.eventLabel('yellow'), 'Жёлтая карточка');
+    assert.equal(L.eventLabel('red'), 'Красная карточка');
 });
 
 test('normalizeMatchEvents: остаются только корректные события команд матча', () => {
     const match = { teamA: 1, teamB: 2 };
     const result = L.normalizeMatchEvents([
         { team: 1, player: 'Иванов А.', type: 'goal' },
-        { team: 2, player: '  Кузнецов К.  ', type: 'assist' },
+        { team: 2, player: '  Кузнецов К.  ', type: 'yellow' },
+        { team: 1, player: 'Петров П.', type: 'red' },
         { team: 3, player: 'Чужой', type: 'goal' },
         { team: 1, player: '', type: 'goal' },
-        { team: 1, player: 'Петров П.', type: 'карточка' },
+        { team: 1, player: 'Голевой Г.', type: 'assist' },
         'мусор'
     ], match);
 
     assert.equal(result.repaired, true);
     assert.deepEqual(result.events, [
         { team: 1, player: 'Иванов А.', type: 'goal' },
-        { team: 2, player: 'Кузнецов К.', type: 'assist' }
+        { team: 2, player: 'Кузнецов К.', type: 'yellow' },
+        { team: 1, player: 'Петров П.', type: 'red' }
     ]);
 
     assert.deepEqual(L.normalizeMatchEvents(undefined, match), { events: [], repaired: false });
@@ -424,13 +433,13 @@ test('matchSquad: состав плюс игроки с записями, кот
 test('переименование игрока переносит его записи на новое имя', () => {
     const events = [
         { team: 1, player: 'Иванов А.', type: 'goal' },
-        { team: 2, player: 'Иванов А.', type: 'assist' }
+        { team: 2, player: 'Иванов А.', type: 'yellow' }
     ];
     const renamed = L.renamePlayerEvents(events, 1, 'Иванов А.', 'Иванов-старший');
 
     assert.deepEqual(renamed, [
         { team: 1, player: 'Иванов-старший', type: 'goal' },
-        { team: 2, player: 'Иванов А.', type: 'assist' }
+        { team: 2, player: 'Иванов А.', type: 'yellow' }
     ]);
     assert.equal(events[0].player, 'Иванов А.', 'исходный список не мутируется');
 });
@@ -467,10 +476,10 @@ test('normalizeData: события матчей сохраняются, «му�
 
     assert.equal(result.repaired, true, 'событие чужой команды — это исправление данных');
     assert.deepEqual(result.data.matches[0].events, [{ team: 1, player: 'Иванов А.', type: 'goal' }]);
-    assert.equal(result.data.version, 3, 'в данных отмечена новая версия формата');
+    assert.equal(result.data.version, 4, 'в данных отмечена новая версия формата');
 });
 
-test('лучшие игроки: сортировка по голам, затем по голевым передачам', () => {
+test('лучшие бомбардиры: сортировка по голам, затем по карточкам', () => {
     const data = {
         teams: [
             { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.'] },
@@ -482,7 +491,7 @@ test('лучшие игроки: сортировка по голам, зате�
                 events: [
                     { team: 1, player: 'Иванов А.', type: 'goal' },
                     { team: 1, player: 'Иванов А.', type: 'goal' },
-                    { team: 1, player: 'Петров П.', type: 'assist' },
+                    { team: 1, player: 'Петров П.', type: 'yellow' },
                     { team: 2, player: 'Сидоров С.', type: 'goal' }
                 ]
             },
@@ -490,7 +499,7 @@ test('лучшие игроки: сортировка по голам, зате�
                 id: 2, teamA: 2, teamB: 1, scoreA: 2, scoreB: 1, date: '2026-09-17', finished: true,
                 events: [
                     { team: 1, player: 'Петров П.', type: 'goal' },
-                    { team: 1, player: 'Иванов А.', type: 'assist' }
+                    { team: 1, player: 'Иванов А.', type: 'red' }
                 ]
             }
         ]
@@ -498,19 +507,20 @@ test('лучшие игроки: сортировка по голам, зате�
 
     const rows = L.computePlayerStats(data);
 
-    assert.deepEqual(rows.map((row) => row.player), ['Иванов А.', 'Петров П.', 'Сидоров С.']);
+    // Иванов — два гола, затем при равных голах выше тот, у кого меньше карточек
+    assert.deepEqual(rows.map((row) => row.player), ['Иванов А.', 'Сидоров С.', 'Петров П.']);
     assert.deepEqual(
-        rows.map((row) => ({ goals: row.goals, assists: row.assists, total: row.total, team: row.teamName })),
+        rows.map((row) => ({ goals: row.goals, yellow: row.yellow, red: row.red, team: row.teamName })),
         [
-            { goals: 2, assists: 1, total: 3, team: 'Спартак' },
-            { goals: 1, assists: 1, total: 2, team: 'Спартак' },
-            { goals: 1, assists: 0, total: 1, team: 'Динамо' }
+            { goals: 2, yellow: 0, red: 1, team: 'Спартак' },
+            { goals: 1, yellow: 0, red: 0, team: 'Динамо' },
+            { goals: 1, yellow: 1, red: 0, team: 'Спартак' }
         ]
     );
     assert.deepEqual(rows.map((row) => row.place), [1, 2, 3]);
 });
 
-test('лучшие игроки: равные голы сравниваются по передачам, игроки без записей не попадают', () => {
+test('лучшие бомбардиры: при равных голах выше игрок без карточек, игроки без записей не попадают', () => {
     const data = {
         teams: [
             { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.', 'Сидоров С.'] },
@@ -521,19 +531,19 @@ test('лучшие игроки: равные голы сравниваются 
             events: [
                 { team: 1, player: 'Петров П.', type: 'goal' },
                 { team: 1, player: 'Иванов А.', type: 'goal' },
-                { team: 1, player: 'Иванов А.', type: 'assist' }
+                { team: 1, player: 'Иванов А.', type: 'yellow' }
             ]
         }]
     };
 
     const rows = L.computePlayerStats(data);
 
-    // Один гол у обоих, но у Иванова есть передача — он выше
-    assert.deepEqual(rows.map((row) => row.player), ['Иванов А.', 'Петров П.']);
+    // Один гол у обоих, но у Иванова есть жёлтая карточка — он ниже
+    assert.deepEqual(rows.map((row) => row.player), ['Петров П.', 'Иванов А.']);
     assert.equal(rows.some((row) => row.player === 'Сидоров С.'), false, 'игрок без записей не показан');
 });
 
-test('лучшие игроки: пустые данные и записи игроков без заявки', () => {
+test('лучшие бомбардиры: пустые данные и записи игроков без заявки', () => {
     assert.deepEqual(L.computePlayerStats(null), []);
     assert.deepEqual(L.computePlayerStats({ teams: [], matches: [] }), []);
 
@@ -552,7 +562,7 @@ test('лучшие игроки: пустые данные и записи иг�
 
     assert.equal(rows.length, 2, 'неизвестный тип события не считается');
     assert.deepEqual(rows[0], {
-        teamId: 1, teamName: 'Спартак', player: 'Ушедший У.', goals: 1, assists: 0, place: 1, total: 1
+        teamId: 1, teamName: 'Спартак', player: 'Ушедший У.', goals: 1, yellow: 0, red: 0, place: 1
     });
     assert.equal(rows[1].teamName, 'Неизвестная команда');
 });

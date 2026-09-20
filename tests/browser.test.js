@@ -450,13 +450,13 @@ test('админ-панель целиком в браузере: вход, ко
     await clickInView(page, '[data-action="match-back"]');
     assert.equal(await sectionVisible(page, 'admin-match-list-view'), true, 'список матчей вернулся');
 
-    // Отмеченный гол сразу виден на публичной странице «Лучшие игроки»
+    // Отмеченный гол сразу виден на публичной странице «Лучшие бомбардиры»
     await page.click('[data-nav="players"]');
-    assert.equal(await sectionVisible(page, 'page-players'), true, 'открылась страница лучших игроков');
+    assert.equal(await sectionVisible(page, 'page-players'), true, 'открылась страница лучших бомбардиров');
     const bestPlayers = await page.$eval('#players-body tr', (row) =>
         Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent.trim()));
     assert.equal(bestPlayers.some((cell) => cell.includes('Тестовый Игрок')), true, 'игрок с голом попал в список');
-    assert.deepEqual(bestPlayers.slice(3), ['1', '0'], 'в таблице: один гол, ноль передач');
+    assert.deepEqual(bestPlayers.slice(3), ['1', '0', '0'], 'в таблице: один гол, ноль жёлтых и красных карточек');
 
     // Ничья 2:2 приносит по одному очку каждой команде
     const after = await dataSnapshot(page);

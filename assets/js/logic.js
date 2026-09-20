@@ -28,7 +28,8 @@
         storageKey: 'footballTournamentData',
         sessionKey: 'footballTournamentAdmin',
         // 3 — в матчах появились события (голы и голевые передачи игроков)
-        dataVersion: 3,
+        // 4 — вместо голевых передач отмечаются жёлтые и красные карточки
+        dataVersion: 4,
         // Пароль администратора. Внимание: это демонстрационная защита,
         // на статическом хостинге реальную авторизацию без сервера сделать нельзя
         // (подробности — в README.md).
@@ -36,7 +37,6 @@
         maxTeamNameLength: 30,
         maxPlayerNameLength: 40,
         maxScore: 99,
-        formLength: 5,
         recentMatches: 3
     };
 
@@ -485,13 +485,11 @@
                 goalsFor: 0,
                 goalsAgainst: 0,
                 goalDiff: 0,
-                points: 0,
-                form: []
+                points: 0
             });
         });
 
-        // Для формы («последние матчи») важен хронологический порядок
-        var finished = sortMatches((matches || []).filter(isFinished), 'asc');
+        var finished = (matches || []).filter(isFinished);
 
         finished.forEach(function (match) {
             var teamA = rows.get(toInt(match.teamA));
@@ -512,21 +510,15 @@
                 teamA.wins += 1;
                 teamA.points += 3;
                 teamB.losses += 1;
-                teamA.form.push('W');
-                teamB.form.push('L');
             } else if (match.scoreA < match.scoreB) {
                 teamB.wins += 1;
                 teamB.points += 3;
                 teamA.losses += 1;
-                teamA.form.push('L');
-                teamB.form.push('W');
             } else {
                 teamA.draws += 1;
                 teamB.draws += 1;
                 teamA.points += 1;
                 teamB.points += 1;
-                teamA.form.push('D');
-                teamB.form.push('D');
             }
         });
 
@@ -534,7 +526,6 @@
 
         standings.forEach(function (row) {
             row.goalDiff = row.goalsFor - row.goalsAgainst;
-            row.form = row.form.slice(-CONFIG.formLength);
         });
 
         standings.sort(function (a, b) {
@@ -573,8 +564,9 @@
     }
 
     /**
-     * Лучшие игроки: голы и голевые передачи по всем матчам турнира.
-     * Сортировка — сначала по голам, затем по передачам, затем по имени.
+     * Лучшие бомбардиры: голы, жёлтые и красные карточки по всем матчам турнира.
+     * Сортировка — сначала по голам (больше — выше), затем по карточкам
+     * (меньше — выше), затем по имени.
      * В список попадают только те, у кого есть хотя бы одна запись:
      * это таблица результативности, а не весь заявочный лист.
      */
@@ -597,7 +589,8 @@
                     teamName: team ? team.name : 'Неизвестная команда',
                     player: name,
                     goals: 0,
-                    assists: 0
+                    yellow: 0,
+                    red: 0
                 };
                 rows.push(byKey[key]);
             }
@@ -621,34 +614,36 @@
 
                 if (event.type === 'goal') {
                     row.goals += 1;
+                } else if (event.type === 'yellow') {
+                    row.yellow += 1;
                 } else {
-                    row.assists += 1;
+                    row.red += 1;
                 }
             });
         });
 
         rows.sort(function (a, b) {
             return b.goals - a.goals ||
-                b.assists - a.assists ||
+                a.yellow - b.yellow ||
+                a.red - b.red ||
                 String(a.player).localeCompare(String(b.player), 'ru') ||
                 String(a.teamName).localeCompare(String(b.teamName), 'ru');
         });
 
         rows.forEach(function (row, index) {
             row.place = index + 1;
-            row.total = row.goals + row.assists;
         });
 
         return rows;
     }
 
     /* ------------------------------------------------------------------ */
-    /* События матча: голы и голевые передачи                             */
+    /* События матча: голы и карточки                                      */
     /* ------------------------------------------------------------------ */
 
-    /** Типы событий: гол и голевая передача (порядок — как в интерфейсе). */
-    var EVENT_TYPES = ['goal', 'assist'];
-    var EVENT_LABELS = { goal: 'Гол', assist: 'Голевой пас' };
+    /** Типы событий: гол, жёлтая и красная карточки (порядок — как в интерфейсе). */
+    var EVENT_TYPES = ['goal', 'yellow', 'red'];
+    var EVENT_LABELS = { goal: 'Гол', yellow: 'Жёлтая карточка', red: 'Красная карточка' };
 
     function isEventType(value) {
         return EVENT_TYPES.indexOf(value) !== -1;
@@ -668,7 +663,7 @@
     }
 
     /**
-     * Приводит события матча к корректному виду: остаются только голы и пасы
+     * Приводит события матча к корректному виду: остаются только голы и карточки
      * игроков тех двух команд, которые играют в этом матче.
      */
     function normalizeMatchEvents(rawEvents, match) {
@@ -714,7 +709,7 @@
         });
     }
 
-    /** Сколько раз игрок забил (или отдал пас) — 0, если записей нет. */
+    /** Сколько раз у игрока отмечено событие указанного типа — 0, если записей нет. */
     function playerEventCount(events, teamId, player, type) {
         var name = cleanText(player).toLowerCase();
         var count = 0;

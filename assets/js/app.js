@@ -35,6 +35,8 @@
         admin: false,
         route: 'home',
         matchesFilter: 'all',
+        /** Открытый матч на публичной странице матчей (null — показывается список). */
+        publicMatchId: null,
         /* Турнирная таблица: компактный вид (без горизонтальной прокрутки).
            Влияет только на телефонах — остальные размеры экрана показывают все столбцы. */
         standingsCompact: true,
@@ -188,20 +190,6 @@
 
         return '<span class="team-badge ' + L.badgeColorForTeam(team.id) + (small ? ' team-badge-sm' : '') +
             '" aria-hidden="true">' + esc(L.getTeamInitials(team.name)) + '</span>';
-    }
-
-    /** Точки «форма» — последние результаты команды (В/Н/П). */
-    function formDots(form) {
-        if (!form || !form.length) {
-            return '<span class="admin-muted" title="Нет завершённых матчей">—</span>';
-        }
-
-        var titles = { W: 'Победа', D: 'Ничья', L: 'Поражение' };
-        var classes = { W: 'form-w', D: 'form-d', L: 'form-l' };
-
-        return '<span class="form-row">' + form.map(function (result) {
-            return '<span class="form-dot ' + classes[result] + '" title="' + esc(titles[result]) + '"></span>';
-        }).join('') + '</span>';
     }
 
     function statusPill(match) {
@@ -852,33 +840,84 @@
             '<p class="empty-state">Предстоящих матчей нет</p>';
     }
 
-    /** Карточка матча для публичных списков. */
+    /**
+     * Карточка матча для публичных списков.
+     * Это кнопка: нажатие открывает детальный результат матча (#/match/<номер>).
+     */
     function matchCard(match) {
         var teamA = L.findTeam(state.data.teams, match.teamA);
         var teamB = L.findTeam(state.data.teams, match.teamB);
 
         return '' +
-            '<article class="match-card ' + (match.finished ? 'finished' : 'upcoming') + '">' +
-                '<div class="flex items-center gap-2 sm:gap-3">' +
-                    '<div class="flex items-center gap-2 flex-1 min-w-0">' +
+            '<button type="button" class="match-card ' + (match.finished ? 'finished' : 'upcoming') + '"' +
+                ' data-action="match-public-open" data-id="' + match.id + '" title="Подробности матча">' +
+                '<span class="flex items-center gap-2 sm:gap-3">' +
+                    '<span class="flex items-center gap-2 flex-1 min-w-0">' +
                         teamBadge(teamA, true) +
                         '<span class="font-medium truncate">' + esc(teamA ? teamA.name : 'Команда удалена') + '</span>' +
-                    '</div>' +
-                    '<div class="px-1.5 sm:px-2 text-center">' +
+                    '</span>' +
+                    '<span class="px-1.5 sm:px-2 text-center">' +
                         (match.finished
                             ? '<span class="score-display">' + match.scoreA + ' : ' + match.scoreB + '</span>'
                             : '<span class="text-dark-500 text-sm">против</span>') +
-                    '</div>' +
-                    '<div class="flex items-center gap-2 flex-1 min-w-0 justify-end">' +
+                    '</span>' +
+                    '<span class="flex items-center gap-2 flex-1 min-w-0 justify-end">' +
                         '<span class="font-medium truncate text-right">' + esc(teamB ? teamB.name : 'Команда удалена') + '</span>' +
                         teamBadge(teamB, true) +
-                    '</div>' +
-                '</div>' +
-                '<div class="mt-2 text-xs text-dark-600 flex flex-wrap items-center gap-3">' +
+                    '</span>' +
+                '</span>' +
+                '<span class="mt-2 text-xs text-dark-600 flex flex-wrap items-center gap-3">' +
                     '<span class="inline-flex items-center gap-1">' + icon('calendar') + esc(L.formatDate(match.date, 'long')) + '</span>' +
                     statusPill(match) +
-                '</div>' +
-            '</article>';
+                    matchSummary(match) +
+                '</span>' +
+            '</button>';
+    }
+
+    /**
+     * Короткая сводка событий матча: голы, жёлтые и красные карточки (иконка и число).
+     * markClass — набор классов: на публичных страницах .match-mark,
+     * в списке админки — .admin-row-count.
+     */
+    function matchSummary(match, markClass) {
+        return summaryMarks(Array.isArray(match.events) ? match.events : [], markClass);
+    }
+
+    /**
+     * Имена классов отметок перечислены явно: Tailwind собирает только те классы,
+     * которые целиком встречаются в исходниках, поэтому части имён не склеиваются.
+     */
+    var SUMMARY_CLASSES = {
+        'match-mark': {
+            goal: 'match-mark match-mark-goal',
+            yellow: 'match-mark match-mark-yellow',
+            red: 'match-mark match-mark-red'
+        },
+        'admin-row-count': {
+            goal: 'admin-row-count admin-row-count-goal',
+            yellow: 'admin-row-count admin-row-count-yellow',
+            red: 'admin-row-count admin-row-count-red'
+        }
+    };
+
+    /** Отметки событий матча: иконка и количество (нулевые не показываются). */
+    function summaryMarks(events, markClass) {
+        var classes = SUMMARY_CLASSES[markClass] || SUMMARY_CLASSES['match-mark'];
+        var types = [
+            { type: 'goal', icon: 'ball' },
+            { type: 'yellow', icon: 'card-yellow' },
+            { type: 'red', icon: 'card-red' }
+        ];
+
+        return types.map(function (item) {
+            var count = events.filter(function (event) {
+                return event.type === item.type;
+            }).length;
+
+            return count
+                ? '<span class="' + classes[item.type] + '">' + icon(item.icon) + count + '</span>'
+                : '';
+        }).join('');
     }
 
     function renderStandings() {
@@ -910,7 +949,7 @@
                             teamBadge({ id: row.id, name: row.name }, true) +
                             '<span class="font-medium">' + esc(row.name) + '</span>' +
                         '</div>' +
-                        '<span class="row-detail">' + detail + ' · ' + formDots(row.form) + '</span>' +
+                        '<span class="row-detail">' + detail + '</span>' +
                     '</td>' +
                     '<td class="num">' + row.played + '</td>' +
                     '<td class="num text-green-700 col-optional">' + row.wins + '</td>' +
@@ -918,7 +957,6 @@
                     '<td class="num text-red-700 col-optional">' + row.losses + '</td>' +
                     '<td class="num col-optional">' + row.goalsFor + '–' + row.goalsAgainst + '</td>' +
                     '<td class="num font-medium ' + diffClass + '">' + (row.goalDiff > 0 ? '+' : '') + row.goalDiff + '</td>' +
-                    '<td class="num col-optional">' + formDots(row.form) + '</td>' +
                     '<td class="num font-bold text-primary-900">' + row.points + '</td>' +
                 '</tr>';
         }).join('');
@@ -971,8 +1009,8 @@
     }
 
     /**
-     * Лучшие игроки: бомбардиры и ассистенты по всем матчам турнира.
-     * Сортировка — по голам, затем по голевым передачам (см. computePlayerStats).
+     * Лучшие бомбардиры: голы и карточки по всем матчам турнира.
+     * Сортировка — по голам, затем по карточкам (см. computePlayerStats).
      */
     function renderPlayers() {
         var body = $('players-body');
@@ -984,9 +1022,9 @@
         var rows = L.computePlayerStats(state.data);
 
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="5" class="empty-state">' +
+            body.innerHTML = '<tr><td colspan="6" class="empty-state">' +
                 (state.data.matches.length
-                    ? 'Голы и голевые передачи ещё не отмечены — их вносит администратор в карточке матча'
+                    ? 'Голы и карточки ещё не отмечены — их вносит администратор в карточке матча'
                     : 'Матчи ещё не добавлены') +
             '</td></tr>';
             return;
@@ -1007,12 +1045,35 @@
                     '</div>' +
                 '</td>' +
                 '<td class="num player-goals">' + row.goals + '</td>' +
-                '<td class="num">' + row.assists + '</td>' +
+                '<td class="num player-yellow">' + row.yellow + '</td>' +
+                '<td class="num player-red">' + row.red + '</td>' +
             '</tr>';
         }).join('');
     }
 
     function renderMatches() {
+        var listView = $('match-list-view');
+        var detailView = $('match-detail-view');
+        var match = findMatch(state.publicMatchId);
+
+        if (!match) {
+            state.publicMatchId = null;
+        }
+
+        if (listView) {
+            listView.hidden = Boolean(match);
+        }
+
+        if (detailView) {
+            detailView.hidden = !match;
+        }
+
+        // Открыт конкретный матч — показываем детальный результат вместо списка
+        if (match) {
+            renderPublicMatch(match);
+            return;
+        }
+
         var list = L.selectMatches(state.data.matches, state.matchesFilter);
 
         qsa('[data-filter]').forEach(function (button) {
@@ -1023,6 +1084,113 @@
             '<p class="empty-state card">' +
                 (state.data.matches.length ? 'По этому фильтру матчей нет' : 'Матчи ещё не добавлены') +
             '</p>';
+    }
+
+    /** Хэш-адрес детального результата матча. */
+    function matchHash(matchId) {
+        return '#/match/' + L.toInt(matchId);
+    }
+
+    /** Открывает детальный результат матча: составы, голы и карточки. */
+    function openPublicMatch(matchId) {
+        var match = findMatch(matchId);
+
+        if (!match) {
+            return;
+        }
+
+        state.publicMatchId = L.toInt(match.id);
+        applyRoute('matches', { matchId: state.publicMatchId, hash: matchHash(state.publicMatchId) });
+    }
+
+    /** Возвращает список матчей (закрывает детальный результат). */
+    function closePublicMatch() {
+        state.publicMatchId = null;
+        applyRoute('matches', { matchId: null, hash: '#/matches' });
+    }
+
+    /** Строка игрока в публичном составе: голы, жёлтая и красная карточки. */
+    function squadRow(match, teamId, player) {
+        var goals = L.playerEventCount(match.events, teamId, player, 'goal');
+        var yellow = L.playerEventCount(match.events, teamId, player, 'yellow');
+        var red = L.playerEventCount(match.events, teamId, player, 'red');
+        var marks = '';
+
+        if (goals) {
+            marks += '<span class="squad-mark squad-mark-goal">' + icon('ball') + goals + '</span>';
+        }
+
+        if (yellow) {
+            marks += '<span class="squad-mark squad-mark-yellow">' + icon('card-yellow') + yellow + '</span>';
+        }
+
+        if (red) {
+            marks += '<span class="squad-mark squad-mark-red">' + icon('card-red') + red + '</span>';
+        }
+
+        return '<div class="squad-row">' +
+            '<span class="squad-name">' + esc(player) + '</span>' +
+            (marks ? '<span class="squad-marks">' + marks + '</span>' : '') +
+        '</div>';
+    }
+
+    /** Колонка команды в детальном результате: кто играл, кто забил, у кого карточки. */
+    function squadColumn(match, team, teamId, teamName) {
+        var players = L.matchSquad(team, match.events, teamId);
+        var rows = players.length
+            ? players.map(function (player) {
+                return squadRow(match, teamId, player);
+            }).join('')
+            : '<p class="text-dark-500 text-sm">Состав не заполнен</p>';
+
+        return '<section class="squad-column">' +
+            '<h3 class="squad-team">' + esc(teamName) + '</h3>' +
+            rows +
+        '</section>';
+    }
+
+    /** Детальный результат матча для посетителей сайта. */
+    function renderPublicMatch(match) {
+        var box = $('match-detail');
+
+        if (!box) {
+            return;
+        }
+
+        var teamA = L.findTeam(state.data.teams, match.teamA);
+        var teamB = L.findTeam(state.data.teams, match.teamB);
+        var nameA = teamA ? teamA.name : 'Команда удалена';
+        var nameB = teamB ? teamB.name : 'Команда удалена';
+        var events = Array.isArray(match.events) ? match.events : [];
+        var hint = L.isFinished(match)
+            ? 'Записано голов: ' + (L.countTeamEvents(match.events, match.teamA, 'goal') +
+                L.countTeamEvents(match.events, match.teamB, 'goal')) + ' из ' + (match.scoreA + match.scoreB) +
+                ' — мяч отмечает гол, прямоугольники — жёлтую и красную карточки.'
+            : (events.length
+                ? 'Счёт ещё не сохранён — отметки внесены заранее.'
+                : 'Матч ещё не сыгран: счёт, голы и карточки появятся после матча.');
+
+        box.innerHTML =
+            '<div class="flex flex-wrap items-center justify-between gap-2 mb-3">' +
+                '<span class="inline-flex items-center gap-1 text-xs text-dark-600">' + icon('calendar') +
+                    esc(L.formatDate(match.date, 'long')) + '</span>' +
+                statusPill(match) +
+            '</div>' +
+            '<div class="match-detail-score">' +
+                '<span class="match-detail-team">' + teamBadge(teamA, true) +
+                    '<span class="match-detail-name">' + esc(nameA) + '</span></span>' +
+                (match.finished
+                    ? '<span class="score-display">' + match.scoreA + ' : ' + match.scoreB + '</span>'
+                    : '<span class="text-dark-500 text-sm">против</span>') +
+                '<span class="match-detail-team">' +
+                    '<span class="match-detail-name">' + esc(nameB) + '</span>' + teamBadge(teamB, true) +
+                '</span>' +
+            '</div>' +
+            '<p class="match-detail-hint">' + esc(hint) + '</p>' +
+            '<div class="match-detail-squads">' +
+                squadColumn(match, teamA, match.teamA, nameA) +
+                squadColumn(match, teamB, match.teamB, nameB) +
+            '</div>';
     }
 
     /** Полная перерисовка всех страниц (публичных и админских). */
@@ -1234,7 +1402,7 @@
 
     /**
      * Раздел «Матчи»: список матчей (сначала прошедшие, затем предстоящие)
-     * либо карточка выбранного матча со счётом, голами и голевыми передачами.
+     * либо карточка выбранного матча со счётом, голами и карточками.
      */
     function renderAdminMatches() {
         var listView = $('admin-match-list-view');
@@ -1289,15 +1457,13 @@
         list.innerHTML = parts.join('');
     }
 
-    /** Строка матча в списке: дата, «Добрик 2 : 1 Оля», статус и число записанных голов. */
+    /** Строка матча в списке: дата, «Добрик 2 : 1 Оля», статус, голы и карточки. */
     function matchListRow(match) {
         var teamA = L.getTeamName(state.data.teams, match.teamA);
         var teamB = L.getTeamName(state.data.teams, match.teamB);
         var score = L.isFinished(match)
             ? '<span class="admin-row-score">' + match.scoreA + ' : ' + match.scoreB + '</span>'
             : '<span class="admin-row-score admin-muted">—</span>';
-        var goals = L.countTeamEvents(match.events, match.teamA, 'goal') +
-            L.countTeamEvents(match.events, match.teamB, 'goal');
 
         return '<button type="button" class="admin-row" data-action="match-open" data-id="' + match.id + '">' +
             '<span class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0">' +
@@ -1306,13 +1472,13 @@
             '</span>' +
             '<span class="admin-row-meta">' +
                 statusPill(match) +
-                (goals ? '<span class="admin-row-count">' + icon('ball') + goals + '</span>' : '') +
+                matchSummary(match, 'admin-row-count') +
                 icon('back', 'admin-row-arrow') +
             '</span>' +
         '</button>';
     }
 
-    /** Карточка матча: счёт, состав обеих команд и отметки голов и пасов. */
+    /** Карточка матча: счёт, состав обеих команд и отметки голов и карточек. */
     function renderAdminMatchCard(match) {
         var scoreBox = $('admin-match-score');
         var eventsBox = $('admin-match-events');
@@ -1330,8 +1496,8 @@
         var goalsB = L.countTeamEvents(match.events, match.teamB, 'goal');
         var hint = L.isFinished(match)
             ? 'Записано голов: ' + (goalsA + goalsB) + ' из ' + (match.scoreA + match.scoreB) +
-                ' — мяч отмечает гол, бутса голевой пас'
-            : 'Счёт ещё не введён, но голы и голевые передачи можно отметить уже сейчас.';
+                ' — мяч отмечает гол, прямоугольник — жёлтую или красную карточку'
+            : 'Счёт ещё не введён, но голы и карточки можно отметить уже сейчас.';
 
         scoreBox.innerHTML =
             '<div class="flex flex-wrap items-center justify-between gap-2 mb-3">' +
@@ -1374,7 +1540,7 @@
             '" aria-label="Счёт команды ' + esc(teamName) + '">';
     }
 
-    /** Колонка одной команды в карточке матча: игроки и кнопки «гол» / «пас». */
+    /** Колонка одной команды в карточке матча: игроки, гол и две карточки. */
     function matchTeamColumn(match, team, teamId, teamName) {
         var players = L.matchSquad(team, match.events, teamId);
         var rows = players.length
@@ -1389,17 +1555,19 @@
         '</div>';
     }
 
-    /** Строка игрока: имя и две отметки — мяч (гол) и бутса (голевой пас). */
+    /** Строка игрока: имя и три отметки — гол, жёлтая и красная карточки. */
     function matchPlayerRow(match, teamId, player) {
         var goals = L.playerEventCount(match.events, teamId, player, 'goal');
-        var assists = L.playerEventCount(match.events, teamId, player, 'assist');
+        var yellow = L.playerEventCount(match.events, teamId, player, 'yellow');
+        var red = L.playerEventCount(match.events, teamId, player, 'red');
 
         return '<div class="event-row">' +
             '<span class="truncate">' + esc(player) + '</span>' +
             '<span class="event-actions">' +
                 eventButton(match.id, teamId, player, 'goal', goals) +
-                eventButton(match.id, teamId, player, 'assist', assists) +
-                (goals + assists
+                eventButton(match.id, teamId, player, 'yellow', yellow) +
+                eventButton(match.id, teamId, player, 'red', red) +
+                (goals + yellow + red
                     ? '<button type="button" class="event-btn event-btn-undo" data-action="match-event-undo" data-id="' +
                         match.id + '" data-team="' + teamId + '" data-player="' + esc(player) +
                         '" title="Убрать последнюю запись">' + icon('undo') + '</button>'
@@ -1408,16 +1576,27 @@
         '</div>';
     }
 
+    /**
+     * Вид кнопок отметок. Имена классов перечислены явно: Tailwind собирает только
+     * те классы, которые целиком встречаются в исходниках.
+     */
+    var EVENT_BUTTONS = {
+        goal: { icon: 'ball', cls: 'event-btn-goal' },
+        yellow: { icon: 'card-yellow', cls: 'event-btn-yellow' },
+        red: { icon: 'card-red', cls: 'event-btn-red' }
+    };
+
     /** Кнопка отметки: неактивная — записи нет, активная — показывает количество. */
     function eventButton(matchId, teamId, player, type, count) {
         var label = L.eventLabel(type);
+        var view = EVENT_BUTTONS[type] || EVENT_BUTTONS.goal;
 
-        return '<button type="button" class="event-btn' + (count ? ' is-active' : '') + '"' +
+        return '<button type="button" class="event-btn ' + view.cls + (count ? ' is-active' : '') + '"' +
             ' data-action="match-event" data-id="' + matchId + '" data-team="' + teamId +
             '" data-player="' + esc(player) + '" data-type="' + type + '"' +
             ' aria-pressed="' + (count ? 'true' : 'false') + '" title="' + esc(label) + '"' +
             ' aria-label="' + esc(label) + ': ' + esc(player) + '">' +
-            icon(type === 'goal' ? 'ball' : 'boot') +
+            icon(view.icon) +
             (count ? '<span class="event-count">' + count + '</span>' : '') +
         '</button>';
     }
@@ -1519,13 +1698,22 @@
 
     var ROUTES = { home: true, standings: true, teams: true, matches: true, players: true, admin: true };
 
+    /**
+     * Разбор хэша. Обычные адреса («#/matches») открывают страницу,
+     * а «#/match/5» — страницу матчей с детальным результатом матча №5.
+     */
     function parseHash() {
         var raw = String(window.location.hash || '')
             .replace(/^#\/?/, '')
             .replace(/\/+$/, '')
             .toLowerCase();
+        var parts = raw.split('/');
 
-        return ROUTES[raw] ? raw : 'home';
+        if (parts[0] === 'match') {
+            return { route: 'matches', matchId: L.toInt(parts[1]) };
+        }
+
+        return { route: ROUTES[raw] ? raw : 'home', matchId: null };
     }
 
     function askConfirm(question) {
@@ -1590,6 +1778,15 @@
         var target = ROUTES[route] ? route : 'home';
         var sectionId = sectionForRoute(target);
 
+        /* Какая страница открыта: список матчей или детальный результат матча.
+           opts.matchId === null — показать список, число — открыть матч,
+           undefined — оставить как есть (внутренняя перерисовка). */
+        if (target === 'matches' && opts.matchId !== undefined) {
+            state.publicMatchId = L.toInt(opts.matchId);
+        } else if (target !== 'matches') {
+            state.publicMatchId = null;
+        }
+
         state.route = target;
 
         qsa('.page-section').forEach(function (section) {
@@ -1615,7 +1812,7 @@
         }
 
         if (opts.updateHash !== false) {
-            var hash = '#/' + target;
+            var hash = opts.hash || ('#/' + target);
 
             if (window.location.hash !== hash) {
                 window.location.hash = hash;
@@ -1974,8 +2171,8 @@
     }
 
     /**
-     * Отметка в карточке матча: игрок забил гол или отдал голевую передачу.
-     * Повторное нажатие добавляет ещё одну такую же запись (дубль, второй пас).
+     * Отметка в карточке матча: игрок забил гол или получил карточку.
+     * Повторное нажатие добавляет ещё одну такую же запись (дубль, вторая карточка).
      */
     function recordMatchEvent(matchId, teamId, player, type) {
         var match = findMatch(matchId);
@@ -2155,7 +2352,7 @@
         var oldName = team.players[index];
         team.players[index] = check.value;
 
-        // Записи игрока в матчах (голы и пасы) переносим на новое имя,
+        // Записи игрока в матчах (голы и карточки) переносим на новое имя,
         // иначе в карточке матча появился бы «старый» игрок
         state.data.matches.forEach(function (match) {
             if (L.toInt(match.teamA) === team.id || L.toInt(match.teamB) === team.id) {
@@ -2249,7 +2446,8 @@
         var index = element.hasAttribute('data-index') ? L.toInt(element.getAttribute('data-index')) : null;
 
         if (action === 'navigate') {
-            applyRoute(element.getAttribute('data-page') || 'home');
+            /* Переход по меню всегда закрывает открытый матч и открывает список */
+            applyRoute(element.getAttribute('data-page') || 'home', { matchId: null });
         } else if (action === 'toggle-menu') {
             var menu = $('mobile-menu');
 
@@ -2284,6 +2482,10 @@
             openMatch(id);
         } else if (action === 'match-back') {
             closeMatch();
+        } else if (action === 'match-public-open') {
+            openPublicMatch(id);
+        } else if (action === 'match-public-back') {
+            closePublicMatch();
         } else if (action === 'match-event') {
             recordMatchEvent(id, teamId, element.getAttribute('data-player'), element.getAttribute('data-type'));
         } else if (action === 'match-event-undo') {
@@ -2415,7 +2617,9 @@
         document.addEventListener('keydown', handleKeydown);
 
         window.addEventListener('hashchange', function () {
-            applyRoute(parseHash(), { updateHash: false, scroll: false });
+            var parsed = parseHash();
+
+            applyRoute(parsed.route, { updateHash: false, scroll: false, matchId: parsed.matchId });
         });
     }
 
@@ -2453,7 +2657,10 @@
 
         bindEvents();
         renderAll();
-        applyRoute(parseHash(), { updateHash: false });
+
+        var route = parseHash();
+
+        applyRoute(route.route, { updateHash: false, matchId: route.matchId });
         fillSyncInputs();
         renderSyncStatus();
 

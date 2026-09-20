@@ -381,13 +381,20 @@
         -webkit-overflow-scrolling: touch;
     }
 
-    /* --- Карточка матча --- */
+    /* --- Карточка матча ---
+       Это кнопка: клик открывает детальный результат матча (#/match/<номер>) */
     .match-card {
+        display: block;
+        width: 100%;
+        text-align: left;
+        font: inherit;
+        color: inherit;
         background: #fff;
         border: 1px solid #dadce0;
         border-radius: 4px;
         padding: 1rem;
-        transition: box-shadow 0.2s;
+        cursor: pointer;
+        transition: box-shadow 0.2s, border-color 0.2s;
     }
 
     .match-card:hover {
@@ -402,6 +409,123 @@
         border-left: 3px solid #fbbc04;
     }
 
+    /* --- Отметки событий в публичной карточке матча: голы и карточки --- */
+    .match-mark {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        font-weight: 500;
+    }
+
+    .match-mark .icon {
+        width: 0.9rem;
+        height: 0.9rem;
+    }
+
+    .match-mark-yellow { color: #b58100; }
+    .match-mark-red { color: #c62828; }
+
+    /* --- Детальный результат матча: счёт, составы, голы и карточки --- */
+    .match-detail-score {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 0.5rem 1rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .match-detail-team {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+        font-weight: 700;
+    }
+
+    .match-detail-name {
+        max-width: 12rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .match-detail-hint {
+        margin-bottom: 1rem;
+        text-align: center;
+        font-size: 0.75rem;
+        color: #5f6368;
+    }
+
+    .match-detail-squads {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #dadce0;
+    }
+
+    @media (min-width: 768px) {
+        .match-detail-squads {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 1.5rem;
+        }
+    }
+
+    .squad-team {
+        margin-bottom: 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #5f6368;
+    }
+
+    .squad-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.35rem 0;
+        border-bottom: 1px solid #e8eaed;
+        font-size: 0.875rem;
+    }
+
+    .squad-row:last-child {
+        border-bottom: 0;
+    }
+
+    .squad-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .squad-marks {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex: none;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .squad-mark {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.15rem;
+    }
+
+    .squad-mark .icon {
+        width: 0.9rem;
+        height: 0.9rem;
+    }
+
+    .squad-mark-goal { color: #2e7d32; }
+    .squad-mark-yellow { color: #b58100; }
+    .squad-mark-red { color: #c62828; }
+
     .score-display {
         background: #202124;
         color: #fff;
@@ -411,24 +535,6 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         letter-spacing: 0.05em;
     }
-
-    /* --- Форма команды: последние матчи (В/Н/П) --- */
-    .form-row {
-        display: inline-flex;
-        gap: 0.25rem;
-        align-items: center;
-    }
-
-    .form-dot {
-        width: 0.625rem;
-        height: 0.625rem;
-        border-radius: 9999px;
-        display: inline-block;
-    }
-
-    .form-w { background: #2e7d32; }
-    .form-d { background: #9aa0a6; }
-    .form-l { background: #c62828; }
 
     /* --- Статусы матча --- */
     .status-pill {
@@ -502,7 +608,7 @@
         margin-top: 0.25rem;
     }
 
-    /* --- Лучшие игроки: таблица бомбардиров и ассистентов --- */
+    /* --- Лучшие бомбардиры: голы и карточки --- */
     .players-table .player-name {
         font-weight: 500;
     }
@@ -510,6 +616,14 @@
     .players-table .player-goals {
         font-weight: 700;
         color: #1b5e20;
+    }
+
+    .players-table .player-yellow {
+        color: #b58100;
+    }
+
+    .players-table .player-red {
+        color: #c62828;
     }
 
     /* --- Админ-панель --- */
@@ -638,6 +752,11 @@
         gap: 0.25rem;
     }
 
+    /* Сводка событий в строке матча: голы, жёлтые и красные карточки */
+    .admin-row-count-goal { color: #81c784; }
+    .admin-row-count-yellow { color: #fdd835; }
+    .admin-row-count-red { color: #ef5350; }
+
     /* Счёт в строке матча: «Добрик 2 : 1 Оля» */
     .admin-row-score {
         font-weight: 700;
@@ -651,7 +770,7 @@
         transform: rotate(180deg);
     }
 
-    /* --- Карточка матча: счёт, голы и голевые передачи --- */
+    /* --- Карточка матча: счёт, голы и карточки --- */
     .admin-score-line {
         display: flex;
         align-items: center;
@@ -691,7 +810,7 @@
         flex: none;
     }
 
-    /* Отметки игрока: серая иконка — записи нет, зелёная — есть (с количеством) */
+    /* Отметки игрока: серая иконка — записи нет, цветная — есть (с количеством) */
     .event-btn {
         display: inline-flex;
         align-items: center;
@@ -724,6 +843,19 @@
         background: #1b5e20;
         border-color: #2e7d32;
         color: #fff;
+    }
+
+    /* Активные отметки карточек — в цвете самой карточки */
+    .event-btn-yellow.is-active {
+        background: #3f3510;
+        border-color: #f9a825;
+        color: #fdd835;
+    }
+
+    .event-btn-red.is-active {
+        background: #402020;
+        border-color: #c62828;
+        color: #ef9a9a;
     }
 
     .event-btn-undo {
@@ -885,7 +1017,7 @@
         height: 1rem;
     }
 
-    /* --- Отметки голов и голевых пасов: 40×40 — удобно нажимать пальцем --- */
+    /* --- Отметки голов и карточек: 40×40 — удобно нажимать пальцем --- */
     .event-btn {
         min-width: 2.5rem;
         height: 2.5rem;
@@ -928,7 +1060,7 @@
         overflow-wrap: anywhere;
     }
 
-    /* --- Лучшие игроки: на телефоне команда уходит под имя игрока --- */
+    /* --- Лучшие бомбардиры: на телефоне команда уходит под имя игрока --- */
     .players-table .col-optional {
         display: none;
     }
