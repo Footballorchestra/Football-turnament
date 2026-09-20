@@ -1496,8 +1496,9 @@
         var goalsB = L.countTeamEvents(match.events, match.teamB, 'goal');
         var hint = L.isFinished(match)
             ? 'Записано голов: ' + (goalsA + goalsB) + ' из ' + (match.scoreA + match.scoreB) +
-                ' — мяч отмечает гол, прямоугольник — жёлтую или красную карточку'
-            : 'Счёт ещё не введён, но голы и карточки можно отметить уже сейчас.';
+                '. Мяч — гол, прямоугольник — карточка, кнопка «Убрать» снимает последнюю запись игрока'
+            : 'Счёт ещё не введён, но голы и карточки можно отметить уже сейчас. ' +
+                'Кнопка «Убрать» снимает последнюю запись игрока.';
 
         scoreBox.innerHTML =
             '<div class="flex flex-wrap items-center justify-between gap-2 mb-3">' +
@@ -1560,6 +1561,10 @@
         var goals = L.playerEventCount(match.events, teamId, player, 'goal');
         var yellow = L.playerEventCount(match.events, teamId, player, 'yellow');
         var red = L.playerEventCount(match.events, teamId, player, 'red');
+        var last = lastPlayerEvent(match.events, teamId, player);
+        var undoLabel = last
+            ? 'Убрать последнюю запись: ' + L.eventLabel(last.type)
+            : 'Записей ещё нет — убирать нечего';
 
         return '<div class="event-row">' +
             '<span class="truncate">' + esc(player) + '</span>' +
@@ -1567,13 +1572,32 @@
                 eventButton(match.id, teamId, player, 'goal', goals) +
                 eventButton(match.id, teamId, player, 'yellow', yellow) +
                 eventButton(match.id, teamId, player, 'red', red) +
-                (goals + yellow + red
-                    ? '<button type="button" class="event-btn event-btn-undo" data-action="match-event-undo" data-id="' +
-                        match.id + '" data-team="' + teamId + '" data-player="' + esc(player) +
-                        '" title="Убрать последнюю запись">' + icon('undo') + '</button>'
-                    : '') +
+                /* Кнопка видна всегда: пока записей нет — она приглушена,
+                   после отметки снимает последнюю запись игрока */
+                '<button type="button" class="event-btn event-btn-undo' + (last ? '' : ' is-empty') + '"' +
+                    ' data-action="match-event-undo" data-id="' + match.id + '" data-team="' + teamId +
+                    '" data-player="' + esc(player) + '"' +
+                    ' title="' + esc(undoLabel) + '" aria-label="' + esc(undoLabel) + ': ' + esc(player) + '">' +
+                    icon('undo') + '<span class="event-btn-text">Убрать</span>' +
+                '</button>' +
             '</span>' +
         '</div>';
+    }
+
+    /** Последняя запись игрока в матче (нужна, чтобы показать, что именно уберётся). */
+    function lastPlayerEvent(events, teamId, player) {
+        var list = Array.isArray(events) ? events : [];
+        var name = L.cleanText(player).toLowerCase();
+
+        for (var i = list.length - 1; i >= 0; i--) {
+            var event = list[i];
+
+            if (L.toInt(event.team) === L.toInt(teamId) && L.cleanText(event.player).toLowerCase() === name) {
+                return event;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -2193,7 +2217,7 @@
         saveData(L.eventLabel(type) + ': ' + player + (team ? ' (' + team.name + ')' : ''));
     }
 
-    /** Убирает последнюю запись игрока в матче. */
+    /** Убирает последнюю запись игрока в матче (гол или карточку). */
     function undoMatchEvent(matchId, teamId, player) {
         var match = findMatch(matchId);
 
@@ -2201,8 +2225,15 @@
             return;
         }
 
+        var last = lastPlayerEvent(match.events, teamId, player);
+
+        if (!last) {
+            toast('У игрока «' + player + '» пока нет записей');
+            return;
+        }
+
         match.events = L.removeLastEvent(match.events, teamId, player);
-        saveData('Запись игрока «' + player + '» убрана');
+        saveData('Запись игрока «' + player + '» убрана (' + L.eventLabel(last.type) + ')');
     }
 
     /**

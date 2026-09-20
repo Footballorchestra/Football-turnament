@@ -586,7 +586,7 @@ test('админка: ввод счёта, переоткрытие, правк�
     app.navigate('standings');
     const spartakCells = Array.from(app.id('standings-body').querySelector('tr').querySelectorAll('td'))
         .map((cell) => cell.textContent.trim());
-    assert.equal(spartakCells[9], '6', 'Спартак: 3 + 3 очка');
+    assert.equal(spartakCells[8], '6', 'Спартак: 3 + 3 очка');
     assert.equal(spartakCells[2], '2', 'сыграно два матча');
 
     // Переоткрытие матча убирает его из зачёта
@@ -598,7 +598,7 @@ test('админка: ввод счёта, переоткрытие, правк�
     app.navigate('standings');
     const afterReopen = Array.from(app.id('standings-body').querySelector('tr').querySelectorAll('td'))
         .map((cell) => cell.textContent.trim());
-    assert.equal(afterReopen[9], '3');
+    assert.equal(afterReopen[8], '3');
 
     // Редактирование матча через форму
     app.navigate('admin');
@@ -655,10 +655,22 @@ test('админка: в карточке матча отмечаются гол
     assert.match(app.id('admin-match-score').textContent, /Спартак/);
     assert.match(app.id('admin-match-score').textContent, /Локомотив/);
 
-    // Состав обеих команд: у каждого игрока три отметки — гол и две карточки
+    // Состав обеих команд: три отметки (гол и две карточки) и кнопка «Убрать» у каждого игрока
     assert.equal(app.id('admin-match-events').querySelectorAll('.event-row').length, 5);
-    assert.equal(app.id('admin-match-events').querySelectorAll('.event-btn').length, 15);
+    assert.equal(app.id('admin-match-events').querySelectorAll('[data-action="match-event"]').length, 15);
+    assert.equal(app.id('admin-match-events').querySelectorAll('[data-action="match-event-undo"]').length, 5);
     assert.equal(app.id('admin-match-events').querySelectorAll('.event-btn.is-active').length, 0, 'записей ещё нет');
+
+    const undoButtonFor = (player) => app.id('admin-match-events')
+        .querySelector('[data-action="match-event-undo"][data-player="' + player + '"]');
+    const matchOneEvents = () => app.storedData().matches.find((match) => match.id === 1).events || [];
+
+    // Кнопка «Убрать» всегда на виду: пока записей нет — приглушена и данные не меняет
+    assert.equal(undoButtonFor('Иванов А.').classList.contains('is-empty'), true);
+    assert.match(undoButtonFor('Иванов А.').textContent, /Убрать/, 'у кнопки есть подпись');
+    app.click(undoButtonFor('Иванов А.'));
+    assert.equal(matchOneEvents().length, 0, 'убирать нечего — данные не меняются');
+    assert.match(app.id('toast-container').textContent, /пока нет записей/);
 
     // Нажатие на мяч записывает гол, иконка становится активной
     app.click(app.markButton(1, 'Иванов А.', 'goal'));
@@ -666,6 +678,10 @@ test('админка: в карточке матча отмечаются гол
     assert.equal(app.markButton(1, 'Иванов А.', 'goal').classList.contains('is-active'), true);
     assert.equal(app.markButton(1, 'Иванов А.', 'goal').getAttribute('aria-pressed'), 'true');
     assert.equal(app.markButton(1, 'Иванов А.', 'goal').querySelector('.event-count').textContent, '1');
+
+    // Кнопка «Убрать» знает, что именно снимет (последняя запись игрока)
+    assert.equal(undoButtonFor('Иванов А.').classList.contains('is-empty'), false, 'появилась запись');
+    assert.equal(undoButtonFor('Иванов А.').getAttribute('title'), 'Убрать последнюю запись: Гол');
 
     // Второй гол того же игрока — счётчик растёт
     app.click(app.markButton(1, 'Иванов А.', 'goal'));
@@ -678,6 +694,9 @@ test('админка: в карточке матча отмечаются гол
     assert.equal(app.markButton(1, 'Петров П.', 'yellow').classList.contains('is-active'), true);
     assert.equal(app.markButton(1, 'Петров П.', 'yellow').getAttribute('title'), 'Жёлтая карточка');
 
+    // У Петрова кнопка «Убрать» подсказывает, что снимет именно жёлтую карточку
+    assert.equal(undoButtonFor('Петров П.').getAttribute('title'), 'Убрать последнюю запись: Жёлтая карточка');
+
     // Красная карточка и гол игрока второй команды
     app.click(app.markButton(2, 'Кузнецов К.', 'red'));
     assert.equal(app.markButton(2, 'Кузнецов К.', 'red').getAttribute('title'), 'Красная карточка');
@@ -687,10 +706,10 @@ test('админка: в карточке матча отмечаются гол
     // Подсказка сверяет записанные голы со счётом матча (2:1)
     assert.match(app.id('admin-match-score').textContent, /Записано голов: 3 из 3/);
 
-    // «Убрать последнюю запись» снимает последний гол первого игрока
-    app.click(app.id('admin-match-events').querySelector('[data-action="match-event-undo"]'));
+    // «Убрать» снимает последнюю запись первого игрока (случайное нажатие отменяется)
+    app.click(undoButtonFor('Иванов А.'));
     assert.equal(app.markButton(1, 'Иванов А.', 'goal').querySelector('.event-count').textContent, '1');
-    assert.equal(app.storedData().matches[0].events.length, 4);
+    assert.equal(matchOneEvents().length, 4);
 
     // В списке матчей виден счёт, число записанных голов и карточек
     app.click(app.button('match-back'));
@@ -699,6 +718,12 @@ test('админка: в карточке матча отмечаются гол
     assert.equal(matchRow.querySelector('.admin-row-count-goal').textContent.trim(), '2');
     assert.equal(matchRow.querySelector('.admin-row-count-yellow').textContent.trim(), '1');
     assert.equal(matchRow.querySelector('.admin-row-count-red').textContent.trim(), '1');
+
+    // Случайную карточку тоже можно снять: у Петрова убираем жёлтую
+    app.openMatch(1);
+    app.click(undoButtonFor('Петров П.'));
+    assert.equal(app.markButton(1, 'Петров П.', 'yellow').classList.contains('is-active'), false, 'жёлтая снята');
+    assert.equal(matchOneEvents().length, 3);
 
     // Переименование игрока переносит его записи на новое имя
     app.openTeam('Спартак');
