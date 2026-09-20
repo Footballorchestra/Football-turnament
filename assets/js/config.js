@@ -33,6 +33,17 @@ window.FT_CONFIG.autoPublishDelayMs = window.FT_CONFIG.autoPublishDelayMs === un
     ? 12000
     : window.FT_CONFIG.autoPublishDelayMs;
 
+/* --- Фото игроков: подготовка в браузере и загрузка в репозиторий ---
+   Значения читает assets/js/photo.js: фото сжимается до квадрата maxSize
+   с качеством quality и кладётся файлом в папку folder репозитория. */
+window.FT_CONFIG.photo = Object.assign({
+    folder: 'assets/photos/',          // папка с фото в репозитории сайта
+    maxSize: 512,                      // сторона квадрата, px
+    quality: 0.82,                     // качество JPEG (0…1)
+    maxSourceBytes: 15 * 1024 * 1024,  // исходный файл: до 15 МБ
+    maxResultBytes: 400 * 1024         // после сжатия: до 400 КБ
+}, window.FT_CONFIG.photo || {});
+
 /* --- Ключи в localStorage --- */
 window.FT_CONFIG.storageKeys = Object.assign({
     token: 'ft.githubToken',        // токен GitHub (только на устройстве администратора)

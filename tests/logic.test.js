@@ -251,6 +251,93 @@ test('searchMatches: поиск по части названия команды'
     assert.equal(matches.length, 3, 'исходный список матчей не меняется');
 });
 
+test('фото игроков: запись, чтение, перенос при переименовании и очистка', () => {
+    const data = L.createDefaultData();
+    const path = 'assets/photos/ivanov-a-1a2b3c.jpg';
+
+    assert.equal(L.photoKey(1, 'Иванов А.'), '1|иванов а.', 'ключ — команда и имя в нижнем регистре');
+    assert.equal(L.getPhoto(data, 1, 'Иванов А.'), '', 'фото ещё нет');
+    assert.equal(L.hasPhoto(data, 1, 'Иванов А.'), false);
+
+    L.setPhoto(data, 1, 'Иванов А.', path);
+    assert.equal(L.getPhoto(data, 1, 'Иванов А.'), path);
+    assert.equal(L.getPhoto(data, 1, 'иванов а.'), path, 'регистр имени не важен');
+    assert.equal(L.hasPhoto(data, 1, 'Иванов А.'), true);
+    assert.equal(L.getPhoto(data, 2, 'Иванов А.'), '', 'у другой команды своё фото');
+
+    // Пути проверяются: всё, кроме файла внутри папки фотографий, отбрасывается
+    assert.equal(L.isValidPhotoPath('assets/photos/ok-name.jpg'), true);
+    assert.equal(L.isValidPhotoPath('../secrets.jpg'), false);
+    assert.equal(L.isValidPhotoPath('/assets/photos/ok.jpg'), false);
+    assert.equal(L.isValidPhotoPath('assets/photos/ok.jpg?x=1'), false);
+    assert.equal(L.isValidPhotoPath('javascript:alert(1)'), false);
+    assert.equal(L.isValidPhotoPath('assets/photos/плохое имя.jpg'), false);
+    assert.equal(L.isValidPhotoPath('х'.repeat(L.CONFIG.maxPhotoPathLength)), false);
+    assert.equal(L.isValidPhotoPath(42), false);
+
+    L.setPhoto(data, 1, 'Иванов А.', 'http://чужой-сайт/x.jpg');
+    assert.equal(L.getPhoto(data, 1, 'Иванов А.'), '', 'недопустимый путь не сохраняется');
+
+    // Переименование игрока переносит фото на новое имя
+    L.setPhoto(data, 1, 'Иванов А.', path);
+    L.renamePlayerPhoto(data, 1, 'Иванов А.', 'Иванов-старший');
+    assert.equal(L.getPhoto(data, 1, 'Иванов-старший'), path);
+    assert.equal(L.getPhoto(data, 1, 'Иванов А.'), '');
+
+    // Удаление игрока и команды
+    L.setPhoto(data, 3, 'Смирнов Д.', path);
+    L.removePhoto(data, 3, 'Смирнов Д.');
+    assert.equal(L.getPhoto(data, 3, 'Смирнов Д.'), '');
+
+    L.setPhoto(data, 2, 'Кузнецов К.', path);
+    L.setPhoto(data, 2, 'Попов П.', path);
+    L.removeTeamPhotos(data, 2);
+    assert.equal(L.getPhoto(data, 2, 'Кузнецов К.'), '', 'фото команды удалены');
+    assert.equal(L.getPhoto(data, 2, 'Попов П.'), '');
+    assert.equal(L.getPhoto(data, 3, 'Смирнов Д.'), '', 'чужие фото не задеты');
+});
+
+test('нормализация фото: валидные пути остаются, «мусор» и фото ушедших игроков отбрасываются', () => {
+    const result = L.normalizeData({
+        teams: [
+            { id: 1, name: 'Спартак', players: ['Иванов А.'] },
+            { id: 2, name: 'Зенит', players: [] }
+        ],
+        matches: [],
+        photos: {
+            '1|Иванов А.': 'assets/photos/ivanov-a-1a2b3c.jpg',
+            '1|Ушедший У.': 'assets/photos/gone-111111.jpg',
+            '2|Кто-то': 'assets/photos/nobody-222222.jpg',
+            '1|Иванов А.2': '../etc/passwd',
+            'нет|ключа': 'assets/photos/x-333333.jpg'
+        }
+    });
+
+    assert.deepEqual(Object.keys(result.data.photos), ['1|иванов а.'], 'осталось только фото игрока из заявки');
+    assert.equal(result.data.photos['1|иванов а.'], 'assets/photos/ivanov-a-1a2b3c.jpg');
+    assert.equal(result.repaired, true, 'отброшенные записи — это исправление данных');
+    assert.equal(result.data.version, 5);
+
+    // Старый файл без карты фото грузится без предупреждений
+    const legacy = L.normalizeData({ teams: [{ id: 1, name: 'A', players: ['X'] }], matches: [] });
+    assert.deepEqual(legacy.data.photos, {});
+    assert.equal(legacy.repaired, false, 'отсутствие фото — не повреждение данных');
+});
+
+test('экспорт и импорт данных переносят фото', () => {
+    const data = L.createDefaultData();
+
+    L.setPhoto(data, 1, 'Иванов А.', 'assets/photos/ivanov-a-1a2b3c.jpg');
+
+    const text = L.serializeData(data);
+
+    assert.ok(text.indexOf('assets/photos/ivanov-a-1a2b3c.jpg') !== -1, 'путь к фото попал в экспорт');
+
+    const imported = L.parseImport(text);
+    assert.equal(imported.ok, true);
+    assert.equal(L.getPhoto(imported.data, 1, 'Иванов А.'), 'assets/photos/ivanov-a-1a2b3c.jpg');
+});
+
 test('normalizeData: мусор на входе даёт демонстрационные данные', () => {
     [null, undefined, 42, 'текст', {}, { teams: [] }, { teams: {}, matches: [] }].forEach((value) => {
         const result = L.normalizeData(value);
@@ -506,7 +593,7 @@ test('normalizeData: события матчей сохраняются, «му�
 
     assert.equal(result.repaired, true, 'событие чужой команды — это исправление данных');
     assert.deepEqual(result.data.matches[0].events, [{ team: 1, player: 'Иванов А.', type: 'goal' }]);
-    assert.equal(result.data.version, 4, 'в данных отмечена новая версия формата');
+    assert.equal(result.data.version, 5, 'в данных отмечена новая версия формата');
 });
 
 test('лучшие бомбардиры: сортировка по голам, затем по карточкам', () => {

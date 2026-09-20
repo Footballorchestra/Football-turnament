@@ -111,6 +111,13 @@
             '/contents/' + encodePath(config.path);
     }
 
+    /** Адрес GitHub Contents API для любого файла репозитория (например, фото игрока). */
+    function fileContentsUrl(github, path) {
+        var config = normalizeConfig(github);
+        return trimTrailingSlashes(config.apiBase) + '/repos/' + config.owner + '/' + config.repo +
+            '/contents/' + encodePath(path);
+    }
+
     /* --- base64 с поддержкой UTF-8 (имена команд на кириллице) --- */
 
     function encodeBase64Utf8(text) {
@@ -206,6 +213,26 @@
     /** Текст коммита. */
     function commitMessage(action) {
         return (action ? action + ' — данные турнира' : 'Обновление данных турнира');
+    }
+
+    /** Тело запроса на загрузку файла в репозиторий (фото игрока, картинка сайта). */
+    function buildUploadRequest(config, path, base64, message, sha) {
+        var body = {
+            message: message || ('Файл ' + path),
+            content: String(base64 === null || base64 === undefined ? '' : base64),
+            branch: config.branch
+        };
+
+        if (sha) {
+            body.sha = sha;
+        }
+
+        return body;
+    }
+
+    /** Текст коммита для загруженного файла. */
+    function fileCommitMessage(action) {
+        return (action ? action + ' — файл сайта' : 'Загрузка файла сайта');
     }
 
     /** Проверка, что ответ похож на документ турнира, и приведение к корректной структуре. */
@@ -465,13 +492,124 @@
                 });
         }
 
+        /**
+         * Загрузка файла в репозиторий (фото игроков и другие файлы сайта).
+         * action — короткое описание для текста коммита, например «Фото игрока «Иванов А.»».
+         * Если файл с таким путём уже есть в репозитории — он заменяется.
+         */
+        function uploadFile(path, base64, action) {
+            var token = String(getToken() || '').trim();
+            var target = String(path || '').trim();
+
+            if (!token) {
+                return Promise.resolve({ ok: false, error: 'Введите токен GitHub' });
+            }
+
+            if (!ready) {
+                return Promise.resolve({ ok: false, error: 'Не заданы репозиторий, ветка или путь к файлу данных' });
+            }
+
+            if (!target) {
+                return Promise.resolve({ ok: false, error: 'Не указан путь к файлу' });
+            }
+
+            // Сначала выясняем, есть ли файл: для замены GitHub требует его sha
+            return request(fileContentsUrl(config, target) + '?ref=' + encodeURIComponent(config.branch), {
+                headers: authHeaders(token),
+                cache: 'no-store'
+            })
+                .then(function (response) {
+                    if (response.status === 401) {
+                        return { ok: false, error: 'GitHub не принял токен (401): проверьте, что он скопирован целиком' };
+                    }
+
+                    if (response.status === 403) {
+                        return { ok: false, error: 'Нет доступа к файлам (403): нужно право Contents: Read and write' };
+                    }
+
+                    if (response.status === 404) {
+                        return { ok: true, sha: null };
+                    }
+
+                    if (!response.ok) {
+                        return { ok: false, error: 'GitHub вернул HTTP ' + response.status };
+                    }
+
+                    return readJson(response).then(function (payload) {
+                        return { ok: true, sha: (payload && payload.sha) || null };
+                    });
+                })
+                .then(function (found) {
+                    if (!found.ok) {
+                        return found;
+                    }
+
+                    return request(fileContentsUrl(config, target), {
+                        method: 'PUT',
+                        headers: authHeaders(token),
+                        body: JSON.stringify(buildUploadRequest(config, target, base64,
+                            fileCommitMessage(action), found.sha))
+                    }).then(function (response) {
+                        return readJson(response).then(function (payload) {
+                            if (response.status === 401) {
+                                return { ok: false, error: 'GitHub не принял токен (401): проверьте, что он скопирован целиком' };
+                            }
+
+                            if (response.status === 403) {
+                                return { ok: false, error: 'Недостаточно прав (403): нужно право Contents: Read and write' };
+                            }
+
+                            if (response.status === 404) {
+                                return { ok: false, error: 'Репозиторий или ветка не найдены (404): проверьте owner, repo и branch' };
+                            }
+
+                            if (response.status === 409) {
+                                return { ok: false, error: 'Файл изменился между чтением и записью (409): попробуйте ещё раз' };
+                            }
+
+                            if (response.status === 413) {
+                                return { ok: false, error: 'Файл слишком большой для GitHub (413) — уменьшите фото' };
+                            }
+
+                            if (response.status === 422) {
+                                return {
+                                    ok: false,
+                                    error: 'GitHub отклонил файл (422): проверьте размер файла и ветку'
+                                };
+                            }
+
+                            if (!response.ok) {
+                                return {
+                                    ok: false,
+                                    error: 'GitHub вернул HTTP ' + response.status +
+                                        (payload && payload.message ? ': ' + payload.message : '')
+                                };
+                            }
+
+                            return {
+                                ok: true,
+                                path: target,
+                                replaced: Boolean(found.sha),
+                                commit: (payload && payload.commit) || null,
+                                htmlUrl: (payload && payload.commit && payload.commit.html_url) || null
+                            };
+                        });
+                    });
+                })
+                .catch(function (error) {
+                    return { ok: false, error: 'Сеть недоступна: ' + error.message };
+                });
+        }
+
         return {
             config: config,
             ready: ready,
             pull: pull,
             checkAccess: checkAccess,
             publish: publish,
+            uploadFile: uploadFile,
             contentsUrl: contentsUrl(config),
+            fileContentsUrl: function (path) { return fileContentsUrl(config, path); },
             rawUrl: function (cacheBust) { return rawUrl(config, cacheBust); },
             localUrl: function (cacheBust) { return localUrl(config, cacheBust); }
         };
@@ -487,6 +625,7 @@
         rawUrl: rawUrl,
         localUrl: localUrl,
         contentsUrl: contentsUrl,
+        fileContentsUrl: fileContentsUrl,
         encodeBase64Utf8: encodeBase64Utf8,
         decodeBase64Utf8: decodeBase64Utf8,
         timestampOf: timestampOf,
@@ -495,7 +634,9 @@
         documentsEqual: documentsEqual,
         parseContentsResponse: parseContentsResponse,
         buildUpdateRequest: buildUpdateRequest,
+        buildUploadRequest: buildUploadRequest,
         commitMessage: commitMessage,
+        fileCommitMessage: fileCommitMessage,
         normalizeRemoteData: normalizeRemoteData,
         createClient: createClient
     };

@@ -74,6 +74,7 @@ function boot(options) {
     window.eval(readSource('assets/js/config.js'));
     window.eval(readSource('assets/js/logic.js'));
     window.eval(readSource('assets/js/sync.js'));
+    window.eval(readSource('assets/js/photo.js'));
     window.eval(readSource('assets/js/app.js'));
 
     if (document.readyState === 'loading') {
@@ -1289,4 +1290,114 @@ test('подтверждённая замена сохраняет копию, �
 
     assert.equal(app.id('teams-grid').textContent.includes('Клуб из репозитория'), false, 'прежние данные вернулись');
     assert.ok(app.window.localStorage.getItem(EDITS_KEY), 'восстановленные данные помечены как неопубликованные');
+});
+
+test('админка: фото игрока уходит в репозиторий и видно сразу, не дожидаясь публикации', async () => {
+    const mock = createMockRepository({ data: remoteData() });
+    const app = boot({ mock, autoPublishDelayMs: 10000 });
+
+    app.login();
+    app.saveToken('test-token');
+    app.openTeam('Спартак');
+
+    const input = app.id('admin-players-list').querySelector('input[data-photo-team]');
+    assert.ok(input, 'в карточке игрока есть выбор файла');
+    assert.equal(app.id('admin-players-list').querySelectorAll('input[type="file"]').length, 3,
+        'кнопка загрузки у каждого игрока команды');
+
+    // Сжатие в браузере подменяем: canvas в jsdom нет, остальной путь проверяем целиком
+    const prepared = {
+        ok: true,
+        base64: 'QUJD',
+        bytes: 1024,
+        mime: 'image/jpeg',
+        size: 512,
+        path: 'assets/photos/ivanov-a-abc123.jpg'
+    };
+
+    app.window.FTPhoto.prepare = () => Promise.resolve(prepared);
+
+    Object.defineProperty(input, 'files', { value: [{ size: 2048, type: 'image/jpeg', name: 'photo.jpg' }] });
+    app.change(input);
+    await app.wait(20);
+
+    // Файл ушёл в репозиторий отдельным коммитом с понятным сообщением
+    assert.equal(mock.state.files[prepared.path].content, 'QUJD', 'файл сохранён в репозитории');
+    assert.equal(mock.state.commits.some((commit) =>
+        commit.message === 'Фото игрока «Иванов А.» (Спартак) — файл сайта'), true, 'коммит с фото');
+
+    // Путь записан в данные (их публикует обычная авто-публикация)
+    assert.equal(app.storedData().photos['1|иванов а.'], prepared.path);
+    assert.match(app.id('toast-container').textContent, /загружено/);
+
+    // Аватар показывается сразу — из памяти, хотя файл на сайте появится позже
+    const avatar = app.id('admin-players-list').querySelector('img.player-avatar');
+    assert.ok(avatar, 'аватар появился в составе');
+    assert.equal(avatar.getAttribute('src'), 'data:image/jpeg;base64,QUJD');
+
+    // И на публичной странице команд
+    app.navigate('teams');
+    assert.ok(app.id('teams-grid').querySelector('.chip-player img.player-avatar'), 'аватар виден в составе команды');
+
+    // Ошибка загрузки (файл слишком большой) не портит данные
+    mock.failNextUpload(413);
+    app.navigate('admin');
+    app.openTeam('Спартак');
+
+    const second = app.id('admin-players-list').querySelector('input[data-photo-team]');
+    Object.defineProperty(second, 'files', { value: [{ size: 2048, type: 'image/jpeg' }] });
+    app.change(second);
+    await app.wait(20);
+
+    assert.match(app.id('toast-container').textContent, /слишком большой/, 'понятная ошибка вместо кода 413');
+});
+
+test('админка: без токена фото не уходит в репозиторий, а готовое фото можно убрать', async () => {
+    // Токен не сохранён — загрузка даже не начинается
+    const mock = createMockRepository({ data: remoteData() });
+    const app = boot({ mock, autoPublishDelayMs: 10000 });
+
+    app.login();
+    app.openTeam('Спартак');
+
+    app.window.FTPhoto.prepare = () => Promise.resolve({
+        ok: true,
+        base64: 'QQ==',
+        bytes: 10,
+        mime: 'image/jpeg',
+        path: 'assets/photos/ivanov-a-abc123.jpg'
+    });
+
+    const input = app.id('admin-players-list').querySelector('input[data-photo-team]');
+    Object.defineProperty(input, 'files', { value: [{ size: 10, type: 'image/jpeg' }] });
+    app.change(input);
+    await app.settle();
+
+    assert.match(app.id('toast-container').textContent, /токен/i);
+    assert.deepEqual(Object.keys(mock.state.files), [], 'в репозиторий ничего не ушло');
+
+    // Фото уже есть: кнопка «Убрать фото» убирает запись из данных
+    const seeded = remoteData();
+    seeded.photos = { '1|иванов а.': 'assets/photos/ivanov-a-abc123.jpg' };
+
+    const withPhoto = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+    withPhoto.login();
+    withPhoto.openTeam('Спартак');
+
+    assert.ok(withPhoto.id('admin-players-list').querySelector('img.player-avatar'), 'фото показано в составе');
+    assert.ok(withPhoto.$('[data-action="player-photo-remove"]'), 'есть кнопка «Убрать фото»');
+
+    withPhoto.click(withPhoto.$('[data-action="player-photo-remove"]'));
+
+    assert.deepEqual(withPhoto.storedData().photos, {}, 'фото убрано из данных');
+    assert.match(withPhoto.id('toast-container').textContent, /убрано/);
+
+    // Удаление игрока тоже убирает его фото
+    const second = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+    second.login();
+    second.openTeam('Спартак');
+    second.click(second.id('admin-players-list').querySelector('[data-action="player-delete"]'));
+
+    assert.deepEqual(second.storedData().photos, {}, 'фото удалённого игрока убрано');
+    assert.equal(second.storedData().teams[0].players.length, 2);
 });

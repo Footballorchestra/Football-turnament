@@ -357,3 +357,107 @@ test('createClient.publish: конфликт в репозитории и пон
     assert.equal(offline.ok, false);
     assert.match(offline.error, /Сеть недоступна/);
 });
+
+test('buildUploadRequest и fileContentsUrl: загрузка файла (фото игрока) в репозиторий', () => {
+    const config = S.normalizeConfig(GITHUB);
+    const body = S.buildUploadRequest(config, 'assets/photos/p-1.jpg', 'QUJD', 'Фото игрока — файл сайта', 'sha-7');
+
+    assert.deepEqual(body, {
+        message: 'Фото игрока — файл сайта',
+        content: 'QUJD',
+        branch: 'main',
+        sha: 'sha-7'
+    });
+
+    const fresh = S.buildUploadRequest(config, 'assets/photos/p-1.jpg', 'QUJD', '', '');
+    assert.equal('sha' in fresh, false, 'для нового файла sha не нужен');
+    assert.equal(fresh.message, 'Файл assets/photos/p-1.jpg');
+
+    assert.equal(S.fileContentsUrl(config, 'assets/photos/p-1.jpg'),
+        'https://api.github.com/repos/AndreyMinenkov/Football-turnament/contents/assets/photos/p-1.jpg');
+    assert.equal(S.fileCommitMessage('Фото игрока «Иванов А.»'), 'Фото игрока «Иванов А.» — файл сайта');
+    assert.equal(S.fileCommitMessage(''), 'Загрузка файла сайта');
+});
+
+test('createClient.uploadFile: новый файл без sha, существующий — перезаписывается со sha', async () => {
+    const fresh = fakeFetch([
+        { match: (url, init) => !init.method || init.method === 'GET', reply: () => jsonResponse(404, { message: 'Not Found' }) },
+        { match: (url, init) => init.method === 'PUT', reply: () => jsonResponse(200, {
+            content: { sha: 'sha-file-1' },
+            commit: { html_url: 'https://github.com/AndreyMinenkov/Football-turnament/commit/file1' }
+        }) }
+    ]);
+
+    const result = await clientWith(fresh).uploadFile('assets/photos/p-1.jpg', 'QUJD', 'Фото игрока «Иванов А.»');
+
+    assert.equal(result.ok, true);
+    assert.equal(result.path, 'assets/photos/p-1.jpg');
+    assert.equal(result.replaced, false);
+    assert.equal(result.htmlUrl, 'https://github.com/AndreyMinenkov/Football-turnament/commit/file1');
+
+    // Сначала проверяем, есть ли файл, затем записываем
+    assert.equal(fresh.calls[0].url,
+        'https://api.github.com/repos/AndreyMinenkov/Football-turnament/contents/assets/photos/p-1.jpg?ref=main');
+
+    const request = fresh.calls[1];
+
+    assert.equal(request.url,
+        'https://api.github.com/repos/AndreyMinenkov/Football-turnament/contents/assets/photos/p-1.jpg');
+    assert.equal(request.init.method, 'PUT');
+    assert.equal(request.init.headers['Authorization'], 'Bearer test-token');
+
+    const body = JSON.parse(request.init.body);
+    assert.equal(body.content, 'QUJD');
+    assert.equal(body.message, 'Фото игрока «Иванов А.» — файл сайта');
+    assert.equal('sha' in body, false, 'новый файл — без sha');
+
+    // Файл уже есть: без его sha GitHub ответит конфликтом
+    const existing = fakeFetch([
+        { match: (url, init) => !init.method || init.method === 'GET', reply: () => jsonResponse(200, { sha: 'sha-old', content: 'AA==' }) },
+        { match: (url, init) => init.method === 'PUT', reply: () => jsonResponse(200, { content: { sha: 'sha-new' }, commit: { html_url: 'x' } }) }
+    ]);
+
+    const replaced = await clientWith(existing).uploadFile('assets/photos/p-1.jpg', 'QUJD', 'Фото игрока «Иванов А.»');
+
+    assert.equal(replaced.ok, true);
+    assert.equal(replaced.replaced, true);
+    assert.equal(JSON.parse(existing.calls[1].init.body).sha, 'sha-old');
+});
+
+test('createClient.uploadFile: понятные ошибки вместо кодов GitHub', async () => {
+    const noToken = fakeFetch([{ match: () => true, reply: () => jsonResponse(200, {}) }]);
+    const noTokenResult = await clientWith(noToken, '').uploadFile('assets/photos/p-1.jpg', 'QQ==', 'Фото');
+
+    assert.equal(noTokenResult.ok, false);
+    assert.match(noTokenResult.error, /токен/);
+    assert.equal(noToken.calls.length, 0, 'без токена в сеть не ходим');
+
+    const tooBig = fakeFetch([
+        { match: (url, init) => !init.method || init.method === 'GET', reply: () => jsonResponse(404, {}) },
+        { match: (url, init) => init.method === 'PUT', reply: () => jsonResponse(413, { message: 'too large' }) }
+    ]);
+
+    assert.match((await clientWith(tooBig).uploadFile('assets/photos/p-1.jpg', 'QQ==', 'Фото')).error, /слишком большой/);
+
+    const conflict = fakeFetch([
+        { match: (url, init) => !init.method || init.method === 'GET', reply: () => jsonResponse(200, { sha: 'sha-a' }) },
+        { match: (url, init) => init.method === 'PUT', reply: () => jsonResponse(409, { message: 'conflict' }) }
+    ]);
+
+    assert.match((await clientWith(conflict).uploadFile('assets/photos/p-1.jpg', 'QQ==', 'Фото')).error, /изменился/);
+
+    const badToken = fakeFetch([{ match: () => true, reply: () => jsonResponse(401, { message: 'Bad credentials' }) }]);
+    assert.match((await clientWith(badToken).uploadFile('assets/photos/p-1.jpg', 'QQ==', 'Фото')).error, /401/);
+
+    const offline = await clientWith(fakeFetch([
+        { match: () => true, reply: () => Promise.reject(new Error('нет соединения')) }
+    ])).uploadFile('assets/photos/p-1.jpg', 'QQ==', 'Фото');
+
+    assert.equal(offline.ok, false);
+    assert.match(offline.error, /Сеть недоступна/);
+
+    const noPath = await clientWith(fakeFetch([{ match: () => true, reply: () => jsonResponse(200, {}) }]))
+        .uploadFile('', 'QQ==', 'Фото');
+
+    assert.match(noPath.error, /путь/);
+});

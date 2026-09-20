@@ -21,6 +21,10 @@ function createMockRepository(options) {
     const state = {
         data: settings.data ? JSON.parse(JSON.stringify(settings.data)) : null,
         sha: null,
+        // Файлы репозитория, кроме data.json: путь → { content (base64), sha }
+        files: {},
+        // Код ответа для следующей загрузки файла (проверка обработки ошибок)
+        uploadStatus: 0,
         token: settings.token || 'test-token',
         commits: [],
         requests: []
@@ -67,6 +71,11 @@ function createMockRepository(options) {
         const isRaw = !isApi && target.includes(RAW_PREFIX + '/');
         const isSiteFile = !isApi && !isRaw && target.split('?')[0].endsWith('data.json');
 
+        // Путь запрашиваемого файла внутри /contents/ (data.json или фото игрока)
+        const apiMatch = isApi ? target.match(/\/contents\/([^?]*)/) : null;
+        const apiPath = apiMatch ? decodeURIComponent(apiMatch[1]) : '';
+        const isDataFile = apiPath.endsWith('data.json');
+
         state.requests.push({ method, url: target, headers: normalizedHeaders, body: body || null });
 
         if (isApi) {
@@ -74,7 +83,19 @@ function createMockRepository(options) {
                 return response(401, { message: 'Bad credentials' });
             }
 
+            if (!apiPath) {
+                return response(404, { message: 'Not Found' });
+            }
+
             if (method === 'GET') {
+                if (!isDataFile) {
+                    const file = state.files[apiPath];
+
+                    return file
+                        ? response(200, { sha: file.sha, content: file.content, path: apiPath })
+                        : response(404, { message: 'Not Found' });
+                }
+
                 return state.data
                     ? response(200, { sha: state.sha, content: encode(JSON.stringify(state.data, null, 2)) })
                     : response(404, { message: 'Not Found' });
@@ -82,6 +103,33 @@ function createMockRepository(options) {
 
             if (method === 'PUT') {
                 const parsed = typeof body === 'string' ? JSON.parse(body) : (body || {});
+
+                if (state.uploadStatus) {
+                    const status = state.uploadStatus;
+                    state.uploadStatus = 0;
+
+                    return response(status, { message: 'Simulated error' });
+                }
+
+                if (!isDataFile) {
+                    const existing = state.files[apiPath];
+
+                    if (existing && parsed.sha !== existing.sha) {
+                        return response(409, { message: 'is at ' + existing.sha + ' but expected ' + parsed.sha });
+                    }
+
+                    shaCounter += 1;
+                    state.files[apiPath] = { content: String(parsed.content || ''), sha: 'sha-' + shaCounter };
+                    state.commits.push({ message: parsed.message, path: apiPath, content: parsed.content });
+
+                    return response(200, {
+                        content: { sha: state.files[apiPath].sha, path: apiPath },
+                        commit: {
+                            html_url: 'https://github.com/' + (settings.owner || 'test') + '/' +
+                                (settings.repo || 'test') + '/commit/' + shaCounter
+                        }
+                    });
+                }
 
                 if (state.data && parsed.sha !== state.sha) {
                     return response(409, { message: 'is at ' + state.sha + ' but expected ' + parsed.sha });
@@ -123,11 +171,17 @@ function createMockRepository(options) {
         state.sha = 'sha-external-' + shaCounter;
     }
 
+    /** Следующая загрузка файла ответит этой ошибкой (например, 413 — файл велик). */
+    function failNextUpload(status) {
+        state.uploadStatus = Number(status) || 0;
+    }
+
     return {
         state,
         handle,
         fetch: fetchImpl,
         changeExternally,
+        failNextUpload,
         encode,
         decode,
         rawPrefix: RAW_PREFIX,

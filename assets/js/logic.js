@@ -29,7 +29,8 @@
         sessionKey: 'footballTournamentAdmin',
         // 3 — в матчах появились события (голы и голевые передачи игроков)
         // 4 — вместо голевых передач отмечаются жёлтые и красные карточки
-        dataVersion: 4,
+        // 5 — у игроков появились фото (карта photos с путями к файлам репозитория)
+        dataVersion: 5,
         // Пароль администратора. Внимание: это демонстрационная защита,
         // на статическом хостинге реальную авторизацию без сервера сделать нельзя
         // (подробности — в README.md).
@@ -37,7 +38,10 @@
         maxTeamNameLength: 30,
         maxPlayerNameLength: 40,
         maxScore: 99,
-        recentMatches: 3
+        recentMatches: 3,
+        // Фото игроков лежат файлами в репозитории сайта, а в данных хранится путь
+        photoPathPrefix: 'assets/photos/',
+        maxPhotoPathLength: 120
     };
 
     /** Палитра бейджей команд (классы описаны в src/input.css). */
@@ -52,6 +56,7 @@
             version: CONFIG.dataVersion,
             revision: 1,
             updatedAt: new Date().toISOString(),
+            photos: {},
             teams: [
                 { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.', 'Сидоров С.'] },
                 { id: 2, name: 'Локомотив', players: ['Кузнецов К.', 'Попов П.'] },
@@ -843,6 +848,158 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /* Фото игроков                                                        */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Фото хранятся файлами в самом репозитории сайта (папка assets/photos/),
+     * а в данных лежит только путь к файлу. Так документ остаётся маленьким
+     * (важно: localStorage ограничен), картинки раздаёт сам сайт, а история
+     * загрузок остаётся в коммитах репозитория.
+     *
+     * Ключ карты — команда и имя игрока в нижнем регистре: «3|иванов а.».
+     */
+
+    /** Ключ фото в карте data.photos. */
+    function photoKey(teamId, player) {
+        var id = toInt(teamId);
+        var name = cleanText(player).toLowerCase();
+
+        return (id === null ? '' : String(id)) + '|' + name;
+    }
+
+    /** Путь к фото должен вести внутрь папки сайта с фотографиями. */
+    function isValidPhotoPath(value) {
+        if (typeof value !== 'string') {
+            return false;
+        }
+
+        var path = value.trim();
+
+        // Только относительный путь внутрь папки: без схем, «../» и пробелов
+        return path.length > 0 && path.length <= CONFIG.maxPhotoPathLength &&
+            path.indexOf(CONFIG.photoPathPrefix) === 0 &&
+            path.indexOf('..') === -1 &&
+            /^[A-Za-z0-9._\/-]+$/.test(path);
+    }
+
+    /** Путь к фото игрока ('' — фото нет). */
+    function getPhoto(data, teamId, player) {
+        var photos = (data && isPlainObject(data.photos)) ? data.photos : {};
+        var value = photos[photoKey(teamId, player)];
+
+        return isValidPhotoPath(value) ? value.trim() : '';
+    }
+
+    /** Есть ли у игрока фото. */
+    function hasPhoto(data, teamId, player) {
+        return getPhoto(data, teamId, player) !== '';
+    }
+
+    /** Записывает фото игрока; пустой путь удаляет запись. */
+    function setPhoto(data, teamId, player, path) {
+        if (!isPlainObject(data)) {
+            return data;
+        }
+
+        if (!isPlainObject(data.photos)) {
+            data.photos = {};
+        }
+
+        var key = photoKey(teamId, player);
+        var value = typeof path === 'string' ? path.trim() : '';
+
+        if (value && isValidPhotoPath(value)) {
+            data.photos[key] = value;
+        } else {
+            delete data.photos[key];
+        }
+
+        return data;
+    }
+
+    /** Убирает фото игрока. */
+    function removePhoto(data, teamId, player) {
+        return setPhoto(data, teamId, player, '');
+    }
+
+    /** Переносит фото на новое имя игрока (при переименовании в составе). */
+    function renamePlayerPhoto(data, teamId, oldName, newName) {
+        var path = getPhoto(data, teamId, oldName);
+
+        if (!path) {
+            return data;
+        }
+
+        removePhoto(data, teamId, oldName);
+
+        return setPhoto(data, teamId, newName, path);
+    }
+
+    /** Убирает фото всех игроков команды (при удалении команды). */
+    function removeTeamPhotos(data, teamId) {
+        var photos = (data && isPlainObject(data.photos)) ? data.photos : {};
+        var prefix = photoKey(teamId, '');
+
+        Object.keys(photos).forEach(function (key) {
+            if (key.indexOf(prefix) === 0) {
+                delete photos[key];
+            }
+        });
+
+        return data;
+    }
+
+    /**
+     * Приводит карту фото к корректному виду: остаются только пути внутрь папки
+     * фотографий у игроков, которые есть в заявке своей команды.
+     */
+    function normalizePhotos(rawPhotos, teams) {
+        var photos = {};
+
+        if (rawPhotos === undefined || rawPhotos === null) {
+            return { photos: photos, repaired: false };
+        }
+
+        if (!isPlainObject(rawPhotos)) {
+            return { photos: photos, repaired: true };
+        }
+
+        var repaired = false;
+
+        Object.keys(rawPhotos).forEach(function (key) {
+            var value = rawPhotos[key];
+
+            if (!isValidPhotoPath(value)) {
+                repaired = true;
+                return;
+            }
+
+            var parts = String(key).split('|');
+            var team = findTeam(teams, parts[0]);
+            var name = cleanText(parts.slice(1).join('|')).toLowerCase();
+
+            if (!team || !name) {
+                repaired = true;
+                return;
+            }
+
+            var inSquad = (team.players || []).some(function (player) {
+                return cleanText(player).toLowerCase() === name;
+            });
+
+            if (!inSquad) {
+                repaired = true;
+                return;
+            }
+
+            photos[photoKey(team.id, name)] = value.trim();
+        });
+
+        return { photos: photos, repaired: repaired };
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Нормализация данных и хранилище                                     */
     /* ------------------------------------------------------------------ */
 
@@ -921,7 +1078,8 @@
                     revision: revision,
                     updatedAt: updatedAt,
                     teams: [],
-                    matches: []
+                    matches: [],
+                    photos: {}
                 },
                 repaired: repaired,
                 reason: repaired ? 'Часть данных была исправлена автоматически' : ''
@@ -993,13 +1151,20 @@
             });
         });
 
+        var normalizedPhotos = normalizePhotos(raw.photos, teams);
+
+        if (normalizedPhotos.repaired) {
+            repaired = true;
+        }
+
         return {
             data: {
                 version: CONFIG.dataVersion,
                 revision: revision,
                 updatedAt: updatedAt,
                 teams: teams,
-                matches: matches
+                matches: matches,
+                photos: normalizedPhotos.photos
             },
             repaired: repaired,
             reason: repaired ? 'Часть данных была исправлена автоматически' : ''
@@ -1106,7 +1271,8 @@
             version: CONFIG.dataVersion,
             exportedAt: new Date().toISOString(),
             teams: (data && data.teams) || [],
-            matches: (data && data.matches) || []
+            matches: (data && data.matches) || [],
+            photos: (data && data.photos) || {}
         }, null, 2);
     }
 
@@ -1150,6 +1316,15 @@
         getTeamName: getTeamName,
         getTeamInitials: getTeamInitials,
         badgeColorForTeam: badgeColorForTeam,
+        photoKey: photoKey,
+        isValidPhotoPath: isValidPhotoPath,
+        getPhoto: getPhoto,
+        hasPhoto: hasPhoto,
+        setPhoto: setPhoto,
+        removePhoto: removePhoto,
+        renamePlayerPhoto: renamePlayerPhoto,
+        removeTeamPhotos: removeTeamPhotos,
+        normalizePhotos: normalizePhotos,
         validateTeamName: validateTeamName,
         validatePlayerName: validatePlayerName,
         normalizeScore: normalizeScore,

@@ -29,7 +29,7 @@
 
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=13">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=14">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -126,6 +126,17 @@
         <!-- Красная карточка -->
         <symbol id="i-card-red" viewBox="0 0 24 24">
             <rect x="7.5" y="3.5" width="9" height="13" rx="1.6" fill="currentColor"/>
+        </symbol>
+        <!-- Фото игрока: фотоаппарат -->
+        <symbol id="i-photo" viewBox="0 0 24 24">
+            <path d="M4 8.5h2.6l1.4-2h8l1.4 2H20a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            <circle cx="12" cy="13.6" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/>
+        </symbol>
+        <!-- Убрать фото: перечёркнутый фотоаппарат -->
+        <symbol id="i-photo-off" viewBox="0 0 24 24">
+            <path d="M4 8.5h2.6l1.4-2h8l1.4 2H20a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            <circle cx="12" cy="13.6" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/>
+            <path d="M4.5 4.2l15 15.6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
         </symbol>
     </svg>
 
@@ -671,9 +682,10 @@
 
     <!-- Логика: настройки → чистая логика → синхронизация с репозиторием → слой DOM.
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
-    <script src="assets/js/config.js?v=13" defer></script>
-    <script src="assets/js/logic.js?v=13" defer></script>
-    <script src="assets/js/sync.js?v=13" defer></script>
-    <script src="assets/js/app.js?v=13" defer></script>
+    <script src="assets/js/config.js?v=14" defer></script>
+    <script src="assets/js/logic.js?v=14" defer></script>
+    <script src="assets/js/sync.js?v=14" defer></script>
+    <script src="assets/js/photo.js?v=14" defer></script>
+    <script src="assets/js/app.js?v=14" defer></script>
 </body>
 </html>

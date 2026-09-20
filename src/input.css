@@ -536,6 +536,70 @@
         letter-spacing: 0.05em;
     }
 
+    /* --- Фото игроков: круглый аватар; если фото нет — кружок с инициалами --- */
+    .player-avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 9999px;
+        object-fit: cover;
+        background: #e8eaed;
+        flex: none;
+    }
+
+    .player-avatar-sm {
+        width: 24px;
+        height: 24px;
+        font-size: 0.625rem;
+    }
+
+    .player-avatar-lg {
+        width: 48px;
+        height: 48px;
+        font-size: 0.875rem;
+    }
+
+    .player-avatar-empty {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        color: #5f6368;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+    }
+
+    /* Инициалы на тёмной панели админки должны читаться */
+    .admin-panel .player-avatar-empty {
+        background: #5f6368;
+        color: #e8eaed;
+    }
+
+    /* Метка-кнопка для выбора файла (внутри — скрытый input type="file") */
+    label.btn {
+        cursor: pointer;
+    }
+
+    /* Игрок с аватаром в списках: чип состава, строка состава в матче, бомбардиры */
+    .chip-player {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+    }
+
+    .squad-player {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
+    .player-line {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        min-width: 0;
+    }
+
     /* --- Статусы матча --- */
     .status-pill {
         display: inline-flex;

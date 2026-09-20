@@ -374,8 +374,11 @@ test('админ-панель целиком в браузере: вход, ко
     // Добавляем команду (раздел «Команды»: список команд и форма под ним)
     await page.type('#new-team-name', 'Зенит');
     await clickInView(page, '[data-form="add-team"] button[type="submit"]');
-    await page.waitForFunction(() => document.querySelectorAll('#admin-teams-list [data-action="team-open"]').length === 5);
+    await page.waitForFunction((expected) => {
+        return document.querySelectorAll('#admin-teams-list [data-action="team-open"]').length === expected;
+    }, {}, before.teams + 1);
     assert.equal(await textOf(page, '#stat-teams'), String(before.teams + 1));
+    assert.equal(await textOf(page, '#stat-matches'), String(before.matches));
 
     // Дубликат отклоняется
     await page.type('#new-team-name', 'зенит');
@@ -383,7 +386,12 @@ test('админ-панель целиком в браузере: вход, ко
     assert.match(await textOf(page, '#team-form-error'), /уже есть/);
 
     // Клик по названию открывает карточку команды: добавляем игрока
-    await clickInView(page, '#admin-teams-list [data-action="team-open"][data-id="5"]');
+    const newTeamId = await page.evaluate(() => {
+        const team = window.FTApp.getData().teams.find((item) => item.name === 'Зенит');
+        return team ? team.id : 0;
+    });
+
+    await clickInView(page, '#admin-teams-list [data-action="team-open"][data-id="' + newTeamId + '"]');
     assert.equal(await sectionVisible(page, 'admin-team-view'), true, 'открылась карточка команды');
     assert.equal(await sectionVisible(page, 'admin-team-list-view'), false, 'список команд скрылся');
 
@@ -400,13 +408,17 @@ test('админ-панель целиком в браузере: вход, ко
     assert.equal(await sectionVisible(page, 'admin-panel-teams'), false, 'раздел «Команды» скрылся');
 
     // Добавляем матч без счёта
-    await page.select('#match-team-a', '1');
-    await page.select('#match-team-b', '5');
+    const firstTeamId = await page.evaluate(() => window.FTApp.getData().teams[0].id);
+
+    await page.select('#match-team-a', String(firstTeamId));
+    await page.select('#match-team-b', String(newTeamId));
     await page.$eval('#match-date', (element) => {
         element.value = '2026-12-01';
     });
     await clickInView(page, '#match-submit');
-    await page.waitForFunction(() => document.querySelectorAll('#admin-matches-list [data-action="match-open"]').length === 5);
+    await page.waitForFunction((expected) => {
+        return document.querySelectorAll('#admin-matches-list [data-action="match-open"]').length === expected;
+    }, {}, before.matches + 1);
 
     const newMatchId = await page.evaluate(() => {
         const stored = JSON.parse(window.localStorage.getItem('footballTournamentData'));
@@ -432,7 +444,8 @@ test('админ-панель целиком в браузере: вход, ко
     }, {}, newMatchId);
 
     // Отмечаем гол игрока новой команды: иконка мяча становится активной
-    const goalButton = '.event-btn[data-action="match-event"][data-team="5"][data-player="Тестовый Игрок"][data-type="goal"]';
+    const goalButton = '.event-btn[data-action="match-event"][data-team="' + newTeamId +
+        '"][data-player="Тестовый Игрок"][data-type="goal"]';
     await clickInView(page, goalButton);
 
     await page.waitForFunction((matchId) => {
@@ -453,15 +466,21 @@ test('админ-панель целиком в браузере: вход, ко
     // Отмеченный гол сразу виден на публичной странице «Лучшие бомбардиры»
     await page.click('[data-nav="players"]');
     assert.equal(await sectionVisible(page, 'page-players'), true, 'открылась страница лучших бомбардиров');
-    const bestPlayers = await page.$eval('#players-body tr', (row) =>
-        Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent.trim()));
-    assert.equal(bestPlayers.some((cell) => cell.includes('Тестовый Игрок')), true, 'игрок с голом попал в список');
+
+    const bestPlayers = await page.evaluate(() => {
+        const row = Array.from(document.querySelectorAll('#players-body tr'))
+            .find((element) => element.textContent.includes('Тестовый Игрок'));
+
+        return row ? Array.from(row.querySelectorAll('td')).map((cell) => cell.textContent.trim()) : [];
+    });
+
+    assert.ok(bestPlayers.length > 0, 'игрок с голом попал в список');
     assert.deepEqual(bestPlayers.slice(3), ['1', '0', '0'], 'в таблице: один гол, ноль жёлтых и красных карточек');
 
     // Ничья 2:2 приносит по одному очку каждой команде
     const after = await dataSnapshot(page);
-    assert.equal(after.points[1], before.points[1] + 1, 'очко первой команде');
-    assert.equal(after.points[5], 1, 'очко новой команде');
+    assert.equal(after.points[firstTeamId], before.points[firstTeamId] + 1, 'очко первой команде');
+    assert.equal(after.points[newTeamId], 1, 'очко новой команде');
 
     await page.click('[data-nav="standings"]');
     const zenitPoints = await page.evaluate(() => {
@@ -469,7 +488,7 @@ test('админ-панель целиком в браузере: вход, ко
             .find((element) => element.textContent.includes('Зенит'));
         return row ? Number(row.querySelector('td:last-child').textContent.trim()) : null;
     });
-    assert.equal(zenitPoints, after.points[5], 'очки новой команды видны в таблице');
+    assert.equal(zenitPoints, after.points[newTeamId], 'очки новой команды видны в таблице');
 
     // Данные переживают перезагрузку страницы
     await reloadApp(page);
@@ -529,9 +548,10 @@ test('сайт работает из подпапки — как на GitHub Pag
 
     try {
         const { page, problems } = await openPage({ url: subUrl });
+        const data = await dataSnapshot(page);
 
-        assert.equal(await textOf(page, '#stat-teams'), '4', 'данные загрузились из подпапки');
-        assert.equal(await page.$$eval('#standings-body tr', (rows) => rows.length), 4);
+        assert.equal(await textOf(page, '#stat-teams'), String(data.teams), 'данные загрузились из подпапки');
+        assert.equal(await page.$$eval('#standings-body tr', (rows) => rows.length), data.teams);
         assert.equal(await page.$eval('body', (element) => getComputedStyle(element).backgroundColor), 'rgb(248, 249, 250)');
 
         // Файла данных по адресу макета в этой подпапке нет — браузер сообщает об этом в консоли,
@@ -656,4 +676,104 @@ test('синхронизация: посетитель видит данные �
 
     await otherPage.close();
     await otherContext.close();
+});
+
+test('фото игрока: настоящее сжатие в браузере, загрузка в репозиторий и аватар в составе', { skip }, async () => {
+    const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
+
+    // Диагностика: какие адреса отвечают 404
+    const notFound = [];
+
+    page.on('response', (response) => {
+        if (response.status() === 404) {
+            notFound.push(response.url());
+        }
+    });
+
+    // 1. Вход администратора и токен публикации
+    await clickWhenReady(page, '[data-nav="admin"]');
+    await page.type('#admin-password', 'admin');
+    await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
+    await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
+
+    await clickInView(page, '[data-action="toggle-settings"]');
+    await page.type('#github-token', 'test-token');
+    await clickInView(page, '[data-action="github-save-token"]');
+    await page.waitForFunction(() => document.getElementById('github-token').placeholder.includes('сохранён'));
+
+    // 2. Открываем первую команду: у игроков есть кнопка загрузки фото
+    await clickWhenReady(page, '#admin-teams-list [data-action="team-open"]');
+    await page.waitForFunction(() => !!document.querySelector('#admin-players-list input[data-photo-team]'));
+
+    // 3. Отдаём настоящее изображение (4×4 PNG рисуется прямо в браузере)
+    await page.evaluate(() => new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        canvas.width = 4;
+        canvas.height = 4;
+        context.fillStyle = '#1b5e20';
+        context.fillRect(0, 0, 4, 4);
+
+        canvas.toBlob((blob) => {
+            const input = document.querySelector('#admin-players-list input[data-photo-team]');
+            const transfer = new DataTransfer();
+
+            transfer.items.add(new File([blob], 'photo.png', { type: 'image/png' }));
+            input.files = transfer.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            resolve(true);
+        }, 'image/png');
+    }));
+
+    // 4. Дожидаемся аватара и проверяем, что получилось
+    await page.waitForFunction(() => {
+        const image = document.querySelector('#admin-players-list img.player-avatar');
+
+        // naturalWidth появляется только после того, как браузер декодировал картинку
+        return !!image && image.complete && image.naturalWidth > 0;
+    });
+
+    const result = await page.evaluate(() => {
+        const data = window.FTApp.getData();
+        const keys = Object.keys(data.photos);
+        const image = document.querySelector('#admin-players-list img.player-avatar');
+
+        return {
+            count: keys.length,
+            path: keys.length ? data.photos[keys[0]] : '',
+            previews: Object.keys(window.FTApp.getState().photoPreviews),
+            preview: image ? image.getAttribute('src').indexOf('data:image/jpeg;base64,') === 0 : false,
+            width: image ? image.naturalWidth : 0,
+            height: image ? image.naturalHeight : 0
+        };
+    });
+
+    assert.equal(result.count, 1, 'фото записано в данные');
+    assert.match(result.path, /^assets\/photos\/[a-z0-9-]+-[0-9a-f]{6}\.jpg$/, 'имя файла безопасное и уникальное');
+    assert.equal(result.previews[0], result.path, 'файл и запись в данных совпадают');
+    assert.equal(result.preview, true, 'показан локальный предпросмотр (сжатый JPEG)');
+    assert.equal(result.width, result.height, 'фото приведено к квадрату');
+    assert.ok(result.width > 200, 'сторона квадрата близка к настройке 512 (получилось: ' + result.width + ')');
+
+    // 5. Файл действительно лежит в «репозитории», и коммит подписан понятно
+    const file = mockRepository.state.files[result.path];
+
+    assert.ok(file, 'файл загружен в репозиторий');
+    assert.ok(file.content.length > 100, 'в репозиторий ушёл настоящий JPEG, а не заглушка');
+    assert.match(mockRepository.state.commits.map((commit) => commit.message || '').join('|'), /Фото игрока/);
+
+    // 6. Аватар виден и в публичном составе команды
+    await clickWhenReady(page, '[data-nav="teams"]');
+    await page.waitForFunction(() => !!document.querySelector('#teams-grid .chip-player img.player-avatar'));
+
+    // Проверка «есть ли уже такой файл» штатно отвечает 404 — браузер пишет об этом в консоль.
+    // Это и есть ожидаемый единственный ответ 404: значит, файл новый и sha не нужен.
+    assert.equal(notFound.length, 1, 'лишние 404: ' + notFound.join(', '));
+    assert.match(notFound[0], /\/mock-api\/repos\/test\/test\/contents\/assets\/photos\/[a-z0-9-]+\.jpg\?ref=main$/);
+
+    const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
+
+    assert.deepEqual(meaningful, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
 });

@@ -14,8 +14,10 @@
 
     var L = window.FTLogic;
     var S = window.FTSync;
+    var P = window.FTPhoto;
     var CONFIG = L.CONFIG;
     var SETTINGS = window.FT_CONFIG || {};
+    var PHOTO = SETTINGS.photo || {};
     var KEYS = SETTINGS.storageKeys || {
         token: 'ft.githubToken',
         autoPublish: 'ft.autoPublish',
@@ -37,6 +39,10 @@
         matchesFilter: 'all',
         /** Открытый матч на публичной странице матчей (null — показывается список). */
         publicMatchId: null,
+        /** Предпросмотр только что загруженных фото: путь → data-URL (до появления файла на сайте). */
+        photoPreviews: {},
+        /** Игрок, чьё фото сейчас загружается: { teamId, index } (null — никто). */
+        photoBusy: null,
         /* Турнирная таблица: компактный вид (без горизонтальной прокрутки).
            Влияет только на телефонах — остальные размеры экрана показывают все столбцы. */
         standingsCompact: true,
@@ -196,6 +202,178 @@
         return match.finished
             ? '<span class="status-pill finished">' + icon('check') + 'Завершён</span>'
             : '<span class="status-pill upcoming">' + icon('clock') + 'Предстоит</span>';
+    }
+
+    /* ================================================================== */
+    /* Фото игроков                                                       */
+    /* ================================================================== */
+
+    /** Настройки подготовки фото: значения по умолчанию — в assets/js/photo.js. */
+    function photoSettings() {
+        return {
+            folder: PHOTO.folder,
+            maxSize: PHOTO.maxSize,
+            quality: PHOTO.quality,
+            maxSourceBytes: PHOTO.maxSourceBytes,
+            maxResultBytes: PHOTO.maxResultBytes
+        };
+    }
+
+    /**
+     * Адрес фото игрока для <img>. Только что загруженное фото появляется на сайте
+     * не сразу (публикация занимает около минуты), поэтому до перезагрузки страницы
+     * показываем локальный предпросмотр из памяти.
+     */
+    function photoUrl(teamId, player) {
+        var path = L.getPhoto(state.data, teamId, player);
+
+        if (!path) {
+            return '';
+        }
+
+        return state.photoPreviews[path] || path;
+    }
+
+    /** Есть ли у игрока фото (учитывая только что загруженное). */
+    function hasPlayerPhoto(teamId, player) {
+        return photoUrl(teamId, player) !== '';
+    }
+
+    /**
+     * Аватар игрока: фото, а если его нет — кружок с инициалами.
+     * options: { small } — 24 px (списки), без флага — 36 px, { big } — 48 px.
+     */
+    function playerAvatar(teamId, player, options) {
+        var opts = options || {};
+        var side = opts.big ? 48 : (opts.small ? 24 : 36);
+        var className = 'player-avatar' + (opts.big ? ' player-avatar-lg' : (opts.small ? ' player-avatar-sm' : ''));
+        var url = photoUrl(teamId, player);
+
+        if (url) {
+            return '<img class="' + className + '" src="' + esc(url) + '" alt="" loading="lazy" width="' + side +
+                '" height="' + side + '">';
+        }
+
+        return '<span class="' + className + ' player-avatar-empty" aria-hidden="true">' +
+            esc(L.getTeamInitials(player)) + '</span>';
+    }
+
+    /** Кнопка выбора файла: label + скрытый input (без inline-скриптов, CSP не нарушается). */
+    function photoInput(teamId, index, player, hasPhoto) {
+        var label = hasPhoto ? 'Заменить фото' : 'Загрузить фото';
+
+        return '<label class="btn btn-sm btn-ghost" title="' + esc(label) + '">' +
+            icon('photo') +
+            '<input type="file" class="sr-only" accept="image/*" data-photo-team="' + L.toInt(teamId) +
+                '" data-photo-index="' + index + '" aria-label="' + esc(label + ': ' + player) + '">' +
+        '</label>';
+    }
+
+    /**
+     * Загрузка фото игрока: сжатие в браузере → файл в репозиторий → путь в данных.
+     * Это два отдельных коммита: сначала картинка, потом ссылка на неё в data.json
+     * (публикация данных идёт обычным путём, через saveData).
+     */
+    function uploadPlayerPhoto(teamId, index, file) {
+        var team = L.findTeam(state.data.teams, teamId);
+        var player = (team && team.players[index] !== undefined) ? team.players[index] : '';
+
+        if (!team || !player) {
+            toast('Игрок не найден', 'error');
+            return;
+        }
+
+        if (!file) {
+            return;
+        }
+
+        if (!sync.client) {
+            toast('Синхронизация с репозиторием недоступна', 'error');
+            return;
+        }
+
+        if (!String(sync.token || '').trim()) {
+            toast('Сначала сохраните токен GitHub в «Настройках» — без него фото не попадут в репозиторий', 'error');
+            return;
+        }
+
+        if (!P || typeof P.prepare !== 'function') {
+            toast('Браузер не поддерживает подготовку фотографий', 'error');
+            return;
+        }
+
+        state.photoBusy = { teamId: L.toInt(team.id), index: index };
+        renderAdminPlayers();
+
+        var options = photoSettings();
+
+        options.teamId = L.toInt(team.id);
+        options.player = player;
+
+        P.prepare(file, options)
+            .then(function (prepared) {
+                if (!prepared.ok) {
+                    return { ok: false, error: prepared.error };
+                }
+
+                return sync.client.uploadFile(prepared.path, prepared.base64,
+                    'Фото игрока «' + player + '» (' + team.name + ')').then(function (result) {
+                    if (result.ok) {
+                        result.path = prepared.path;
+                        result.bytes = prepared.bytes;
+                        result.preview = 'data:' + (prepared.mime || 'image/jpeg') + ';base64,' + prepared.base64;
+                    }
+
+                    return result;
+                });
+            })
+            .then(function (result) {
+                state.photoBusy = null;
+
+                if (!result || !result.ok) {
+                    renderAdminPlayers();
+                    toast((result && result.error) || 'Не удалось загрузить фото', 'error');
+                    return;
+                }
+
+                // Файл на сайте появится через минуту: до перезагрузки показываем его из памяти
+                state.photoPreviews[result.path] = result.preview;
+
+                L.setPhoto(state.data, team.id, player, result.path);
+
+                if (result.htmlUrl) {
+                    sync.lastCommitUrl = result.htmlUrl;
+                }
+
+                saveData('Фото игрока «' + player + '» загружено (' + P.formatBytes(result.bytes) + ')');
+            });
+    }
+
+    /** Убирает фото игрока из данных (сам файл остаётся в истории репозитория). */
+    function removePlayerPhoto(teamId, index) {
+        var team = L.findTeam(state.data.teams, teamId);
+        var player = (team && team.players[index] !== undefined) ? team.players[index] : '';
+
+        if (!team || !player) {
+            return;
+        }
+
+        if (!L.hasPhoto(state.data, team.id, player)) {
+            toast('У игрока «' + player + '» нет фото');
+            return;
+        }
+
+        if (!askConfirm('Убрать фото игрока «' + player + '»?\n\n' +
+            'Сам файл останется в истории репозитория — при необходимости его можно вернуть.')) {
+            return;
+        }
+
+        var path = L.getPhoto(state.data, team.id, player);
+
+        delete state.photoPreviews[path];
+        L.removePhoto(state.data, team.id, player);
+
+        saveData('Фото игрока «' + player + '» убрано');
     }
 
     /* ================================================================== */
@@ -986,7 +1164,8 @@
             var row = byId[team.id] || { points: 0, played: 0, place: '—' };
             var players = (team.players || []).length
                 ? team.players.map(function (player) {
-                    return '<span class="chip">' + esc(player) + '</span>';
+                    return '<span class="chip chip-player">' + playerAvatar(team.id, player, { small: true }) +
+                        esc(player) + '</span>';
                 }).join('')
                 : '<span class="text-dark-500 text-xs">Состав не заполнен</span>';
 
@@ -1034,7 +1213,8 @@
             return '<tr>' +
                 '<td class="num font-medium text-dark-600">' + row.place + '</td>' +
                 '<td class="cell-player">' +
-                    '<span class="player-name">' + esc(row.player) + '</span>' +
+                    '<span class="player-line">' + playerAvatar(row.teamId, row.player, { small: true }) +
+                        '<span class="player-name">' + esc(row.player) + '</span></span>' +
                     // На телефоне столбец «Команда» скрыт, и название выводится под именем
                     '<span class="row-detail">' + esc(row.teamName) + '</span>' +
                 '</td>' +
@@ -1148,7 +1328,8 @@
         }
 
         return '<div class="squad-row">' +
-            '<span class="squad-name">' + esc(player) + '</span>' +
+            '<span class="squad-player">' + playerAvatar(teamId, player, { small: true }) +
+                '<span class="squad-name">' + esc(player) + '</span></span>' +
             (marks ? '<span class="squad-marks">' + marks + '</span>' : '') +
         '</div>';
     }
@@ -1698,6 +1879,9 @@
             var isEditing = !!state.editingPlayer &&
                 state.editingPlayer.teamId === team.id &&
                 state.editingPlayer.index === index;
+            var hasPhoto = hasPlayerPhoto(team.id, player);
+            var isBusy = !!state.photoBusy && state.photoBusy.teamId === L.toInt(team.id) &&
+                state.photoBusy.index === index;
 
             if (isEditing) {
                 return '<div class="admin-card flex items-center gap-2">' +
@@ -1710,8 +1894,18 @@
             }
 
             return '<div class="admin-card flex items-center justify-between gap-2">' +
-                '<span class="truncate"><span class="admin-muted mr-2">' + (index + 1) + '.</span>' + esc(player) + '</span>' +
-                '<span class="flex gap-1">' +
+                '<span class="flex items-center gap-2 min-w-0">' +
+                    playerAvatar(team.id, player, { small: true }) +
+                    '<span class="truncate"><span class="admin-muted mr-2">' + (index + 1) + '.</span>' + esc(player) + '</span>' +
+                '</span>' +
+                '<span class="flex items-center gap-1 flex-none">' +
+                    (isBusy
+                        ? '<span class="admin-hint whitespace-nowrap">Загружаю…</span>'
+                        : photoInput(team.id, index, player, hasPhoto)) +
+                    (hasPhoto && !isBusy
+                        ? '<button type="button" class="btn btn-sm btn-ghost" data-action="player-photo-remove" data-team="' +
+                            team.id + '" data-index="' + index + '" title="Убрать фото игрока">' + icon('photo-off') + '</button>'
+                        : '') +
                     '<button type="button" class="btn btn-sm btn-ghost" data-action="player-rename" data-team="' + team.id +
                         '" data-index="' + index + '" title="Переименовать">' + icon('pencil') + '</button>' +
                     '<button type="button" class="btn btn-sm btn-danger" data-action="player-delete" data-team="' + team.id +
@@ -2173,6 +2367,9 @@
             state.selectedTeamId = null;
         }
 
+        // Фото игроков удалённой команды больше не нужны (файлы остаются в истории)
+        L.removeTeamPhotos(state.data, team.id);
+
         saveData('Команда «' + team.name + '» удалена');
     }
 
@@ -2424,6 +2621,9 @@
             }
         });
 
+        // Фото игрока тоже переезжает на новое имя
+        L.renamePlayerPhoto(state.data, team.id, oldName, check.value);
+
         state.editingPlayer = null;
         saveData('Имя игрока изменено');
     }
@@ -2439,8 +2639,17 @@
             return;
         }
 
+        var removed = team.players[index];
+
         team.players.splice(index, 1);
         state.editingPlayer = null;
+
+        // Фото удалённого игрока убираем из данных (файл остаётся в истории репозитория)
+        if (removed) {
+            delete state.photoPreviews[L.getPhoto(state.data, team.id, removed)];
+            L.removePhoto(state.data, team.id, removed);
+        }
+
         saveData('Игрок удалён');
     }
 
@@ -2459,6 +2668,7 @@
         state.editingPlayer = null;
         state.selectedTeamId = null;
         state.openMatchId = null;
+        state.photoPreviews = {};
 
         saveData('Загружены демонстрационные данные');
     }
@@ -2483,6 +2693,7 @@
         state.editingPlayer = null;
         state.selectedTeamId = null;
         state.openMatchId = null;
+        state.photoPreviews = {};
 
         saveData('Данные загружены из файла');
 
@@ -2578,6 +2789,8 @@
             cancelPlayerRename();
         } else if (action === 'player-delete') {
             deletePlayer(teamId, index);
+        } else if (action === 'player-photo-remove') {
+            removePlayerPhoto(teamId, index);
         } else if (action === 'github-save-token') {
             saveTokenFromInput();
         } else if (action === 'github-forget-token') {
@@ -2617,7 +2830,20 @@
     function handleChange(event) {
         var target = event.target;
 
-        if (!target || !target.id) {
+        if (!target) {
+            return;
+        }
+
+        // Выбор файла с фото игрока: <input type="file" data-photo-team data-photo-index>
+        if (typeof target.hasAttribute === 'function' && target.hasAttribute('data-photo-team')) {
+            var files = target.files || [];
+
+            uploadPlayerPhoto(L.toInt(target.getAttribute('data-photo-team')),
+                L.toInt(target.getAttribute('data-photo-index')), files.length ? files[0] : null);
+            return;
+        }
+
+        if (!target.id) {
             return;
         }
 
