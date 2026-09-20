@@ -221,6 +221,36 @@ test('sortMatches и selectMatches: порядок и фильтры', () => {
     assert.equal(matches[0].id, 1, 'исходный массив не мутируется (было побочным эффектом в старой версии)');
 });
 
+test('searchMatches: поиск по части названия команды', () => {
+    const teams = [
+        { id: 1, name: 'Ветераны МГК' },
+        { id: 2, name: 'ФК Моцарт' },
+        { id: 3, name: 'Большой Театр' }
+    ];
+    const matches = [
+        { id: 1, teamA: 1, teamB: 2, date: '2026-09-07' },
+        { id: 2, teamA: 3, teamB: 1, date: '2026-09-14' },
+        { id: 3, teamA: 2, teamB: 3, date: '2026-09-21' }
+    ];
+
+    // Пустой запрос и одни пробелы ничего не отсеивают
+    assert.equal(L.searchMatches(matches, teams, '').length, 3);
+    assert.equal(L.searchMatches(matches, teams, '   ').length, 3);
+    assert.deepEqual(L.searchMatches(null, teams, 'Моц'), [], 'нет списка матчей — пустой результат');
+
+    // Часть названия, регистр не важен
+    assert.deepEqual(L.searchMatches(matches, teams, 'ветер').map((m) => m.id), [1, 2]);
+    assert.deepEqual(L.searchMatches(matches, teams, 'МОЦАРТ').map((m) => m.id), [1, 3]);
+
+    // Матч находится по любой из двух команд, «часть слова» тоже подходит
+    assert.deepEqual(L.searchMatches(matches, teams, 'Театр').map((m) => m.id), [2, 3]);
+    assert.deepEqual(L.searchMatches(matches, teams, 'ФК').map((m) => m.id), [1, 3]);
+
+    // Ничего не нашлось
+    assert.deepEqual(L.searchMatches(matches, teams, 'зенит'), []);
+    assert.equal(matches.length, 3, 'исходный список матчей не меняется');
+});
+
 test('normalizeData: мусор на входе даёт демонстрационные данные', () => {
     [null, undefined, 42, 'текст', {}, { teams: [] }, { teams: {}, matches: [] }].forEach((value) => {
         const result = L.normalizeData(value);

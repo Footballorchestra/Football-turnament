@@ -1074,15 +1074,34 @@
             return;
         }
 
-        var list = L.selectMatches(state.data.matches, state.matchesFilter);
+        var searchInput = $('match-search');
+        var query = (searchInput ? searchInput.value : '').trim();
+        var list = L.searchMatches(
+            L.selectMatches(state.data.matches, state.matchesFilter),
+            state.data.teams,
+            query
+        );
 
         qsa('[data-filter]').forEach(function (button) {
             button.classList.toggle('is-active', button.getAttribute('data-filter') === state.matchesFilter);
         });
 
+        // Сколько матчей нашлось по запросу
+        var found = $('matches-found');
+
+        if (found) {
+            found.textContent = query
+                ? 'Найдено матчей: ' + list.length + ' из ' + state.data.matches.length + '.'
+                : '';
+        }
+
         $('matches-list').innerHTML = list.map(matchCard).join('') ||
             '<p class="empty-state card">' +
-                (state.data.matches.length ? 'По этому фильтру матчей нет' : 'Матчи ещё не добавлены') +
+                (state.data.matches.length
+                    ? (query
+                        ? 'По запросу «' + esc(query) + '» матчей не найдено'
+                        : 'По этому фильтру матчей нет')
+                    : 'Матчи ещё не добавлены') +
             '</p>';
     }
 
@@ -1432,9 +1451,23 @@
         }
 
         var groups = L.groupMatchesForAdmin(state.data.matches);
+        var searchInput = $('admin-match-search');
+        var query = (searchInput ? searchInput.value : '').trim();
+
+        if (query) {
+            groups = {
+                finished: L.searchMatches(groups.finished, state.data.teams, query),
+                upcoming: L.searchMatches(groups.upcoming, state.data.teams, query)
+            };
+            groups.all = groups.finished.concat(groups.upcoming);
+        }
 
         if (!groups.all.length) {
-            list.innerHTML = '<p class="admin-hint py-4">Матчи ещё не добавлены — добавьте первый ниже.</p>';
+            list.innerHTML = '<p class="admin-hint py-4">' +
+                (query
+                    ? 'По запросу «' + esc(query) + '» матчей не найдено'
+                    : 'Матчи ещё не добавлены — добавьте первый ниже.') +
+            '</p>';
             return;
         }
 
@@ -2602,8 +2635,16 @@
     function handleInput(event) {
         var target = event.target;
 
-        if (target && target.id === 'team-search') {
+        if (!target || !target.id) {
+            return;
+        }
+
+        if (target.id === 'team-search') {
             renderTeams();
+        } else if (target.id === 'match-search') {
+            renderMatches();
+        } else if (target.id === 'admin-match-search') {
+            renderAdminMatches();
         }
     }
 

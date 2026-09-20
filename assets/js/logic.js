@@ -467,6 +467,26 @@
     }
 
     /**
+     * Поиск матчей по названию команды: подходит часть названия или слово
+     * (регистр и лишние пробелы не важны). Пустой запрос ничего не отсеивает.
+     */
+    function searchMatches(matches, teams, query) {
+        var list = Array.isArray(matches) ? matches.slice() : [];
+        var needle = cleanText(query).toLowerCase();
+
+        if (!needle) {
+            return list;
+        }
+
+        return list.filter(function (match) {
+            var nameA = getTeamName(teams, match.teamA).toLowerCase();
+            var nameB = getTeamName(teams, match.teamB).toLowerCase();
+
+            return nameA.indexOf(needle) !== -1 || nameB.indexOf(needle) !== -1;
+        });
+    }
+
+    /**
      * Расчёт турнирной таблицы: победа — 3 очка, ничья — 1.
      * Сортировка: очки → разница мячей → забитые мячи → название (детерминированно).
      */
@@ -1138,6 +1158,7 @@
         isFinished: isFinished,
         sortMatches: sortMatches,
         selectMatches: selectMatches,
+        searchMatches: searchMatches,
         groupMatchesForAdmin: groupMatchesForAdmin,
         isEventType: isEventType,
         eventLabel: eventLabel,

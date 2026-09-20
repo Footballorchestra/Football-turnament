@@ -302,6 +302,60 @@ test('матчи: фильтры «все», «завершённые», «пр�
     assert.equal(app.$$('#matches-list .match-card').length, 4);
 });
 
+test('матчи для посетителей: поиск по команде фильтрует список', () => {
+    const app = boot();
+
+    app.navigate('matches');
+    const search = app.id('match-search');
+    assert.ok(search, 'на странице матчей есть строка поиска');
+    assert.equal(app.$$('#matches-list .match-card').length, 4);
+
+    // Часть названия — и в списке остаются только матчи этой команды
+    app.type(search, 'спар');
+    assert.equal(app.$$('#matches-list .match-card').length, 2, 'остались матчи Спартака');
+    assert.equal(app.id('matches-list').textContent.match(/Спартак/g).length, 2);
+    assert.match(app.id('matches-found').textContent, /Найдено матчей: 2 из 4/);
+
+    // Поиск работает вместе с фильтром «завершённые / предстоящие»
+    app.click(app.$('[data-filter="finished"]'));
+    assert.equal(app.$$('#matches-list .match-card').length, 1, 'из матчей Спартака остался завершённый');
+
+    app.click(app.$('[data-filter="all"]'));
+    app.type(search, 'динамо');
+    assert.equal(app.$$('#matches-list .match-card').length, 2, 'найдены матчи Динамо');
+
+    // Ничего не нашлось — понятная подсказка вместо пустого экрана
+    app.type(search, 'зенит');
+    assert.equal(app.$$('#matches-list .match-card').length, 0);
+    assert.match(app.id('matches-list').textContent, /По запросу «зенит» матчей не найдено/);
+    assert.match(app.id('matches-found').textContent, /0 из 4/);
+
+    // Очистка строки поиска возвращает весь список
+    app.type(search, '');
+    assert.equal(app.$$('#matches-list .match-card').length, 4);
+    assert.equal(app.id('matches-found').textContent, '');
+});
+
+test('админка: поиск в разделе «Матчи» фильтрует список', () => {
+    const app = boot();
+    app.login();
+
+    app.click(app.$('[data-admin-tab="matches"]'));
+    const search = app.id('admin-match-search');
+    assert.ok(search, 'в разделе «Матчи» есть строка поиска');
+    assert.equal(app.$$('#admin-matches-list [data-action="match-open"]').length, 4);
+
+    app.type(search, 'локомотив');
+    assert.equal(app.$$('#admin-matches-list [data-action="match-open"]').length, 2, 'остались матчи Локомотива');
+
+    app.type(search, 'зенит');
+    assert.equal(app.$$('#admin-matches-list [data-action="match-open"]').length, 0);
+    assert.match(app.id('admin-matches-list').textContent, /По запросу «зенит» матчей не найдено/);
+
+    app.type(search, '');
+    assert.equal(app.$$('#admin-matches-list [data-action="match-open"]').length, 4, 'поиск очищен — список вернулся');
+});
+
 test('матч для посетителей: клик по карточке открывает детальный результат с составами и событиями', () => {
     const app = boot();
 
