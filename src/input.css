@@ -422,8 +422,8 @@
         height: 0.9rem;
     }
 
-    .match-mark-yellow { color: #b58100; }
-    .match-mark-red { color: #c62828; }
+    .match-mark-yellow { color: #f9a825; }
+    .match-mark-red { color: #e53935; }
 
     /* --- Детальный результат матча: счёт, составы, голы и карточки --- */
     .match-detail-score {
@@ -523,8 +523,8 @@
     }
 
     .squad-mark-goal { color: #2e7d32; }
-    .squad-mark-yellow { color: #b58100; }
-    .squad-mark-red { color: #c62828; }
+    .squad-mark-yellow { color: #f9a825; }
+    .squad-mark-red { color: #e53935; }
 
     .score-display {
         background: #202124;
@@ -754,7 +754,7 @@
 
     /* Сводка событий в строке матча: голы, жёлтые и красные карточки */
     .admin-row-count-goal { color: #81c784; }
-    .admin-row-count-yellow { color: #fdd835; }
+    .admin-row-count-yellow { color: #ffd54f; }
     .admin-row-count-red { color: #ef5350; }
 
     /* Счёт в строке матча: «Добрик 2 : 1 Оля» */
@@ -845,17 +845,35 @@
         color: #fff;
     }
 
+    /* Иконки карточек всегда в цвете карточки: жёлтая отметка — жёлтая,
+       красная — красная. Так их видно и до нажатия, и они не путаются между собой. */
+    .event-btn-yellow .icon {
+        color: #f9a825;
+    }
+
+    .event-btn-red .icon {
+        color: #e53935;
+    }
+
     /* Активные отметки карточек — в цвете самой карточки */
     .event-btn-yellow.is-active {
         background: #3f3510;
         border-color: #f9a825;
-        color: #fdd835;
+        color: #ffd54f;
+    }
+
+    .event-btn-yellow.is-active .icon {
+        color: #ffd54f;
     }
 
     .event-btn-red.is-active {
         background: #402020;
         border-color: #c62828;
-        color: #ef9a9a;
+        color: #ff8a80;
+    }
+
+    .event-btn-red.is-active .icon {
+        color: #ff8a80;
     }
 
     .event-btn-undo {
