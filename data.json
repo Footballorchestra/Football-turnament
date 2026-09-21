@@ -1,7 +1,7 @@
 {
-  "version": 5,
-  "revision": 254,
-  "updatedAt": "2026-09-20T17:28:23.163Z",
+  "version": 6,
+  "revision": 255,
+  "updatedAt": "2026-09-21T18:16:44.500Z",
   "teams": [
     {
       "id": 1,
@@ -379,5 +379,8 @@
       ]
     }
   ],
-  "photos": {}
+  "photos": {
+    "1|доброрадных сергей": "assets/photos/dobroradnykh-sergei-dcc974.jpg"
+  },
+  "teamPhotos": {}
 }
