@@ -1871,12 +1871,11 @@ test('админка: дата рождения и принадлежность 
     assert.match(app.id('player-card').textContent, /3 мая 2011/);
     assert.match(app.id('player-card').textContent, /Школа №5, первый тренер/);
 
-    // Администратор может продолжить правку прямо с карточки — откроется та же форма
-    app.click(app.id('player-card').querySelector('[data-action="admin-player-info-open"]'));
-
-    assert.equal(app.activeSection(), 'page-admin-dashboard', 'открылась админка');
-    assert.equal(app.id('player-birth-date').value, '2011-05-03', 'значения подставлены в форму');
-    assert.equal(app.id('player-note').value, note);
+    // Карточка только для чтения: кнопок заполнения данных на ней нет даже у администратора
+    assert.equal(app.id('player-card').querySelector('[data-action="admin-player-info-open"]'), null,
+        'на карточке нет кнопки заполнения данных');
+    assert.equal(app.id('player-card').querySelector('[data-action="player-info-open"]'), null,
+        'и кнопки из админки на карточке тоже нет');
 });
 
 test('админка: длина принадлежности и дата из будущего проверяются', async () => {

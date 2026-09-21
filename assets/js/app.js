@@ -1756,14 +1756,6 @@
         var info = L.getPlayerInfo(state.data, opened.team.id, opened.player);
         var stats = L.playerStats(state.data, opened.team.id, opened.player);
         var birth = playerBirthLine(info.birthDate);
-        var hasInfo = Boolean(info.birthDate || info.note);
-        // Администратор может заполнить данные прямо с карточки — откроется форма в админке
-        var edit = state.admin
-            ? '<div class="mt-3"><button type="button" class="btn btn-sm btn-ghost"' +
-                ' data-action="admin-player-info-open" data-team="' + L.toInt(opened.team.id) +
-                '" data-index="' + opened.index + '">' + icon('pencil') +
-                (hasInfo ? 'Изменить данные игрока' : 'Заполнить данные игрока') + '</button></div>'
-            : '';
 
         box.innerHTML =
             '<div class="player-card-head">' +
@@ -1786,8 +1778,7 @@
                 '<p class="player-card-label">Принадлежность</p>' +
                 '<p class="player-note-text">' +
                     (info.note ? esc(info.note) : '<span class="text-dark-500">не указана</span>') + '</p>' +
-            '</div>' +
-            edit;
+            '</div>';
     }
 
     /** Строка игрока в публичном составе: голы, жёлтая и красная карточки. */
@@ -2541,25 +2532,6 @@
         state.editingPlayerInfo = null;
         setFieldError('player-info-error', '');
         saveData('Данные игрока «' + player + '» сохранены');
-    }
-
-    /** С карточки игрока открывает админку сразу с формой данных этого игрока. */
-    function openAdminPlayerInfo(teamId, index) {
-        if (!state.admin) {
-            return;
-        }
-
-        openTeam(teamId);
-
-        state.editingPlayerInfo = { teamId: L.toInt(teamId), index: L.toInt(index) };
-        renderAdminPlayerInfo();
-        applyRoute('admin', { hash: '#/admin' });
-
-        var box = $('admin-player-info');
-
-        if (box && typeof box.scrollIntoView === 'function') {
-            box.scrollIntoView({ block: 'center' });
-        }
     }
 
     /**
@@ -3672,8 +3644,6 @@
             cancelPlayerInfoEdit();
         } else if (action === 'player-info-clear') {
             clearPlayerInfo(teamId, index);
-        } else if (action === 'admin-player-info-open') {
-            openAdminPlayerInfo(teamId, index);
         } else if (action === 'match-event') {
             recordMatchEvent(id, teamId, element.getAttribute('data-player'), element.getAttribute('data-type'));
         } else if (action === 'match-event-undo') {

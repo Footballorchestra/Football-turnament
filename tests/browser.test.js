@@ -1101,24 +1101,48 @@ test('карточка игрока: имя ведёт на карточку, а
     await clickInView(page, '[data-action="go-back"]');
     assert.equal(await sectionVisible(page, 'page-teams'), true, 'вернулись в список команд');
 
-    // 2. Администратор: вход, карточка игрока, заполнение данных
-    await clickWhenReady(page, '[data-nav="admin"]');
-    await page.type('#admin-password', 'admin');
-    await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
-    await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
+    // 2. Администратор: вход, карточка игрока, заполнение данных.
+    // Вход повторяем: клик по меню может попасть в момент перерисовки страницы
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+        if (await page.evaluate(() => window.FTApp.isAdmin())) {
+            break;
+        }
+
+        await clickWhenReady(page, '[data-nav="admin"]');
+        await page.waitForSelector('#admin-password', { visible: true });
+        await page.$eval('#admin-password', (input) => {
+            input.value = '';
+        });
+        await page.type('#admin-password', 'admin');
+        await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
+        await page.waitForFunction(() => window.FTApp.isAdmin(), { timeout: 5000 }).catch(() => {});
+    }
+
+    assert.equal(await page.evaluate(() => window.FTApp.isAdmin()), true, 'вход выполнен');
+
     await clickInView(page, '[data-action="toggle-settings"]');
     await page.type('#github-token', 'test-token');
     await clickInView(page, '[data-action="github-save-token"]');
     await page.waitForFunction(() => document.getElementById('github-token').placeholder.includes('сохранён'));
 
-    // Заходим на карточку игрока по ссылке и открываем форму данных прямо оттуда
-    await page.evaluate((hash) => {
-        window.location.hash = hash;
-    }, link.hash);
-    await page.waitForFunction(() => !!document.querySelector('#player-card [data-action="admin-player-info-open"]'));
-    await clickInView(page, '#player-card [data-action="admin-player-info-open"]');
+    // Открываем форму данных игрока в админке: раздел «Команды» → карточка команды → кнопка у игрока.
+    // На самой карточке игрока кнопок редактирования нет — данные заполняет только администратор.
+    const parts = link.hash.replace('#/player/', '').split('/');
+
+    await page.waitForFunction(() => !!document.querySelector('#admin-teams-list [data-action="team-open"]'));
+    await clickInView(page, '#admin-teams-list [data-action="team-open"][data-id="' + parts[0] + '"]');
+    await page.waitForFunction(() => !!document.querySelector('#admin-players-list [data-action="player-info-open"]'));
+    await clickInView(page, '#admin-players-list [data-action="player-info-open"][data-index="' + parts[1] + '"]');
 
     await page.waitForFunction(() => !!document.getElementById('player-note'));
+
+    const cardActions = await page.evaluate(() => {
+        const box = document.getElementById('player-card');
+
+        return Array.from(box.querySelectorAll('[data-action]')).map((element) => element.getAttribute('data-action'));
+    });
+
+    assert.deepEqual(cardActions, ['team-public-open'], 'на карточке игрока только ссылка на команду');
 
     const limits = await page.evaluate(() => ({
         maxLength: document.getElementById('player-note').getAttribute('maxlength'),
