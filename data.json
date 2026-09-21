@@ -1,7 +1,7 @@
 {
   "version": 7,
-  "revision": 256,
-  "updatedAt": "2026-09-21T19:28:57.685Z",
+  "revision": 257,
+  "updatedAt": "2026-09-21T19:29:15.726Z",
   "teams": [
     {
       "id": 1,
@@ -384,5 +384,10 @@
     "1|доброрадных сергей": "assets/photos/dobroradnykh-sergei-dcc974.jpg"
   },
   "teamPhotos": {},
-  "playerInfo": {}
+  "playerInfo": {
+    "1|тест": {
+      "birthDate": "1991-01-01",
+      "note": "Привет"
+    }
+  }
 }
