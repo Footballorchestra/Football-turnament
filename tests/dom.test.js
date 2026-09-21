@@ -249,6 +249,54 @@ test('команды: карточки, поиск и состав', () => {
     assert.equal(app.$$('#teams-grid article').length, 4);
 });
 
+test('страница команды: открывается из турнирной таблицы и из списка команд', () => {
+    const app = boot();
+
+    // Строка турнирной таблицы ведёт на страницу команды
+    app.navigate('standings');
+    const row = app.id('standings-body').querySelector('tr[data-action="team-public-open"][data-id="1"]');
+    assert.ok(row, 'строка команды кликабельна');
+    assert.ok(row.querySelector('.team-link'), 'название команды — кнопка');
+    assert.ok(row.querySelector('.team-name'), 'имя команды на месте');
+
+    app.click(row);
+
+    assert.equal(app.activeSection(), 'page-teams', 'открылась страница «Команды»');
+    assert.equal(app.id('team-list-view').hidden, true, 'список команд скрылся');
+    assert.equal(app.id('team-detail-view').hidden, false, 'показана страница команды');
+    assert.equal(app.window.location.hash, '#/team/1', 'у команды свой адрес');
+
+    const detail = app.id('team-detail');
+
+    assert.match(detail.textContent, /Спартак/);
+    assert.match(detail.textContent, /Игроков в заявке: 3/);
+    assert.equal(detail.querySelectorAll('.stat-box').length, 4, 'место, очки, игры, мячи');
+    assert.match(detail.textContent, /Победы: 1 · Ничьи: 0 · Поражения: 0/);
+    assert.equal(detail.querySelectorAll('.chip-player').length, 3, 'состав с аватарами');
+    assert.equal(detail.querySelectorAll('.match-card').length, 2, 'только матчи этой команды');
+
+    // Возврат к списку команд
+    app.click(app.button('team-public-back'));
+    assert.equal(app.id('team-list-view').hidden, false);
+    assert.equal(app.id('team-detail-view').hidden, true);
+    assert.equal(app.window.location.hash, '#/teams');
+
+    // Из списка команд тоже можно провалиться в команду
+    app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="2"]'));
+    assert.equal(app.id('team-detail-view').hidden, false);
+    assert.match(app.id('team-detail').textContent, /Локомотив/);
+    assert.equal(app.window.location.hash, '#/team/2');
+
+    // А из страницы команды — в детальный результат её матча
+    const matchLink = app.id('team-detail').querySelector('[data-action="match-public-open"]');
+    assert.ok(matchLink, 'матчи команды ведут в детальный результат');
+
+    app.click(matchLink);
+
+    assert.equal(app.activeSection(), 'page-matches');
+    assert.equal(app.id('match-detail-view').hidden, false, 'открылся детальный результат матча');
+});
+
 test('лучшие бомбардиры: таблица показывает только забитые мячи, без колонок карточек', () => {
     const app = boot();
 

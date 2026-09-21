@@ -39,6 +39,8 @@
         matchesFilter: 'all',
         /** Открытый матч на публичной странице матчей (null — показывается список). */
         publicMatchId: null,
+        /** Открытая команда на публичной странице команд (null — показывается список). */
+        publicTeamId: null,
         /** Предпросмотр только что загруженных фото: путь → data-URL (до появления файла на сайте). */
         photoPreviews: {},
         /** Игрок, чьё фото сейчас загружается: { teamId, index } (null — никто). */
@@ -1120,13 +1122,14 @@
                 ' · Мячи ' + row.goalsFor + '–' + row.goalsAgainst;
 
             return '' +
-                '<tr class="' + rowClass + '">' +
+                '<tr class="' + rowClass + '" data-action="team-public-open" data-id="' + row.id + '">' +
                     '<td class="num font-medium text-dark-600">' + row.place + '</td>' +
                     '<td class="cell-team">' +
-                        '<div class="flex items-center gap-3">' +
+                        '<button type="button" class="team-link" data-action="team-public-open" data-id="' + row.id +
+                                '" title="Открыть страницу команды">' +
                             teamBadge({ id: row.id, name: row.name }, true) +
-                            '<span class="font-medium">' + esc(row.name) + '</span>' +
-                        '</div>' +
+                            '<span class="team-name font-medium">' + esc(row.name) + '</span>' +
+                        '</button>' +
                         '<span class="row-detail">' + detail + '</span>' +
                     '</td>' +
                     '<td class="num">' + row.played + '</td>' +
@@ -1141,6 +1144,28 @@
     }
 
     function renderTeams() {
+        var listView = $('team-list-view');
+        var detailView = $('team-detail-view');
+        var opened = L.findTeam(state.data.teams, state.publicTeamId);
+
+        if (!opened) {
+            state.publicTeamId = null;
+        }
+
+        if (listView) {
+            listView.hidden = Boolean(opened);
+        }
+
+        if (detailView) {
+            detailView.hidden = !opened;
+        }
+
+        // Открыта конкретная команда — показываем её страницу вместо списка
+        if (opened) {
+            renderPublicTeam(opened);
+            return;
+        }
+
         var searchInput = $('team-search');
         var query = (searchInput ? searchInput.value : '').trim().toLowerCase();
         var standings = L.computeStandings(state.data.teams, state.data.matches);
@@ -1170,11 +1195,14 @@
                 : '<span class="text-dark-500 text-xs">Состав не заполнен</span>';
 
             return '' +
-                '<article class="card p-4">' +
+                '<article class="card p-4" data-action="team-public-open" data-id="' + team.id + '">' +
                     '<div class="flex items-center gap-3 mb-3">' +
                         teamBadge(team) +
-                        '<div class="min-w-0">' +
-                            '<h3 class="font-bold text-lg truncate">' + esc(team.name) + '</h3>' +
+                        '<div class="min-w-0 flex-1">' +
+                            '<button type="button" class="team-link" data-action="team-public-open" data-id="' + team.id +
+                                    '" title="Открыть страницу команды">' +
+                                '<span class="team-name text-lg font-bold truncate">' + esc(team.name) + '</span>' +
+                            '</button>' +
                             '<p class="text-xs text-dark-600">Место: ' + row.place + ' · Очки: ' + row.points +
                                 ' · Игры: ' + row.played + '</p>' +
                         '</div>' +
@@ -1304,6 +1332,90 @@
     function closePublicMatch() {
         state.publicMatchId = null;
         applyRoute('matches', { matchId: null, hash: '#/matches' });
+    }
+
+    /** Хэш-адрес страницы команды. */
+    function teamHash(teamId) {
+        return '#/team/' + L.toInt(teamId);
+    }
+
+    /** Открывает страницу команды: статистика, состав с фото и матчи. */
+    function openPublicTeam(teamId) {
+        var team = L.findTeam(state.data.teams, teamId);
+
+        if (!team) {
+            return;
+        }
+
+        applyRoute('teams', { teamId: L.toInt(team.id), hash: teamHash(team.id) });
+    }
+
+    /** Возвращает список команд (закрывает страницу команды). */
+    function closePublicTeam() {
+        state.publicTeamId = null;
+        applyRoute('teams', { teamId: null, hash: '#/teams' });
+    }
+
+    /** Плитка со значением для страницы команды. */
+    function statBox(label, value) {
+        return '<div class="stat-box">' +
+            '<div class="stat-value">' + esc(String(value)) + '</div>' +
+            '<p class="stat-label">' + esc(label) + '</p>' +
+        '</div>';
+    }
+
+    /** Страница команды: статистика в турнире, состав и все её матчи. */
+    function renderPublicTeam(team) {
+        var box = $('team-detail');
+
+        if (!box) {
+            return;
+        }
+
+        var row = null;
+
+        L.computeStandings(state.data.teams, state.data.matches).forEach(function (item) {
+            if (item.id === L.toInt(team.id)) {
+                row = item;
+            }
+        });
+
+        var players = (team.players || []).length
+            ? team.players.map(function (player) {
+                return '<span class="chip chip-player">' + playerAvatar(team.id, player, { small: true }) +
+                    esc(player) + '</span>';
+            }).join('')
+            : '<p class="text-dark-500 text-sm">Состав не заполнен</p>';
+
+        var matches = L.teamMatches(state.data.matches, team.id);
+        var diff = row ? (row.goalDiff > 0 ? '+' : '') + row.goalDiff : '0';
+
+        box.innerHTML =
+            '<div class="flex items-center gap-3 mb-4">' +
+                teamBadge(team) +
+                '<div class="min-w-0">' +
+                    '<h2 class="font-bold text-lg sm:text-xl truncate">' + esc(team.name) + '</h2>' +
+                    '<p class="text-xs text-dark-600">Игроков в заявке: ' + (team.players || []).length + '</p>' +
+                '</div>' +
+            '</div>' +
+            '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">' +
+                statBox('Место', row ? row.place : '—') +
+                statBox('Очки', row ? row.points : 0) +
+                statBox('Игры', row ? row.played : 0) +
+                statBox('Мячи', row ? row.goalsFor + '–' + row.goalsAgainst : '0–0') +
+            '</div>' +
+            '<p class="text-xs text-dark-600 mb-5">' +
+                (row
+                    ? 'Победы: ' + row.wins + ' · Ничьи: ' + row.draws + ' · Поражения: ' + row.losses +
+                        ' · Разница мячей: ' + diff
+                    : 'Команда ещё не играла') +
+            '</p>' +
+            '<h3 class="text-xs font-bold uppercase tracking-wide text-dark-600 mb-2">Состав</h3>' +
+            '<div class="flex flex-wrap gap-2 mb-6">' + players + '</div>' +
+            '<h3 class="text-xs font-bold uppercase tracking-wide text-dark-600 mb-2">Матчи команды</h3>' +
+            '<div class="space-y-3">' + (matches.length
+                ? matches.map(matchCard).join('')
+                : '<p class="empty-state">Матчей ещё не было</p>') + '</div>';
     }
 
     /** Строка игрока в публичном составе: голы, жёлтая и красная карточки. */
@@ -1948,8 +2060,8 @@
     var ROUTES = { home: true, standings: true, teams: true, matches: true, players: true, admin: true };
 
     /**
-     * Разбор хэша. Обычные адреса («#/matches») открывают страницу,
-     * а «#/match/5» — страницу матчей с детальным результатом матча №5.
+     * Разбор хэша. Обычные адреса («#/matches») открывают страницу, «#/match/5» —
+     * страницу матчей с детальным результатом матча №5, «#/team/3» — страницу команды №3.
      */
     function parseHash() {
         var raw = String(window.location.hash || '')
@@ -1962,7 +2074,11 @@
             return { route: 'matches', matchId: L.toInt(parts[1]) };
         }
 
-        return { route: ROUTES[raw] ? raw : 'home', matchId: null };
+        if (parts[0] === 'team') {
+            return { route: 'teams', teamId: L.toInt(parts[1]) };
+        }
+
+        return { route: ROUTES[raw] ? raw : 'home', matchId: null, teamId: null };
     }
 
     function askConfirm(question) {
@@ -2027,13 +2143,19 @@
         var target = ROUTES[route] ? route : 'home';
         var sectionId = sectionForRoute(target);
 
-        /* Какая страница открыта: список матчей или детальный результат матча.
-           opts.matchId === null — показать список, число — открыть матч,
-           undefined — оставить как есть (внутренняя перерисовка). */
+        /* Какая страница открыта: список или детальная страница (матч, команда).
+           opts.matchId / opts.teamId === null — показать список, число — открыть
+           детальную страницу, undefined — оставить как есть (внутренняя перерисовка). */
         if (target === 'matches' && opts.matchId !== undefined) {
             state.publicMatchId = L.toInt(opts.matchId);
         } else if (target !== 'matches') {
             state.publicMatchId = null;
+        }
+
+        if (target === 'teams' && opts.teamId !== undefined) {
+            state.publicTeamId = L.toInt(opts.teamId);
+        } else if (target !== 'teams') {
+            state.publicTeamId = null;
         }
 
         state.route = target;
@@ -2719,8 +2841,8 @@
         var index = element.hasAttribute('data-index') ? L.toInt(element.getAttribute('data-index')) : null;
 
         if (action === 'navigate') {
-            /* Переход по меню всегда закрывает открытый матч и открывает список */
-            applyRoute(element.getAttribute('data-page') || 'home', { matchId: null });
+            /* Переход по меню всегда закрывает открытый матч или команду и показывает список */
+            applyRoute(element.getAttribute('data-page') || 'home', { matchId: null, teamId: null });
         } else if (action === 'toggle-menu') {
             var menu = $('mobile-menu');
 
@@ -2759,6 +2881,10 @@
             openPublicMatch(id);
         } else if (action === 'match-public-back') {
             closePublicMatch();
+        } else if (action === 'team-public-open') {
+            openPublicTeam(id);
+        } else if (action === 'team-public-back') {
+            closePublicTeam();
         } else if (action === 'match-event') {
             recordMatchEvent(id, teamId, element.getAttribute('data-player'), element.getAttribute('data-type'));
         } else if (action === 'match-event-undo') {
@@ -2915,7 +3041,12 @@
         window.addEventListener('hashchange', function () {
             var parsed = parseHash();
 
-            applyRoute(parsed.route, { updateHash: false, scroll: false, matchId: parsed.matchId });
+            applyRoute(parsed.route, {
+                updateHash: false,
+                scroll: false,
+                matchId: parsed.matchId,
+                teamId: parsed.teamId
+            });
         });
     }
 
@@ -2956,7 +3087,7 @@
 
         var route = parseHash();
 
-        applyRoute(route.route, { updateHash: false, matchId: route.matchId });
+        applyRoute(route.route, { updateHash: false, matchId: route.matchId, teamId: route.teamId });
         fillSyncInputs();
         renderSyncStatus();
 

@@ -251,6 +251,24 @@ test('searchMatches: поиск по части названия команды'
     assert.equal(matches.length, 3, 'исходный список матчей не меняется');
 });
 
+test('teamMatches: матчи одной команды — прошедшие, затем предстоящие', () => {
+    const matches = [
+        { id: 1, teamA: 1, teamB: 2, date: '2026-09-10', scoreA: 2, scoreB: 1, finished: true },
+        { id: 2, teamA: 3, teamB: 4, date: '2026-09-11', scoreA: 1, scoreB: 1, finished: true },
+        { id: 3, teamA: 1, teamB: 3, date: '2026-09-20', scoreA: null, scoreB: null, finished: false },
+        { id: 4, teamA: 1, teamB: 4, date: '2026-09-13', scoreA: 0, scoreB: 3, finished: true },
+        { id: 5, teamA: 1, teamB: 4, date: '2026-09-25', scoreA: null, scoreB: null, finished: false }
+    ];
+
+    // Прошедшие — от новых к старым (13-е раньше 10-го), затем предстоящие по дате
+    assert.deepEqual(L.teamMatches(matches, 1).map((m) => m.id), [4, 1, 3, 5]);
+    assert.deepEqual(L.teamMatches(matches, 3).map((m) => m.id), [2, 3], 'только матчи этой команды');
+    assert.deepEqual(L.teamMatches(matches, '1').map((m) => m.id), [4, 1, 3, 5], 'id строкой тоже подходит');
+    assert.deepEqual(L.teamMatches(matches, 9).map((m) => m.id), [], 'у неизвестной команды матчей нет');
+    assert.deepEqual(L.teamMatches(null, 1), [], 'нет списка матчей — пустой результат');
+    assert.equal(matches.length, 5, 'исходный список не меняется');
+});
+
 test('фото игроков: запись, чтение, перенос при переименовании и очистка', () => {
     const data = L.createDefaultData();
     const path = 'assets/photos/ivanov-a-1a2b3c.jpg';

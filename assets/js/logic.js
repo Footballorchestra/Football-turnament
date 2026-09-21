@@ -472,6 +472,24 @@
     }
 
     /**
+     * Матчи одной команды: сначала прошедшие (от новых к старым), затем предстоящие
+     * (от ближайших к дальним) — тот же порядок, что и в общем списке матчей.
+     */
+    function teamMatches(matches, teamId) {
+        var id = toInt(teamId);
+        var own = (matches || []).filter(function (match) {
+            return toInt(match.teamA) === id || toInt(match.teamB) === id;
+        });
+
+        var finished = sortMatches(own.filter(isFinished), 'desc');
+        var upcoming = sortMatches(own.filter(function (match) {
+            return !isFinished(match);
+        }), 'asc');
+
+        return finished.concat(upcoming);
+    }
+
+    /**
      * Поиск матчей по названию команды: подходит часть названия или слово
      * (регистр и лишние пробелы не важны). Пустой запрос ничего не отсеивает.
      */
@@ -1337,6 +1355,7 @@
         sortMatches: sortMatches,
         selectMatches: selectMatches,
         searchMatches: searchMatches,
+        teamMatches: teamMatches,
         groupMatchesForAdmin: groupMatchesForAdmin,
         isEventType: isEventType,
         eventLabel: eventLabel,

@@ -29,7 +29,7 @@
 
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=15">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=16">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -299,19 +299,34 @@
 
         <!-- ============================ КОМАНДЫ ============================ -->
         <section id="page-teams" class="page-section">
-            <div class="card mb-4">
-                <div class="card-header">
-                    <h2 class="section-title flex items-center gap-2">
-                        <svg class="icon text-primary-700" aria-hidden="true"><use href="#i-users"></use></svg>Команды турнира
-                    </h2>
-                    <div class="relative w-full md:w-80">
-                        <svg class="icon absolute left-3 top-1/2 -translate-y-1/2 text-dark-500" aria-hidden="true"><use href="#i-search"></use></svg>
-                        <label class="sr-only" for="team-search">Поиск команды</label>
-                        <input type="search" id="team-search" placeholder="Поиск команды…" class="input-field pl-10" autocomplete="off">
+            <!-- Список команд и поиск -->
+            <div id="team-list-view">
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h2 class="section-title flex items-center gap-2">
+                            <svg class="icon text-primary-700" aria-hidden="true"><use href="#i-users"></use></svg>Команды турнира
+                        </h2>
+                        <div class="relative w-full md:w-80">
+                            <svg class="icon absolute left-3 top-1/2 -translate-y-1/2 text-dark-500" aria-hidden="true"><use href="#i-search"></use></svg>
+                            <label class="sr-only" for="team-search">Поиск команды</label>
+                            <input type="search" id="team-search" placeholder="Поиск команды…" class="input-field pl-10" autocomplete="off">
+                        </div>
                     </div>
+                    <p class="text-xs text-dark-600 px-4 pb-3">
+                        Нажмите на команду, чтобы открыть её страницу: состав с фото, статистика
+                        и все матчи команды.
+                    </p>
                 </div>
+                <div id="teams-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             </div>
-            <div id="teams-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+
+            <!-- Страница команды: статистика, состав и матчи -->
+            <div id="team-detail-view" hidden>
+                <button type="button" class="btn btn-sm btn-ghost" data-action="team-public-back">
+                    <svg class="icon" aria-hidden="true"><use href="#i-back"></use></svg>Все команды
+                </button>
+                <div id="team-detail" class="card mt-3 p-4 sm:p-5"></div>
+            </div>
         </section>
 
         <!-- ============================ МАТЧИ ============================ -->
@@ -681,10 +696,10 @@
 
     <!-- Логика: настройки → чистая логика → синхронизация с репозиторием → слой DOM.
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
-    <script src="assets/js/config.js?v=15" defer></script>
-    <script src="assets/js/logic.js?v=15" defer></script>
-    <script src="assets/js/sync.js?v=15" defer></script>
-    <script src="assets/js/photo.js?v=15" defer></script>
-    <script src="assets/js/app.js?v=15" defer></script>
+    <script src="assets/js/config.js?v=16" defer></script>
+    <script src="assets/js/logic.js?v=16" defer></script>
+    <script src="assets/js/sync.js?v=16" defer></script>
+    <script src="assets/js/photo.js?v=16" defer></script>
+    <script src="assets/js/app.js?v=16" defer></script>
 </body>
 </html>

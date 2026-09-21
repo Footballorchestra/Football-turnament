@@ -600,6 +600,42 @@
         min-width: 0;
     }
 
+    /* --- Турнирная таблица: строка команды ведёт на её страницу --- */
+    .standings-table tbody tr[data-action] {
+        cursor: pointer;
+    }
+
+    .standings-table tbody tr[data-action]:hover {
+        background: #f1f3f4;
+    }
+
+    /* Ссылка-кнопка на команду: в турнирной таблице и в карточках команд */
+    .team-link {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        background: none;
+        border: 0;
+        font: inherit;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .team-link:hover .team-name {
+        text-decoration: underline;
+    }
+
+    .team-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     /* --- Статусы матча --- */
     .status-pill {
         display: inline-flex;

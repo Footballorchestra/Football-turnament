@@ -780,3 +780,58 @@ test('фото игрока: настоящее сжатие в браузере
     assert.deepEqual(meaningful, [], 'нет ошибок консоли и сбоев загрузки');
     await page.close();
 });
+
+test('страница команды: из турнирной таблицы видно состав, статистику и матчи', { skip }, async () => {
+    const { page, problems } = await openPage();
+
+    await page.click('[data-nav="standings"]');
+
+    // Берём команду, у которой точно есть матчи: содержимое data.json может меняться
+    const target = await page.evaluate(() => {
+        const data = window.FTApp.getData();
+        const rows = Array.from(document.querySelectorAll('#standings-body tr[data-action="team-public-open"]'));
+
+        for (const row of rows) {
+            const id = Number(row.getAttribute('data-id'));
+            const matches = window.FTLogic.teamMatches(data.matches, id);
+
+            if (matches.length > 0) {
+                return {
+                    id: id,
+                    name: row.querySelector('.team-name').textContent.trim(),
+                    matches: matches.length
+                };
+            }
+        }
+
+        return null;
+    });
+
+    assert.ok(target, 'в таблице есть команда с матчами');
+
+    await clickInView(page, '#standings-body tr[data-action="team-public-open"][data-id="' + target.id + '"]');
+
+    // Открылась страница команды вместо списка
+    assert.equal(await sectionVisible(page, 'page-teams'), true);
+    assert.equal(await sectionVisible(page, 'team-detail-view'), true, 'показана страница команды');
+    assert.equal(await sectionVisible(page, 'team-list-view'), false, 'список команд скрыт');
+    assert.equal(await page.evaluate(() => window.location.hash), '#/team/' + target.id, 'у команды свой адрес');
+
+    // На странице: название, статистика, состав и матчи именно этой команды
+    assert.match(await textOf(page, '#team-detail'), new RegExp(target.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.equal(await page.$$eval('#team-detail .stat-box', (boxes) => boxes.length), 4, 'плитки статистики');
+    assert.ok(await page.$$eval('#team-detail .chip-player', (chips) => chips.length) > 0, 'состав показан');
+    assert.equal(await page.$$eval('#team-detail .match-card', (cards) => cards.length), target.matches, 'только её матчи');
+
+    // Из страницы команды открывается детальный результат матча
+    await clickInView(page, '#team-detail [data-action="match-public-open"]');
+    assert.equal(await sectionVisible(page, 'match-detail-view'), true, 'открылся детальный результат матча');
+
+    // И обратно к списку команд
+    await page.click('[data-nav="teams"]');
+    assert.equal(await sectionVisible(page, 'team-list-view'), true, 'вернулись к списку команд');
+    assert.equal(await sectionVisible(page, 'team-detail-view'), false);
+
+    assert.deepEqual(problems, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+});
