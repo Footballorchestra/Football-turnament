@@ -31,13 +31,17 @@
         // 4 — вместо голевых передач отмечаются жёлтые и красные карточки
         // 5 — у игроков появились фото (карта photos с путями к файлам репозитория)
         // 6 — у команд появились эмблемы (карта teamPhotos)
-        dataVersion: 6,
+        // 7 — у игроков появились дата рождения и принадлежность (карта playerInfo)
+        dataVersion: 7,
         // Пароль администратора. Внимание: это демонстрационная защита,
         // на статическом хостинге реальную авторизацию без сервера сделать нельзя
         // (подробности — в README.md).
         adminPassword: 'admin',
         maxTeamNameLength: 30,
         maxPlayerNameLength: 40,
+        // Принадлежность игрока — свободный текст (школа, клуб, тренер):
+        // примерно 3–4 коротких предложения
+        maxPlayerNoteLength: 200,
         maxScore: 99,
         recentMatches: 3,
         // Фото игроков лежат файлами в репозитории сайта, а в данных хранится путь
@@ -59,6 +63,13 @@
             updatedAt: new Date().toISOString(),
             photos: {},
             teamPhotos: {},
+            // Дата рождения и принадлежность игроков: ключ «команда|имя в нижнем регистре»
+            playerInfo: {
+                '1|иванов а.': {
+                    birthDate: '2011-04-18',
+                    note: 'Школа №5, первый тренер — Петров И. До 2023 года играл за «Динамо».'
+                }
+            },
             teams: [
                 { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.', 'Сидоров С.'] },
                 { id: 2, name: 'Локомотив', players: ['Кузнецов К.', 'Попов П.'] },
@@ -685,6 +696,42 @@
         return scorers;
     }
 
+    /** Номер игрока в заявке команды (−1 — такого игрока в составе нет). */
+    function playerIndex(team, player) {
+        var name = cleanText(player, CONFIG.maxPlayerNameLength).toLowerCase();
+
+        if (!team || !name || !Array.isArray(team.players)) {
+            return -1;
+        }
+
+        for (var i = 0; i < team.players.length; i++) {
+            if (cleanText(team.players[i], CONFIG.maxPlayerNameLength).toLowerCase() === name) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /** Голы и карточки одного игрока по всем матчам турнира. */
+    function playerStats(data, teamId, player) {
+        var id = toInt(teamId);
+        var name = cleanText(player, CONFIG.maxPlayerNameLength);
+        var result = { goals: 0, yellow: 0, red: 0 };
+
+        if (id === null || !name || !data || !Array.isArray(data.matches)) {
+            return result;
+        }
+
+        data.matches.forEach(function (match) {
+            result.goals += playerEventCount(match.events, id, name, 'goal');
+            result.yellow += playerEventCount(match.events, id, name, 'yellow');
+            result.red += playerEventCount(match.events, id, name, 'red');
+        });
+
+        return result;
+    }
+
     /* ------------------------------------------------------------------ */
     /* События матча: голы и карточки                                      */
     /* ------------------------------------------------------------------ */
@@ -1058,6 +1105,260 @@
         return { photos: photos, repaired: repaired };
     }
 
+    /* ------------------------------------------------------------------ */
+    /* Данные игрока: дата рождения и принадлежность                       */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Дата рождения хранится строкой «ГГГГ-ММ-ДД» (как даты матчей), а принадлежность —
+     * свободный текст: школа, клуб, тренер. Её длина ограничена (CONFIG.maxPlayerNoteLength,
+     * примерно 3–4 коротких предложения), чтобы карточка игрока оставалась аккуратной.
+     *
+     * Записи живут в отдельной карте playerInfo с тем же ключом, что и фото: «3|иванов а.».
+     */
+
+    /** Самая ранняя разумная дата рождения. */
+    var MIN_BIRTH_YEAR = 1900;
+
+    /** Дата рождения: «ГГГГ-ММ-ДД», существующая, не в будущем и не раньше 1900 года. */
+    function isValidBirthDate(value, now) {
+        if (typeof value !== 'string') {
+            return false;
+        }
+
+        var text = value.trim();
+        var date = parseISODate(text);
+
+        if (!date || date.getFullYear() < MIN_BIRTH_YEAR) {
+            return false;
+        }
+
+        return toISODate(date) <= toISODate(now instanceof Date ? now : new Date());
+    }
+
+    /** Сколько лет игроку (null — дата не указана). Возраст считается на дату now. */
+    function playerAge(birthDate, now) {
+        if (!isValidBirthDate(birthDate, now)) {
+            return null;
+        }
+
+        var date = parseISODate(birthDate.trim());
+        var today = now instanceof Date ? now : new Date();
+        var age = today.getFullYear() - date.getFullYear();
+        var months = today.getMonth() - date.getMonth();
+
+        // День рождения в этом году ещё не наступил — год ещё не прибавился
+        if (months < 0 || (months === 0 && today.getDate() < date.getDate())) {
+            age -= 1;
+        }
+
+        return age;
+    }
+
+    /** «год», «года» или «лет» — для возраста. */
+    function yearsWord(age) {
+        var value = Math.abs(toInt(age) || 0) % 100;
+        var last = value % 10;
+
+        if (value > 10 && value < 20) {
+            return 'лет';
+        }
+
+        if (last === 1) {
+            return 'год';
+        }
+
+        return (last >= 2 && last <= 4) ? 'года' : 'лет';
+    }
+
+    /** «15 лет» — возраст словами ('' — дата не указана). */
+    function formatAge(age) {
+        var value = toInt(age);
+
+        if (value === null || value < 0) {
+            return '';
+        }
+
+        return value + ' ' + yearsWord(value);
+    }
+
+    /** Принадлежность игрока: строки сохраняются, лишние пробелы и пустые строки — нет. */
+    function cleanNote(value, maxLength) {
+        var text = String(value === null || value === undefined ? '' : value)
+            .replace(/\r\n?/g, '\n')
+            .split('\n')
+            .map(function (line) {
+                return line.replace(/[ \t\f\v]+/g, ' ').trim();
+            })
+            .join('\n')
+            .replace(/\n{2,}/g, '\n')
+            .trim();
+        var limit = toInt(maxLength) || CONFIG.maxPlayerNoteLength;
+
+        return text.length > limit ? text.slice(0, limit).trim() : text;
+    }
+
+    /** Пустая запись игрока. */
+    function emptyPlayerInfo() {
+        return { birthDate: '', note: '' };
+    }
+
+    /** Данные игрока ('' — не заполнено). */
+    function getPlayerInfo(data, teamId, player) {
+        var card = (data && isPlainObject(data.playerInfo)) ? data.playerInfo[photoKey(teamId, player)] : null;
+
+        if (!isPlainObject(card)) {
+            return emptyPlayerInfo();
+        }
+
+        return {
+            birthDate: isValidBirthDate(card.birthDate) ? card.birthDate.trim() : '',
+            note: cleanNote(card.note)
+        };
+    }
+
+    /** Заполнена ли у игрока хотя бы одна из карточек данных. */
+    function hasPlayerInfo(data, teamId, player) {
+        var info = getPlayerInfo(data, teamId, player);
+
+        return info.birthDate !== '' || info.note !== '';
+    }
+
+    /** Записывает данные игрока; пустые значения убирают запись целиком. */
+    function setPlayerInfo(data, teamId, player, info) {
+        if (!isPlainObject(data)) {
+            return data;
+        }
+
+        if (!isPlainObject(data.playerInfo)) {
+            data.playerInfo = {};
+        }
+
+        var key = photoKey(teamId, player);
+
+        if (!key || key.charAt(key.length - 1) === '|') {
+            return data;
+        }
+
+        var value = {
+            birthDate: isValidBirthDate(info && info.birthDate) ? String(info.birthDate).trim() : '',
+            note: cleanNote(info && info.note)
+        };
+
+        if (value.birthDate || value.note) {
+            data.playerInfo[key] = value;
+        } else {
+            delete data.playerInfo[key];
+        }
+
+        return data;
+    }
+
+    /** Убирает данные игрока. */
+    function removePlayerInfo(data, teamId, player) {
+        return setPlayerInfo(data, teamId, player, emptyPlayerInfo());
+    }
+
+    /** Убирает данные всех игроков команды (при удалении команды). */
+    function removeTeamPlayerInfo(data, teamId) {
+        var cards = (data && isPlainObject(data.playerInfo)) ? data.playerInfo : {};
+        var prefix = photoKey(teamId, '');
+
+        Object.keys(cards).forEach(function (key) {
+            if (key.indexOf(prefix) === 0) {
+                delete cards[key];
+            }
+        });
+
+        return data;
+    }
+
+    /** Переносит данные игрока на новое имя (при переименовании в составе). */
+    function renamePlayerInfo(data, teamId, oldName, newName) {
+        var info = getPlayerInfo(data, teamId, oldName);
+
+        if (!info.birthDate && !info.note) {
+            return data;
+        }
+
+        removePlayerInfo(data, teamId, oldName);
+
+        return setPlayerInfo(data, teamId, newName, info);
+    }
+
+    /**
+     * Проверяет данные игрока из формы администратора.
+     * Возвращает { ok: true, value } или { ok: false, error }.
+     */
+    function validatePlayerInfo(input) {
+        var source = input || {};
+        var rawNote = source.note === undefined || source.note === null ? '' : String(source.note);
+        var birthDate = cleanText(source.birthDate, 10);
+
+        if (birthDate && !isValidBirthDate(birthDate)) {
+            return { ok: false, error: 'Дата рождения — «ДД.ММ.ГГГГ», не в будущем и не раньше 1900 года' };
+        }
+
+        if (rawNote.trim().length > CONFIG.maxPlayerNoteLength) {
+            return {
+                ok: false,
+                error: 'Принадлежность — не больше ' + CONFIG.maxPlayerNoteLength + ' символов'
+            };
+        }
+
+        return { ok: true, value: { birthDate: birthDate, note: cleanNote(rawNote) } };
+    }
+
+    /**
+     * Приводит карту данных игроков к корректному виду: остаются только записи
+     * оставшихся в заявке игроков, дата проверяется, длина текста ограничивается.
+     */
+    function normalizePlayerInfo(rawInfo, teams) {
+        var cards = {};
+
+        if (rawInfo === undefined || rawInfo === null) {
+            return { info: cards, repaired: false };
+        }
+
+        if (!isPlainObject(rawInfo)) {
+            return { info: cards, repaired: true };
+        }
+
+        var repaired = false;
+
+        Object.keys(rawInfo).forEach(function (key) {
+            var value = rawInfo[key];
+            var parts = String(key).split('|');
+            var name = cleanText(parts.slice(1).join('|')).toLowerCase();
+            var team = findTeam(teams, parts[0]);
+            var inSquad = Boolean(team && name) && (team.players || []).some(function (player) {
+                return cleanText(player).toLowerCase() === name;
+            });
+
+            if (!isPlainObject(value) || !inSquad) {
+                repaired = true;
+                return;
+            }
+
+            var birthDate = isValidBirthDate(value.birthDate) ? value.birthDate.trim() : '';
+            var note = cleanNote(value.note);
+            var rawNote = value.note === undefined || value.note === null ? '' : String(value.note);
+
+            if ((value.birthDate && !birthDate) || rawNote.trim().length > CONFIG.maxPlayerNoteLength) {
+                repaired = true;
+            }
+
+            if (birthDate || note) {
+                cards[photoKey(team.id, name)] = { birthDate: birthDate, note: note };
+            } else {
+                // Запись без данных не нужна — это тоже исправление
+                repaired = true;
+            }
+        });
+
+        return { info: cards, repaired: repaired };
+    }
+
     /**
      * Приводит карту фото к корректному виду: остаются только пути внутрь папки
      * фотографий у игроков, которые есть в заявке своей команды.
@@ -1188,7 +1489,8 @@
                     teams: [],
                     matches: [],
                     photos: {},
-                    teamPhotos: {}
+                    teamPhotos: {},
+                    playerInfo: {}
                 },
                 repaired: repaired,
                 reason: repaired ? 'Часть данных была исправлена автоматически' : ''
@@ -1262,8 +1564,9 @@
 
         var normalizedPhotos = normalizePhotos(raw.photos, teams);
         var normalizedTeamPhotos = normalizeTeamPhotos(raw.teamPhotos, teams);
+        var normalizedPlayerInfo = normalizePlayerInfo(raw.playerInfo, teams);
 
-        if (normalizedPhotos.repaired || normalizedTeamPhotos.repaired) {
+        if (normalizedPhotos.repaired || normalizedTeamPhotos.repaired || normalizedPlayerInfo.repaired) {
             repaired = true;
         }
 
@@ -1275,7 +1578,8 @@
                 teams: teams,
                 matches: matches,
                 photos: normalizedPhotos.photos,
-                teamPhotos: normalizedTeamPhotos.photos
+                teamPhotos: normalizedTeamPhotos.photos,
+                playerInfo: normalizedPlayerInfo.info
             },
             repaired: repaired,
             reason: repaired ? 'Часть данных была исправлена автоматически' : ''
@@ -1384,7 +1688,8 @@
             teams: (data && data.teams) || [],
             matches: (data && data.matches) || [],
             photos: (data && data.photos) || {},
-            teamPhotos: (data && data.teamPhotos) || {}
+            teamPhotos: (data && data.teamPhotos) || {},
+            playerInfo: (data && data.playerInfo) || {}
         }, null, 2);
     }
 
@@ -1443,6 +1748,20 @@
         setTeamPhoto: setTeamPhoto,
         removeTeamPhoto: removeTeamPhoto,
         normalizeTeamPhotos: normalizeTeamPhotos,
+        isValidBirthDate: isValidBirthDate,
+        playerAge: playerAge,
+        yearsWord: yearsWord,
+        formatAge: formatAge,
+        playerIndex: playerIndex,
+        playerStats: playerStats,
+        getPlayerInfo: getPlayerInfo,
+        hasPlayerInfo: hasPlayerInfo,
+        setPlayerInfo: setPlayerInfo,
+        removePlayerInfo: removePlayerInfo,
+        removeTeamPlayerInfo: removeTeamPlayerInfo,
+        renamePlayerInfo: renamePlayerInfo,
+        validatePlayerInfo: validatePlayerInfo,
+        normalizePlayerInfo: normalizePlayerInfo,
         validateTeamName: validateTeamName,
         validatePlayerName: validatePlayerName,
         normalizeScore: normalizeScore,

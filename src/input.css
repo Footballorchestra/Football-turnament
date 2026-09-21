@@ -565,6 +565,13 @@
         font-size: 0.875rem;
     }
 
+    /* Крупное фото в карточке игрока */
+    .player-avatar-xl {
+        width: 144px;
+        height: 144px;
+        font-size: 2.75rem;
+    }
+
     .player-avatar-empty {
         display: inline-flex;
         align-items: center;
@@ -701,6 +708,50 @@
     /* В компактной турнирной таблице (телефон) эмблема, как и бейдж, скрывается */
     .standings-table.is-compact .team-photo {
         display: none;
+    }
+
+    /* --- Карточка игрока: крупное фото, дата рождения и принадлежность --- */
+
+    .player-link {
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .player-link:hover .player-name,
+    .player-link:hover .squad-name,
+    .player-link:hover:not(.chip) {
+        text-decoration: underline;
+    }
+
+    .player-card-head {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 0.75rem;
+    }
+
+    .player-card-team {
+        max-width: 22rem;
+    }
+
+    .player-card-label {
+        font-size: 0.75rem;
+        color: #5f6368;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .player-note {
+        border-top: 1px solid #dadce0;
+        padding-top: 0.75rem;
+    }
+
+    /* Принадлежность пишут несколькими строками — строки сохраняем */
+    .player-note-text {
+        white-space: pre-line;
+        margin-top: 0.25rem;
+        overflow-wrap: anywhere;
     }
 
     /* --- Статусы матча --- */
@@ -1187,6 +1238,13 @@
     .btn {
         min-height: 2.5rem;
         padding: 0.5625rem 1rem;
+    }
+
+    /* Крупное фото в карточке игрока на телефоне занимает меньше места */
+    .player-avatar-xl {
+        width: 104px;
+        height: 104px;
+        font-size: 2rem;
     }
 
     /* Мелкие кнопки — высота как у сегментированных элементов iOS (32px):

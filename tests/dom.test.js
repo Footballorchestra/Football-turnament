@@ -1707,3 +1707,277 @@ test('фото, которого ещё нет на сайте: повторны
     assert.equal(row.querySelector('img.team-photo'), null, 'сломанная эмблема убрана');
     assert.equal(row.querySelector('.team-badge').textContent, 'СП', 'бейдж с инициалами вернулся');
 });
+
+test('карточка игрока: имя кликабельно, видны фото, дата рождения и принадлежность', () => {
+    const app = boot();
+    const card = () => app.id('player-card');
+
+    // В списке команд игрок — ссылка на свою карточку
+    app.navigate('teams');
+
+    const chip = app.id('teams-grid').querySelector('.chip-player');
+
+    assert.ok(chip, 'игроки видны в составе');
+    assert.equal(chip.tagName, 'A', 'имя игрока — ссылка');
+    assert.equal(chip.getAttribute('data-action'), 'player-public-open');
+    assert.match(chip.getAttribute('title'), /Открыть карточку игрока/);
+
+    app.click(chip);
+
+    assert.equal(app.activeSection(), 'page-player', 'открылась карточка игрока');
+    assert.equal(app.window.location.hash, '#/player/1/0', 'у карточки свой адрес');
+    assert.equal(app.$('[data-nav="teams"]').classList.contains('active'), true,
+        'в меню подсвечен раздел «Команды»');
+
+    // Крупное фото, команда, дата рождения и принадлежность
+    assert.ok(card().querySelector('.player-avatar-xl'), 'крупный аватар игрока');
+    assert.match(card().textContent, /Иванов А\./);
+    assert.match(card().textContent, /18 апреля 2011/, 'дата рождения из данных');
+    assert.match(card().textContent, /Школа №5/, 'принадлежность из данных');
+    assert.match(card().textContent, /В турнире: голы — 0/, 'статистика игрока');
+    assert.ok(card().querySelector('a.team-link'), 'название команды — ссылка на её страницу');
+
+    // Кнопка «Назад» возвращает туда, откуда пришли
+    assert.match(app.id('back-target').textContent, /Команды/);
+    app.click(app.button('go-back'));
+    assert.equal(app.activeSection(), 'page-teams');
+
+    // Игрок без данных: подсказки вместо пустых полей
+    app.click(app.id('teams-grid').querySelectorAll('.chip-player')[1]);
+
+    assert.match(card().textContent, /Дата рождения: не указана/);
+    assert.equal((card().textContent.match(/не указана/g) || []).length, 2, 'и принадлежность тоже не указана');
+
+    // Состав на странице команды тоже кликабелен
+    app.navigate('teams');
+    app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="1"]'));
+
+    const squadChip = app.id('team-detail').querySelector('.chip-player');
+
+    assert.equal(squadChip.tagName, 'A');
+    assert.equal(squadChip.getAttribute('data-action'), 'player-public-open');
+    assert.match(app.id('team-detail').textContent, /Иванов А\./);
+});
+
+test('карточка игрока: открывается из бомбардиров и из составов матча, несуществующий не ломает сайт', () => {
+    const seeded = remoteData();
+
+    // Гол Иванова А. — игрок попадает в таблицу бомбардиров
+    seeded.matches[0].events = [
+        { team: 1, player: 'Иванов А.', type: 'goal' },
+        { team: 2, player: 'Кузнецов К.', type: 'yellow' }
+    ];
+
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+
+    // Из таблицы бомбардиров
+    app.navigate('players');
+
+    const scorer = app.id('players-body').querySelector('a.player-link');
+
+    assert.ok(scorer, 'бомбардир — ссылка на карточку');
+    assert.equal(scorer.getAttribute('data-action'), 'player-public-open');
+
+    app.click(scorer);
+
+    assert.equal(app.activeSection(), 'page-player');
+    assert.match(app.id('player-card').textContent, /Иванов А\./);
+    assert.match(app.id('player-card').textContent, /В турнире: голы — 1/, 'гол учтён в карточке');
+    assert.equal(app.window.location.hash, '#/player/1/0');
+
+    // Из детального результата матча
+    app.navigate('matches');
+    app.click(app.$('#matches-list [data-action="match-public-open"]'));
+
+    const squadPlayer = app.id('match-detail').querySelector('.squad-player[data-action="player-public-open"]');
+
+    assert.ok(squadPlayer, 'игрок в составе матча — ссылка');
+
+    const squadTeam = squadPlayer.getAttribute('data-team');
+    const squadIndex = squadPlayer.getAttribute('data-index');
+    const squadName = squadPlayer.querySelector('.squad-name').textContent;
+
+    app.click(squadPlayer);
+
+    assert.equal(app.activeSection(), 'page-player');
+    assert.equal(app.window.location.hash, '#/player/' + squadTeam + '/' + squadIndex, 'адрес игрока в составе');
+    assert.equal(app.id('player-card').querySelector('h2').textContent, squadName, 'открылся тот же игрок');
+
+    // Игрока из ссылки уже нет в заявке — показывается понятное сообщение
+    seeded.teams[0].players = ['Петров П.'];
+
+    const changed = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+
+    changed.window.location.hash = '#/player/1/2';
+    changed.window.dispatchEvent(new changed.window.Event('hashchange'));
+
+    assert.match(changed.id('player-card').textContent, /Игрок не найден/);
+    assert.ok(changed.$('#player-card [data-action="team-public-back"]'), 'есть кнопка «К списку команд»');
+
+    changed.click(changed.$('#player-card [data-action="team-public-back"]'));
+    assert.equal(changed.activeSection(), 'page-teams');
+});
+
+
+test('админка: дата рождения и принадлежность заполняются и видны на карточке игрока', async () => {
+    const seeded = remoteData();
+
+    // Начинаем с чистого листа: у игроков пока ничего не заполнено
+    seeded.playerInfo = {};
+
+    const mock = createMockRepository({ data: seeded });
+    const app = boot({ mock, autoPublishDelayMs: 10000 });
+
+    await app.settle();
+
+    app.login();
+    app.openTeam('Спартак');
+
+    // У каждого игрока есть кнопка с формой данных
+    const infoButtons = app.id('admin-players-list').querySelectorAll('[data-action="player-info-open"]');
+
+    assert.equal(infoButtons.length, 3, 'кнопка «данные игрока» у каждого игрока состава');
+
+    app.click(infoButtons[0]);
+
+    const form = () => app.id('admin-player-info').querySelector('form');
+
+    assert.equal(app.id('admin-player-info').hidden, false, 'форма открылась');
+    assert.match(app.id('admin-player-info').textContent, /Данные игрока: Иванов А\./);
+    assert.equal(app.id('player-birth-date').value, '', 'дата рождения пока пустая');
+    assert.equal(app.id('player-note').value, '', 'принадлежность пока пустая');
+    assert.equal(app.id('player-note').getAttribute('maxlength'), String(L.CONFIG.maxPlayerNoteLength),
+        'длина принадлежности ограничена');
+    assert.equal(app.id('player-birth-date').getAttribute('max'), L.todayISO(), 'будущие даты выбрать нельзя');
+
+    // Счётчик символов обновляется при вводе
+    const note = 'Школа №5, первый тренер — Петров И.';
+
+    app.type(app.id('player-note'), note);
+    assert.equal(app.id('player-note-count').textContent, String(note.length));
+
+    app.id('player-birth-date').value = '2011-05-03';
+    app.submit(form());
+
+    assert.deepEqual(app.storedData().playerInfo['1|иванов а.'], { birthDate: '2011-05-03', note: note });
+    assert.match(app.id('toast-container').textContent, /Данные игрока «Иванов А\.» сохранены/);
+    assert.equal(app.id('admin-player-info').hidden, true, 'после сохранения форма закрывается');
+
+    // Данные видны на публичной карточке игрока
+    app.navigate('teams');
+    app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="1"]'));
+    app.click(app.id('team-detail').querySelector('.chip-player'));
+
+    assert.match(app.id('player-card').textContent, /3 мая 2011/);
+    assert.match(app.id('player-card').textContent, /Школа №5, первый тренер/);
+
+    // Администратор может продолжить правку прямо с карточки — откроется та же форма
+    app.click(app.id('player-card').querySelector('[data-action="admin-player-info-open"]'));
+
+    assert.equal(app.activeSection(), 'page-admin-dashboard', 'открылась админка');
+    assert.equal(app.id('player-birth-date').value, '2011-05-03', 'значения подставлены в форму');
+    assert.equal(app.id('player-note').value, note);
+});
+
+test('админка: длина принадлежности и дата из будущего проверяются', async () => {
+    const seeded = remoteData();
+
+    seeded.playerInfo = { '1|иванов а.': { birthDate: '2011-05-03', note: 'Школа №5' } };
+
+    const mock = createMockRepository({ data: seeded });
+    const app = boot({ mock, autoPublishDelayMs: 10000 });
+
+    await app.settle();
+
+    app.login();
+    app.openTeam('Спартак');
+    app.click(app.id('admin-players-list').querySelector('[data-action="player-info-open"]'));
+
+    const form = () => app.id('admin-player-info').querySelector('form');
+
+    // Слишком длинный текст не сохраняется — понятная ошибка вместо тихой обрезки
+    app.type(app.id('player-note'), 'а'.repeat(L.CONFIG.maxPlayerNoteLength + 1));
+    app.submit(form());
+
+    assert.match(app.id('player-info-error').textContent, /не больше 200 символов/);
+    assert.equal(app.storedData().playerInfo['1|иванов а.'].note, 'Школа №5', 'данные не изменились');
+
+    // Дата из будущего тоже не проходит
+    app.id('player-birth-date').value = '2030-01-01';
+    app.type(app.id('player-note'), 'Школа №6');
+    app.submit(form());
+
+    assert.match(app.id('player-info-error').textContent, /не в будущем/);
+
+    // «Убрать данные» очищает дату рождения и принадлежность
+    app.click(app.id('admin-player-info').querySelector('[data-action="player-info-clear"]'));
+
+    assert.deepEqual(app.storedData().playerInfo, {});
+    assert.match(app.id('toast-container').textContent, /Данные игрока убраны/);
+    assert.equal(app.id('admin-player-info').hidden, true, 'форма закрыта');
+});
+
+
+
+test('админка: переименование и удаление игрока переносят данные карточки', async () => {
+    const seeded = remoteData();
+
+    seeded.playerInfo = { '1|иванов а.': { birthDate: '2011-05-03', note: 'Школа №5' } };
+
+    const mock = createMockRepository({ data: seeded });
+    const app = boot({ mock, autoPublishDelayMs: 10000 });
+
+    await app.settle();
+
+    app.login();
+    app.openTeam('Спартак');
+
+    // Форма открыта на игроке с заполненными данными
+    app.click(app.id('admin-players-list').querySelector('[data-action="player-info-open"]'));
+    assert.equal(app.id('player-birth-date').value, '2011-05-03');
+    assert.ok(app.id('admin-player-info').querySelector('[data-action="player-info-clear"]'),
+        'есть кнопка «убрать данные»');
+
+    // «Отмена» просто закрывает форму, данные не меняются
+    app.click(app.id('admin-player-info').querySelector('[data-action="player-info-cancel"]'));
+
+    assert.equal(app.id('admin-player-info').hidden, true);
+    assert.deepEqual(app.storedData().playerInfo, { '1|иванов а.': { birthDate: '2011-05-03', note: 'Школа №5' } });
+
+    // Переименование переносит данные на новое имя
+    app.click(app.id('admin-players-list').querySelector('[data-action="player-rename"]'));
+    app.type(app.id('player-rename-input'), 'Иванов-старший');
+    app.click(app.id('admin-players-list').querySelector('[data-action="player-save"]'));
+
+    assert.deepEqual(app.storedData().playerInfo, {
+        '1|иванов-старший': { birthDate: '2011-05-03', note: 'Школа №5' }
+    });
+
+    // Удаление игрока убирает и его данные
+    app.click(app.id('admin-players-list').querySelector('[data-action="player-delete"]'));
+
+    assert.deepEqual(app.storedData().playerInfo, {}, 'данные удалённого игрока убраны');
+    assert.equal(app.storedData().teams[0].players.length, 2);
+});
+
+test('админка: удаление команды убирает данные её игроков', async () => {
+    const seeded = remoteData();
+
+    seeded.playerInfo = {
+        '1|иванов а.': { birthDate: '2011-05-03', note: 'Школа №5' },
+        '2|кузнецов к.': { birthDate: '2010-02-02', note: 'Клуб' }
+    };
+
+    const mock = createMockRepository({ data: seeded });
+    const app = boot({ mock, autoPublishDelayMs: 10000 });
+
+    await app.settle();
+
+    app.login();
+    app.openTeam('Спартак');
+    app.click(app.button('team-delete'));
+
+    assert.deepEqual(app.storedData().playerInfo, { '2|кузнецов к.': { birthDate: '2010-02-02', note: 'Клуб' } },
+        'данные игроков удалённой команды убраны, чужие не задеты');
+});
+

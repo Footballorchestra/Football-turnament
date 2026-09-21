@@ -29,7 +29,7 @@
 
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=21">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=23">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -339,6 +339,11 @@
             </div>
         </section>
 
+        <!-- ============================ ИГРОК ============================ -->
+        <section id="page-player" class="page-section">
+            <div id="player-card" class="card p-4 sm:p-5"></div>
+        </section>
+
         <!-- ============================ МАТЧИ ============================ -->
         <section id="page-matches" class="page-section">
             <!-- Список матчей и фильтры -->
@@ -588,6 +593,9 @@
                     </form>
 
                     <div id="admin-players-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2"></div>
+
+                    <!-- Данные игрока: дата рождения и принадлежность (открывается кнопкой у игрока) -->
+                    <div id="admin-player-info" class="mt-4 border-t border-dark-200 pt-4" hidden></div>
                 </div>
             </div>
 
@@ -709,10 +717,10 @@
 
     <!-- Логика: настройки → чистая логика → синхронизация с репозиторием → слой DOM.
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
-    <script src="assets/js/config.js?v=21" defer></script>
-    <script src="assets/js/logic.js?v=21" defer></script>
-    <script src="assets/js/sync.js?v=21" defer></script>
-    <script src="assets/js/photo.js?v=21" defer></script>
-    <script src="assets/js/app.js?v=21" defer></script>
+    <script src="assets/js/config.js?v=23" defer></script>
+    <script src="assets/js/logic.js?v=23" defer></script>
+    <script src="assets/js/sync.js?v=23" defer></script>
+    <script src="assets/js/photo.js?v=23" defer></script>
+    <script src="assets/js/app.js?v=23" defer></script>
 </body>
 </html>

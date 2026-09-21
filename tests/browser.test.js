@@ -729,12 +729,14 @@ test('фото игрока: настоящее сжатие в браузере
         }, 'image/png');
     }));
 
-    // 4. Дожидаемся аватара и проверяем, что получилось
+    // 4. Дожидаемся предпросмотра загруженного фото и проверяем, что получилось.
+    // Ждём именно наш предпросмотр (data:…), а не первую картинку в составе: у других
+    // игроков фото могло быть и раньше, и обычная проверка сработала бы слишком рано.
     await page.waitForFunction(() => {
         const image = document.querySelector('#admin-players-list img.player-avatar');
 
-        // naturalWidth появляется только после того, как браузер декодировал картинку
-        return !!image && image.complete && image.naturalWidth > 0;
+        return !!image && image.getAttribute('src').indexOf('data:image/jpeg;base64,') === 0 &&
+            image.complete && image.naturalWidth > 0;
     });
 
     const result = await page.evaluate(() => {
@@ -744,6 +746,7 @@ test('фото игрока: настоящее сжатие в браузере
 
         return {
             count: Object.keys(data.photos || {}).length,
+            stored: Object.values(data.photos || {}),
             path: previews.length ? previews[previews.length - 1] : '',
             previews: previews,
             preview: image ? image.getAttribute('src').indexOf('data:image/jpeg;base64,') === 0 : false,
@@ -752,7 +755,8 @@ test('фото игрока: настоящее сжатие в браузере
         };
     });
 
-    assert.equal(result.count, photosBefore + 1, 'новое фото записано в данные');
+    assert.ok(result.stored.includes(result.path), 'путь нового фото записан в данные');
+    assert.ok(result.count >= photosBefore, 'прежние фото не потерялись');
     assert.match(result.path, /^assets\/photos\/[a-z0-9-]+-[0-9a-f]{6}\.jpg$/, 'имя файла безопасное и уникальное');
     assert.equal(result.previews.length, 1, 'предпросмотр ровно у загруженного фото');
     assert.equal(result.preview, true, 'показан локальный предпросмотр (сжатый JPEG)');
@@ -929,7 +933,9 @@ test('эмблема команды: загрузка из админки, сж�
     await page.waitForFunction(() => {
         const image = document.querySelector('#admin-team-photo img.team-photo');
 
-        return !!image && image.complete && image.naturalWidth > 0;
+        // Ждём предпросмотр из памяти: файл на сайте появится позже
+        return !!image && image.getAttribute('src').indexOf('data:image/jpeg;base64,') === 0 &&
+            image.complete && image.naturalWidth > 0;
     });
 
     const result = await page.evaluate(() => {
@@ -1045,3 +1051,122 @@ test('фото, которого нет на сайте: повторные по
     mockRepository.changeExternally(before);
     await page.close();
 });
+test('карточка игрока: имя ведёт на карточку, администратор заполняет дату рождения и принадлежность', { skip }, async () => {
+    const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
+
+    // 1. В списке команд имя игрока — ссылка на его карточку
+    await clickWhenReady(page, '[data-nav="teams"]');
+    await page.waitForFunction(() => !!document.querySelector('#teams-grid .chip-player[data-action="player-public-open"]'));
+
+    const link = await page.evaluate(() => {
+        const element = document.querySelector('#teams-grid .chip-player[data-action="player-public-open"]');
+
+        return {
+            hash: element.getAttribute('href'),
+            text: element.textContent.replace(/\s+/g, ' ').trim()
+        };
+    });
+
+    assert.match(link.hash, /^#\/player\/\d+\/\d+$/, 'адрес карточки игрока');
+    assert.match(link.text, /\S/, 'в ссылке видно имя игрока');
+
+    await clickInView(page, '#teams-grid .chip-player[data-action="player-public-open"]');
+    await page.waitForFunction(() => !!document.querySelector('#player-card .player-card-head'));
+
+    const opened = await page.evaluate(() => {
+        const box = document.getElementById('player-card');
+
+        return {
+            hash: window.location.hash,
+            active: document.querySelector('.page-section.active').id,
+            name: box.querySelector('h2').textContent,
+            photo: !!box.querySelector('.player-avatar-xl'),
+            team: box.querySelector('a.team-link .team-name').textContent,
+            hasBirthLine: box.textContent.includes('Дата рождения:'),
+            hasNote: !!box.querySelector('.player-note-text'),
+            stats: box.textContent.includes('В турнире: голы —')
+        };
+    });
+
+    assert.equal(opened.hash, link.hash, 'страница игрока со своим адресом');
+    assert.equal(opened.active, 'page-player', 'показана страница игрока');
+    assert.match(opened.name, /\S/);
+    assert.equal(opened.photo, true, 'крупное фото игрока');
+    assert.match(opened.team, /\S/, 'видна команда игрока');
+    assert.equal(opened.hasBirthLine, true, 'видна дата рождения');
+    assert.equal(opened.hasNote, true, 'видна принадлежность');
+    assert.equal(opened.stats, true, 'видна статистика игрока');
+
+    // «Назад» возвращает в список команд
+    await clickInView(page, '[data-action="go-back"]');
+    assert.equal(await sectionVisible(page, 'page-teams'), true, 'вернулись в список команд');
+
+    // 2. Администратор: вход, карточка игрока, заполнение данных
+    await clickWhenReady(page, '[data-nav="admin"]');
+    await page.type('#admin-password', 'admin');
+    await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
+    await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
+    await clickInView(page, '[data-action="toggle-settings"]');
+    await page.type('#github-token', 'test-token');
+    await clickInView(page, '[data-action="github-save-token"]');
+    await page.waitForFunction(() => document.getElementById('github-token').placeholder.includes('сохранён'));
+
+    // Заходим на карточку игрока по ссылке и открываем форму данных прямо оттуда
+    await page.evaluate((hash) => {
+        window.location.hash = hash;
+    }, link.hash);
+    await page.waitForFunction(() => !!document.querySelector('#player-card [data-action="admin-player-info-open"]'));
+    await clickInView(page, '#player-card [data-action="admin-player-info-open"]');
+
+    await page.waitForFunction(() => !!document.getElementById('player-note'));
+
+    const limits = await page.evaluate(() => ({
+        maxLength: document.getElementById('player-note').getAttribute('maxlength'),
+        maxDate: document.getElementById('player-birth-date').getAttribute('max'),
+        admin: document.querySelector('.page-section.active').id
+    }));
+
+    assert.equal(limits.admin, 'page-admin-dashboard', 'открылась админка с формой данных игрока');
+    assert.equal(limits.maxLength, '200', 'длина принадлежности ограничена 200 символами');
+    assert.match(limits.maxDate, /^\d{4}-\d{2}-\d{2}$/, 'будущие даты рождения выбрать нельзя');
+
+    const note = 'Школа №5, первый тренер — Петров И. С 2023 года играет за «Добрик».';
+
+    await page.$eval('#player-birth-date', (input) => {
+        input.value = '2011-05-03';
+    });
+    await page.type('#player-note', note);
+    await page.click('[data-form="player-info"] button[type="submit"]');
+
+    await page.waitForFunction(() => document.getElementById('toast-container').textContent.includes('сохранены'));
+
+    const saved = await page.evaluate((hash) => {
+        const parts = hash.replace('#/player/', '').split('/');
+        const data = window.FTApp.getData();
+        const team = data.teams.find((item) => String(item.id) === parts[0]);
+        const player = team ? team.players[Number(parts[1])] : '';
+        const key = parts[0] + '|' + String(player).toLowerCase();
+
+        return { key: key, value: (data.playerInfo || {})[key] || null };
+    }, link.hash);
+
+    assert.deepEqual(saved.value, { birthDate: '2011-05-03', note: note },
+        'дата рождения и принадлежность сохранены (' + saved.key + ')');
+
+    // 3. Данные видны на публичной карточке игрока
+    await page.evaluate((hash) => {
+        window.location.hash = hash;
+    }, link.hash);
+    await page.waitForFunction(() => document.getElementById('player-card').textContent.includes('3 мая 2011'));
+
+    const shown = await page.evaluate(() => document.getElementById('player-card').textContent);
+
+    assert.match(shown, /Школа №5, первый тренер/, 'принадлежность видна на карточке');
+
+    const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
+
+    assert.deepEqual(meaningful, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+});
+
+

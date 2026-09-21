@@ -41,6 +41,9 @@
         publicMatchId: null,
         /** Открытая команда на публичной странице команд (null — показывается список). */
         publicTeamId: null,
+        /** Открытый игрок: команда и номер в заявке (null — карточка игрока не открыта). */
+        publicPlayerTeamId: null,
+        publicPlayerIndex: null,
         /** Стек посещённых страниц для кнопки «Назад» (в памяти, до перезагрузки). */
         history: [],
         /** Предпросмотр только что загруженных фото: путь → data-URL (до появления файла на сайте). */
@@ -55,6 +58,8 @@
         editingTeamId: null,
         editingMatchId: null,
         editingPlayer: null,
+        /** Игрок, чью дату рождения и принадлежность заполняет администратор: { teamId, index }. */
+        editingPlayerInfo: null,
         /** Открытая команда в разделе «Команды» (null — показывается список команд). */
         selectedTeamId: null,
         /** Открытый матч в разделе «Матчи» (null — показывается список матчей). */
@@ -368,12 +373,15 @@
 
     /**
      * Аватар игрока: фото, а если его нет — кружок с инициалами.
-     * options: { small } — 24 px (списки), без флага — 36 px, { big } — 48 px.
+     * options: { small } — 24 px (списки), без флага — 36 px, { big } — 48 px,
+     * { detail } — 144 px (крупное фото в карточке игрока).
      */
     function playerAvatar(teamId, player, options) {
         var opts = options || {};
-        var side = opts.big ? 48 : (opts.small ? 24 : 36);
-        var className = 'player-avatar' + (opts.big ? ' player-avatar-lg' : (opts.small ? ' player-avatar-sm' : ''));
+        var side = opts.detail ? 144 : (opts.big ? 48 : (opts.small ? 24 : 36));
+        var className = 'player-avatar' + (opts.detail
+            ? ' player-avatar-xl'
+            : (opts.big ? ' player-avatar-lg' : (opts.small ? ' player-avatar-sm' : '')));
         var url = photoUrl(teamId, player);
 
         if (url) {
@@ -388,6 +396,29 @@
 
         return '<span class="' + className + ' player-avatar-empty" aria-hidden="true">' +
             esc(L.getTeamInitials(player)) + '</span>';
+    }
+
+    /**
+     * Игрок ссылкой на свою карточку: фото и имя открывают карточку игрока.
+     * options.innerHTML — готовое содержимое (аватар и имя), options.className —
+     * дополнительные классы ссылки («chip chip-player», «squad-player» и т. п.).
+     * Если игрока нет в заявке (например, его удалили, а записи в матчах остались),
+     * выводится просто текст: открывать нечего.
+     */
+    function playerLink(team, player, options) {
+        var opts = options || {};
+        var index = L.playerIndex(team, player);
+        var inner = opts.innerHTML === undefined ? esc(player) : opts.innerHTML;
+
+        if (!team || index < 0) {
+            return opts.className
+                ? '<span class="' + opts.className + '">' + inner + '</span>'
+                : inner;
+        }
+
+        return '<a class="player-link' + (opts.className ? ' ' + opts.className : '') + '" href="' +
+            playerHash(team.id, index) + '" data-action="player-public-open" data-team="' + L.toInt(team.id) +
+            '" data-index="' + index + '" title="Открыть карточку игрока: ' + esc(player) + '">' + inner + '</a>';
     }
 
     /** Кнопка выбора файла: label + скрытый input (без inline-скриптов, CSP не нарушается). */
@@ -1417,8 +1448,10 @@
             var row = byId[team.id] || { points: 0, played: 0, place: '—' };
             var players = (team.players || []).length
                 ? team.players.map(function (player) {
-                    return '<span class="chip chip-player">' + playerAvatar(team.id, player, { small: true }) +
-                        esc(player) + '</span>';
+                    return playerLink(team, player, {
+                        className: 'chip chip-player',
+                        innerHTML: playerAvatar(team.id, player, { small: true }) + esc(player)
+                    });
                 }).join('')
                 : '<span class="text-dark-500 text-xs">Состав не заполнен</span>';
 
@@ -1469,8 +1502,10 @@
             return '<tr>' +
                 '<td class="num font-medium text-dark-600">' + row.place + '</td>' +
                 '<td class="cell-player">' +
-                    '<span class="player-line">' + playerAvatar(row.teamId, row.player, { small: true }) +
-                        '<span class="player-name">' + esc(row.player) + '</span></span>' +
+                    playerLink(L.findTeam(state.data.teams, row.teamId), row.player, {
+                        innerHTML: '<span class="player-line">' + playerAvatar(row.teamId, row.player, { small: true }) +
+                            '<span class="player-name">' + esc(row.player) + '</span></span>'
+                    }) +
                     // На телефоне столбец «Команда» скрыт, и название выводится под именем
                     '<span class="row-detail">' +
                         teamLink(L.findTeam(state.data.teams, row.teamId), row.teamName, false, false) +
@@ -1611,8 +1646,10 @@
 
         var players = (team.players || []).length
             ? team.players.map(function (player) {
-                return '<span class="chip chip-player">' + playerAvatar(team.id, player, { small: true }) +
-                    esc(player) + '</span>';
+                return playerLink(team, player, {
+                    className: 'chip chip-player',
+                    innerHTML: playerAvatar(team.id, player, { small: true }) + esc(player)
+                });
             }).join('')
             : '<p class="text-dark-500 text-sm">Состав не заполнен</p>';
 
@@ -1648,6 +1685,111 @@
                 : '<p class="empty-state">Матчей ещё не было</p>') + '</div>';
     }
 
+    /* ------------------------------------------------------------------ */
+    /* Карточка игрока: фото, дата рождения и принадлежность               */
+    /* ------------------------------------------------------------------ */
+
+    /** Хэш-адрес карточки игрока: команда и номер в заявке. */
+    function playerHash(teamId, index) {
+        return '#/player/' + L.toInt(teamId) + '/' + L.toInt(index);
+    }
+
+    /** Открытый игрок: команда и номер в заявке (null — карточка не открыта). */
+    function openedPlayer() {
+        var team = L.findTeam(state.data.teams, state.publicPlayerTeamId);
+        var index = L.toInt(state.publicPlayerIndex);
+
+        if (!team || index === null) {
+            return null;
+        }
+
+        var player = (team.players || [])[index];
+
+        return player ? { team: team, index: index, player: player } : null;
+    }
+
+    /** Открывает карточку игрока (со своим адресом, ссылкой можно поделиться). */
+    function openPublicPlayer(teamId, index) {
+        var team = L.findTeam(state.data.teams, teamId);
+        var number = L.toInt(index);
+
+        if (!team || number === null || !(team.players || [])[number]) {
+            return;
+        }
+
+        applyRoute('player', {
+            playerTeamId: L.toInt(team.id),
+            playerIndex: number,
+            hash: playerHash(team.id, number)
+        });
+    }
+
+    /** «18 апреля 2011 · 15 лет» ('' — дата не указана). */
+    function playerBirthLine(birthDate) {
+        if (!birthDate) {
+            return '';
+        }
+
+        var age = L.formatAge(L.playerAge(birthDate));
+
+        return esc(L.formatDate(birthDate, 'long')) + (age ? ' · ' + esc(age) : '');
+    }
+
+    /** Карточка игрока: крупное фото, команда, дата рождения, принадлежность и статистика. */
+    function renderPlayerCard() {
+        var box = $('player-card');
+
+        if (!box) {
+            return;
+        }
+
+        var opened = openedPlayer();
+
+        if (!opened) {
+            box.innerHTML =
+                '<p class="empty-state">Игрок не найден — возможно, состав команды изменился.</p>' +
+                '<button type="button" class="btn btn-sm btn-ghost mt-3" data-action="team-public-back">' +
+                    icon('back') + 'К списку команд</button>';
+            return;
+        }
+
+        var info = L.getPlayerInfo(state.data, opened.team.id, opened.player);
+        var stats = L.playerStats(state.data, opened.team.id, opened.player);
+        var birth = playerBirthLine(info.birthDate);
+        var hasInfo = Boolean(info.birthDate || info.note);
+        // Администратор может заполнить данные прямо с карточки — откроется форма в админке
+        var edit = state.admin
+            ? '<div class="mt-3"><button type="button" class="btn btn-sm btn-ghost"' +
+                ' data-action="admin-player-info-open" data-team="' + L.toInt(opened.team.id) +
+                '" data-index="' + opened.index + '">' + icon('pencil') +
+                (hasInfo ? 'Изменить данные игрока' : 'Заполнить данные игрока') + '</button></div>'
+            : '';
+
+        box.innerHTML =
+            '<div class="player-card-head">' +
+                playerAvatar(opened.team.id, opened.player, { detail: true }) +
+                '<div class="min-w-0 flex-1">' +
+                    '<h2 class="font-bold text-xl mb-1">' + esc(opened.player) + '</h2>' +
+                    '<div class="player-card-team mb-2">' +
+                        teamLink(opened.team, opened.team.name, false, true) + '</div>' +
+                    '<p class="text-sm text-dark-600">Дата рождения: ' +
+                        (birth
+                            ? '<span class="font-medium text-dark-800">' + birth + '</span>'
+                            : '<span class="text-dark-500">не указана</span>') + '</p>' +
+                    '<p class="text-sm text-dark-600">В турнире: голы — ' +
+                        '<span class="font-medium text-dark-800">' + stats.goals + '</span>, жёлтые — ' +
+                        '<span class="font-medium text-dark-800">' + stats.yellow + '</span>, красные — ' +
+                        '<span class="font-medium text-dark-800">' + stats.red + '</span></p>' +
+                '</div>' +
+            '</div>' +
+            '<div class="player-note">' +
+                '<p class="player-card-label">Принадлежность</p>' +
+                '<p class="player-note-text">' +
+                    (info.note ? esc(info.note) : '<span class="text-dark-500">не указана</span>') + '</p>' +
+            '</div>' +
+            edit;
+    }
+
     /** Строка игрока в публичном составе: голы, жёлтая и красная карточки. */
     function squadRow(match, teamId, player) {
         var goals = L.playerEventCount(match.events, teamId, player, 'goal');
@@ -1668,8 +1810,11 @@
         }
 
         return '<div class="squad-row">' +
-            '<span class="squad-player">' + playerAvatar(teamId, player, { small: true }) +
-                '<span class="squad-name">' + esc(player) + '</span></span>' +
+            playerLink(L.findTeam(state.data.teams, L.toInt(teamId)), player, {
+                className: 'squad-player',
+                innerHTML: playerAvatar(teamId, player, { small: true }) +
+                    '<span class="squad-name">' + esc(player) + '</span>'
+            }) +
             (marks ? '<span class="squad-marks">' + marks + '</span>' : '') +
         '</div>';
     }
@@ -1756,6 +1901,7 @@
         renderTeams();
         renderMatches();
         renderPlayers();
+        renderPlayerCard();
         renderAdmin();
     }
 
@@ -1769,6 +1915,7 @@
         renderAdminTeams();
         renderAdminMatches();
         renderAdminPlayers();
+        renderAdminPlayerInfo();
         fillAdminSelects();
     }
 
@@ -1974,6 +2121,7 @@
         state.selectedTeamId = L.toInt(teamId);
         state.editingTeamId = null;
         state.editingPlayer = null;
+        state.editingPlayerInfo = null;
 
         // Карточка команды живёт в разделе «Команды»: открываем его,
         // даже если нажали на название команды из раздела «Матчи»
@@ -1991,6 +2139,7 @@
         state.selectedTeamId = null;
         state.editingTeamId = null;
         state.editingPlayer = null;
+        state.editingPlayerInfo = null;
         renderAdminTeams();
         renderAdminPlayers();
     }
@@ -2281,6 +2430,7 @@
                 state.editingPlayer.teamId === team.id &&
                 state.editingPlayer.index === index;
             var hasPhoto = hasPlayerPhoto(team.id, player);
+            var hasInfo = L.hasPlayerInfo(state.data, team.id, player);
             var isBusy = !!state.photoBusy && state.photoBusy.kind === 'player' &&
                 state.photoBusy.teamId === L.toInt(team.id) && state.photoBusy.index === index;
 
@@ -2307,6 +2457,10 @@
                         ? '<button type="button" class="btn btn-sm btn-ghost" data-action="player-photo-remove" data-team="' +
                             team.id + '" data-index="' + index + '" title="Убрать фото игрока">' + icon('photo-off') + '</button>'
                         : '') +
+                    '<button type="button" class="btn btn-sm btn-ghost" data-action="player-info-open" data-team="' + team.id +
+                        '" data-index="' + index + '" title="' + esc(hasInfo
+                            ? 'Дата рождения и принадлежность заполнены — изменить'
+                            : 'Заполнить дату рождения и принадлежность') + '">' + icon('info') + '</button>' +
                     '<button type="button" class="btn btn-sm btn-ghost" data-action="player-rename" data-team="' + team.id +
                         '" data-index="' + index + '" title="Переименовать">' + icon('pencil') + '</button>' +
                     '<button type="button" class="btn btn-sm btn-danger" data-action="player-delete" data-team="' + team.id +
@@ -2314,6 +2468,155 @@
                 '</span>' +
             '</div>';
         }).join('');
+    }
+
+    /* --- Данные игрока: дата рождения и принадлежность (форма администратора) --- */
+
+    /** Открывает форму данных игрока. */
+    function startPlayerInfoEdit(teamId, index) {
+        state.editingPlayerInfo = { teamId: L.toInt(teamId), index: L.toInt(index) };
+        renderAdminPlayerInfo();
+
+        var box = $('admin-player-info');
+        var input = $('player-birth-date');
+
+        if (box && typeof box.scrollIntoView === 'function') {
+            box.scrollIntoView({ block: 'nearest' });
+        }
+
+        if (input && typeof input.focus === 'function') {
+            input.focus();
+        }
+    }
+
+    function cancelPlayerInfoEdit() {
+        state.editingPlayerInfo = null;
+        renderAdminPlayerInfo();
+    }
+
+    /** Убирает дату рождения и принадлежность игрока. */
+    function clearPlayerInfo(teamId, index) {
+        var team = L.findTeam(state.data.teams, teamId);
+        var player = (team && index !== null) ? team.players[index] : '';
+
+        if (!team || !player) {
+            return;
+        }
+
+        if (!askConfirm('Убрать дату рождения и принадлежность игрока «' + player + '»?')) {
+            return;
+        }
+
+        L.removePlayerInfo(state.data, team.id, player);
+        state.editingPlayerInfo = null;
+        saveData('Данные игрока убраны');
+    }
+
+    /** Сохраняет дату рождения и принадлежность из формы. */
+    function handlePlayerInfoSubmit(event) {
+        event.preventDefault();
+
+        var team = L.findTeam(state.data.teams, state.editingPlayerInfo ? state.editingPlayerInfo.teamId : null);
+        var index = state.editingPlayerInfo ? state.editingPlayerInfo.index : null;
+        var player = (team && index !== null) ? team.players[index] : '';
+        var date = $('player-birth-date');
+        var note = $('player-note');
+
+        if (!team || !player) {
+            setFieldError('player-info-error', 'Игрок не найден — откройте команду заново');
+            return;
+        }
+
+        var check = L.validatePlayerInfo({
+            birthDate: date ? date.value : '',
+            note: note ? note.value : ''
+        });
+
+        if (!check.ok) {
+            setFieldError('player-info-error', check.error);
+            return;
+        }
+
+        L.setPlayerInfo(state.data, team.id, player, check.value);
+        state.editingPlayerInfo = null;
+        setFieldError('player-info-error', '');
+        saveData('Данные игрока «' + player + '» сохранены');
+    }
+
+    /** С карточки игрока открывает админку сразу с формой данных этого игрока. */
+    function openAdminPlayerInfo(teamId, index) {
+        if (!state.admin) {
+            return;
+        }
+
+        openTeam(teamId);
+
+        state.editingPlayerInfo = { teamId: L.toInt(teamId), index: L.toInt(index) };
+        renderAdminPlayerInfo();
+        applyRoute('admin', { hash: '#/admin' });
+
+        var box = $('admin-player-info');
+
+        if (box && typeof box.scrollIntoView === 'function') {
+            box.scrollIntoView({ block: 'center' });
+        }
+    }
+
+    /**
+     * Форма данных игрока: дата рождения и принадлежность.
+     * Открывается кнопкой у игрока в карточке команды; пока игрок не выбран — скрыта.
+     */
+    function renderAdminPlayerInfo() {
+        var box = $('admin-player-info');
+
+        if (!box) {
+            return;
+        }
+
+        var team = L.findTeam(state.data.teams, state.editingPlayerInfo ? state.editingPlayerInfo.teamId : null);
+        var index = state.editingPlayerInfo ? state.editingPlayerInfo.index : null;
+        var player = (team && index !== null) ? team.players[index] : '';
+
+        if (!team || !player) {
+            state.editingPlayerInfo = null;
+            box.hidden = true;
+            box.innerHTML = '';
+            return;
+        }
+
+        var info = L.getPlayerInfo(state.data, team.id, player);
+
+        box.hidden = false;
+        box.innerHTML =
+            '<h3 class="admin-title">' + icon('info') + 'Данные игрока: ' + esc(player) + '</h3>' +
+            '<p class="admin-hint mb-3">Команда «' + esc(team.name) + '». Дата рождения и принадлежность видны ' +
+                'на карточке игрока — она открывается нажатием на имя игрока в составе.</p>' +
+            '<form data-form="player-info" class="grid grid-cols-1 md:grid-cols-3 gap-3" novalidate>' +
+                '<div>' +
+                    '<label class="field-label text-dark-200" for="player-birth-date">Дата рождения</label>' +
+                    '<input type="date" id="player-birth-date" class="admin-input" min="1900-01-01" max="' +
+                        L.todayISO() + '" value="' + esc(info.birthDate) + '">' +
+                '</div>' +
+                '<div class="md:col-span-2">' +
+                    '<label class="field-label text-dark-200" for="player-note">Принадлежность</label>' +
+                    '<textarea id="player-note" class="admin-input" rows="3" maxlength="' +
+                        CONFIG.maxPlayerNoteLength + '" placeholder="Например: школа №5, тренер Петров. ' +
+                        'Играл за «Динамо» до 2023 года.">' + esc(info.note) + '</textarea>' +
+                    '<p class="admin-hint">Заполнено <span id="player-note-count">' + String(info.note.length) +
+                        '</span> из ' + CONFIG.maxPlayerNoteLength +
+                        ' символов — примерно 3–4 коротких предложения.</p>' +
+                '</div>' +
+                '<div class="md:col-span-3 flex flex-wrap gap-2">' +
+                    '<button type="submit" class="btn btn-primary">' + icon('check') + 'Сохранить данные</button>' +
+                    '<button type="button" class="btn btn-ghost" data-action="player-info-cancel">Отмена</button>' +
+                    (L.hasPlayerInfo(state.data, team.id, player)
+                        ? '<button type="button" class="btn btn-danger" data-action="player-info-clear" data-team="' +
+                            L.toInt(team.id) + '" data-index="' + index + '">' + icon('trash') +
+                            'Убрать данные</button>'
+                        : '') +
+                '</div>' +
+                '<p id="player-info-error" class="field-error md:col-span-3" role="alert"></p>' +
+            '</form>';
     }
 
     /**
@@ -2348,11 +2651,18 @@
     /* Роутинг и сессия администратора (хэш-адреса: #/standings и т.п.)   */
     /* ================================================================== */
 
-    var ROUTES = { home: true, standings: true, teams: true, matches: true, players: true, admin: true };
+    var ROUTES = { home: true, standings: true, teams: true, matches: true, players: true, admin: true, player: true };
+
+    /**
+     * Какой пункт меню подсвечивать на странице. Карточка игрока — часть раздела
+     * «Команды»: в меню нет своего пункта, поэтому подсвечиваем команды.
+     */
+    var NAV_FOR_ROUTE = { player: 'teams' };
 
     /**
      * Разбор хэша. Обычные адреса («#/matches») открывают страницу, «#/match/5» —
-     * страницу матчей с детальным результатом матча №5, «#/team/3» — страницу команды №3.
+     * страницу матчей с детальным результатом матча №5, «#/team/3» — страницу
+     * команды №3, «#/player/3/1» — карточку игрока №1 из заявки команды №3.
      */
     function parseHash() {
         var raw = String(window.location.hash || '')
@@ -2362,14 +2672,30 @@
         var parts = raw.split('/');
 
         if (parts[0] === 'match') {
-            return { route: 'matches', matchId: L.toInt(parts[1]) };
+            return { route: 'matches', matchId: L.toInt(parts[1]), teamId: null, playerTeamId: null, playerIndex: null };
         }
 
         if (parts[0] === 'team') {
-            return { route: 'teams', teamId: L.toInt(parts[1]) };
+            return { route: 'teams', matchId: null, teamId: L.toInt(parts[1]), playerTeamId: null, playerIndex: null };
         }
 
-        return { route: ROUTES[raw] ? raw : 'home', matchId: null, teamId: null };
+        if (parts[0] === 'player') {
+            return {
+                route: 'player',
+                matchId: null,
+                teamId: null,
+                playerTeamId: L.toInt(parts[1]),
+                playerIndex: L.toInt(parts[2])
+            };
+        }
+
+        return {
+            route: ROUTES[raw] ? raw : 'home',
+            matchId: null,
+            teamId: null,
+            playerTeamId: null,
+            playerIndex: null
+        };
     }
 
     function askConfirm(question) {
@@ -2440,6 +2766,7 @@
         teams: 'Команды',
         matches: 'Матчи',
         players: 'Лучшие бомбардиры',
+        player: 'Игрок',
         admin: 'Админ-панель'
     };
 
@@ -2448,7 +2775,9 @@
         return {
             route: state.route,
             matchId: state.publicMatchId,
-            teamId: state.publicTeamId
+            teamId: state.publicTeamId,
+            playerTeamId: state.publicPlayerTeamId,
+            playerIndex: state.publicPlayerIndex
         };
     }
 
@@ -2456,7 +2785,9 @@
     function samePage(a, b) {
         return a.route === b.route &&
             L.toInt(a.matchId) === L.toInt(b.matchId) &&
-            L.toInt(a.teamId) === L.toInt(b.teamId);
+            L.toInt(a.teamId) === L.toInt(b.teamId) &&
+            L.toInt(a.playerTeamId) === L.toInt(b.playerTeamId) &&
+            L.toInt(a.playerIndex) === L.toInt(b.playerIndex);
     }
 
     /** Название страницы для подписи у кнопки «Назад». */
@@ -2464,7 +2795,7 @@
         return PAGE_TITLES[page.route] || PAGE_TITLES.home;
     }
 
-    /** Хэш-адрес страницы (с учётом открытого матча или команды). */
+    /** Хэш-адрес страницы (с учётом открытого матча, команды или игрока). */
     function hashForPage(page) {
         if (page.route === 'matches' && page.matchId) {
             return matchHash(page.matchId);
@@ -2472,6 +2803,10 @@
 
         if (page.route === 'teams' && page.teamId) {
             return teamHash(page.teamId);
+        }
+
+        if (page.route === 'player' && page.playerTeamId) {
+            return playerHash(page.playerTeamId, page.playerIndex === null ? 0 : page.playerIndex);
         }
 
         return '#/' + page.route;
@@ -2530,6 +2865,8 @@
             scroll: false,
             matchId: previous.matchId === undefined ? null : previous.matchId,
             teamId: previous.teamId === undefined ? null : previous.teamId,
+            playerTeamId: previous.playerTeamId === undefined ? null : previous.playerTeamId,
+            playerIndex: previous.playerIndex === undefined ? null : previous.playerIndex,
             hash: hashForPage(previous)
         });
 
@@ -2545,9 +2882,10 @@
         var sectionId = sectionForRoute(target);
         var previous = currentPage();
 
-        /* Какая страница открыта: список или детальная страница (матч, команда).
-           opts.matchId / opts.teamId === null — показать список, число — открыть
-           детальную страницу, undefined — оставить как есть (внутренняя перерисовка). */
+        /* Какая страница открыта: список или детальная страница (матч, команда, игрок).
+           opts.matchId / opts.teamId / opts.playerTeamId === null — показать список,
+           число — открыть детальную страницу, undefined — оставить как есть
+           (внутренняя перерисовка). */
         if (target === 'matches' && opts.matchId !== undefined) {
             state.publicMatchId = L.toInt(opts.matchId);
         } else if (target !== 'matches') {
@@ -2558,6 +2896,14 @@
             state.publicTeamId = L.toInt(opts.teamId);
         } else if (target !== 'teams') {
             state.publicTeamId = null;
+        }
+
+        if (target === 'player' && opts.playerTeamId !== undefined) {
+            state.publicPlayerTeamId = L.toInt(opts.playerTeamId);
+            state.publicPlayerIndex = L.toInt(opts.playerIndex);
+        } else if (target !== 'player') {
+            state.publicPlayerTeamId = null;
+            state.publicPlayerIndex = null;
         }
 
         /* Кнопка «Назад»: запоминаем страницу, с которой уходим. Переходы внутри
@@ -2573,8 +2919,11 @@
             section.classList.toggle('active', section.id === sectionId);
         });
 
+        // Страницы без своего пункта меню (карточка игрока) подсвечивают раздел, к которому относятся
+        var navTarget = NAV_FOR_ROUTE[target] || target;
+
         qsa('[data-nav]').forEach(function (element) {
-            var isActive = element.getAttribute('data-nav') === target;
+            var isActive = element.getAttribute('data-nav') === navTarget;
 
             element.classList.toggle('active', isActive);
 
@@ -2615,6 +2964,8 @@
             renderMatches();
         } else if (target === 'players') {
             renderPlayers();
+        } else if (target === 'player') {
+            renderPlayerCard();
         }
 
         renderBackButton();
@@ -2890,6 +3241,10 @@
             state.editingPlayer = null;
         }
 
+        if (state.editingPlayerInfo && state.editingPlayerInfo.teamId === team.id) {
+            state.editingPlayerInfo = null;
+        }
+
         if (state.editingTeamId === team.id) {
             state.editingTeamId = null;
         }
@@ -2901,6 +3256,9 @@
         // Фото игроков и эмблема удалённой команды больше не нужны (файлы остаются в истории)
         L.removeTeamPhotos(state.data, team.id);
         L.removeTeamPhoto(state.data, team.id);
+
+        // Дата рождения и принадлежность игроков удалённой команды — тоже
+        L.removeTeamPlayerInfo(state.data, team.id);
 
         saveData('Команда «' + team.name + '» удалена');
     }
@@ -3156,6 +3514,9 @@
         // Фото игрока тоже переезжает на новое имя
         L.renamePlayerPhoto(state.data, team.id, oldName, check.value);
 
+        // Дата рождения и принадлежность — тоже
+        L.renamePlayerInfo(state.data, team.id, oldName, check.value);
+
         state.editingPlayer = null;
         saveData('Имя игрока изменено');
     }
@@ -3175,11 +3536,13 @@
 
         team.players.splice(index, 1);
         state.editingPlayer = null;
+        state.editingPlayerInfo = null;
 
         // Фото удалённого игрока убираем из данных (файл остаётся в истории репозитория)
         if (removed) {
             delete state.photoPreviews[L.getPhoto(state.data, team.id, removed)];
             L.removePhoto(state.data, team.id, removed);
+            L.removePlayerInfo(state.data, team.id, removed);
         }
 
         saveData('Игрок удалён');
@@ -3198,6 +3561,7 @@
         state.editingTeamId = null;
         state.editingMatchId = null;
         state.editingPlayer = null;
+        state.editingPlayerInfo = null;
         state.selectedTeamId = null;
         state.openMatchId = null;
         state.photoPreviews = {};
@@ -3223,6 +3587,7 @@
         state.editingTeamId = null;
         state.editingMatchId = null;
         state.editingPlayer = null;
+        state.editingPlayerInfo = null;
         state.selectedTeamId = null;
         state.openMatchId = null;
         state.photoPreviews = {};
@@ -3299,6 +3664,16 @@
             openPublicTeam(id);
         } else if (action === 'team-public-back') {
             closePublicTeam();
+        } else if (action === 'player-public-open') {
+            openPublicPlayer(teamId, index);
+        } else if (action === 'player-info-open') {
+            startPlayerInfoEdit(teamId, index);
+        } else if (action === 'player-info-cancel') {
+            cancelPlayerInfoEdit();
+        } else if (action === 'player-info-clear') {
+            clearPlayerInfo(teamId, index);
+        } else if (action === 'admin-player-info-open') {
+            openAdminPlayerInfo(teamId, index);
         } else if (action === 'match-event') {
             recordMatchEvent(id, teamId, element.getAttribute('data-player'), element.getAttribute('data-type'));
         } else if (action === 'match-event-undo') {
@@ -3364,6 +3739,8 @@
             handleMatchSubmit(event);
         } else if (name === 'add-player') {
             handleAddPlayer(event);
+        } else if (name === 'player-info') {
+            handlePlayerInfoSubmit(event);
         }
     }
 
@@ -3418,6 +3795,13 @@
             renderMatches();
         } else if (target.id === 'admin-match-search') {
             renderAdminMatches();
+        } else if (target.id === 'player-note') {
+            // Счётчик символов у «принадлежности»: текст ограничен по длине
+            var counter = $('player-note-count');
+
+            if (counter) {
+                counter.textContent = String(String(target.value || '').length);
+            }
         }
     }
 
@@ -3472,6 +3856,8 @@
                 scroll: false,
                 matchId: parsed.matchId,
                 teamId: parsed.teamId,
+                playerTeamId: parsed.playerTeamId,
+                playerIndex: parsed.playerIndex,
                 replace: true
             });
         });
