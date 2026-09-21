@@ -819,7 +819,12 @@ test('страница команды: из турнирной таблицы в
 
     // На странице: название, статистика, состав и матчи именно этой команды
     assert.match(await textOf(page, '#team-detail'), new RegExp(target.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-    assert.equal(await page.$$eval('#team-detail .stat-box', (boxes) => boxes.length), 4, 'плитки статистики');
+    assert.equal(await page.$$eval('#team-detail .stat-box', (boxes) => boxes.length), 5, 'пять плиток статистики');
+    assert.deepEqual(
+        await page.$$eval('#team-detail .stat-label', (labels) => labels.map((item) => item.firstChild.textContent.trim())),
+        ['Место', 'Очки', 'Игры', 'ГЗ', 'ГП'],
+        'забитые и пропущенные мячи — отдельными плитками'
+    );
     assert.ok(await page.$$eval('#team-detail .chip-player', (chips) => chips.length) > 0, 'состав показан');
     assert.equal(await page.$$eval('#team-detail .match-card', (cards) => cards.length), target.matches, 'только её матчи');
 

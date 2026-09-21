@@ -1356,11 +1356,13 @@
         applyRoute('teams', { teamId: null, hash: '#/teams' });
     }
 
-    /** Плитка со значением для страницы команды. */
-    function statBox(label, value) {
-        return '<div class="stat-box">' +
+    /** Плитка со значением для страницы команды; hint — расшифровка (подсказка и озвучка). */
+    function statBox(label, value, hint) {
+        return '<div class="stat-box"' + (hint ? ' title="' + esc(hint) + '"' : '') + '>' +
             '<div class="stat-value">' + esc(String(value)) + '</div>' +
-            '<p class="stat-label">' + esc(label) + '</p>' +
+            '<p class="stat-label">' + esc(label) +
+                (hint ? '<span class="sr-only"> — ' + esc(hint.toLowerCase()) + '</span>' : '') +
+            '</p>' +
         '</div>';
     }
 
@@ -1398,11 +1400,12 @@
                     '<p class="text-xs text-dark-600">Игроков в заявке: ' + (team.players || []).length + '</p>' +
                 '</div>' +
             '</div>' +
-            '<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">' +
-                statBox('Место', row ? row.place : '—') +
-                statBox('Очки', row ? row.points : 0) +
-                statBox('Игры', row ? row.played : 0) +
-                statBox('Мячи', row ? row.goalsFor + '–' + row.goalsAgainst : '0–0') +
+            '<div class="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3">' +
+                statBox('Место', row ? row.place : '—', 'Место в турнирной таблице') +
+                statBox('Очки', row ? row.points : 0, 'Набранные очки') +
+                statBox('Игры', row ? row.played : 0, 'Сыгранные матчи') +
+                statBox('ГЗ', row ? row.goalsFor : 0, 'Голов забито') +
+                statBox('ГП', row ? row.goalsAgainst : 0, 'Голов пропущено') +
             '</div>' +
             '<p class="text-xs text-dark-600 mb-5">' +
                 (row

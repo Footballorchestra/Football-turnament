@@ -270,7 +270,21 @@ test('страница команды: открывается из турнир�
 
     assert.match(detail.textContent, /Спартак/);
     assert.match(detail.textContent, /Игроков в заявке: 3/);
-    assert.equal(detail.querySelectorAll('.stat-box').length, 4, 'место, очки, игры, мячи');
+    assert.equal(detail.querySelectorAll('.stat-box').length, 5, 'место, очки, игры, ГЗ и ГП');
+
+    // Забитые и пропущенные мячи — отдельными плитками, а не счётом «забитые–пропущенные»
+    const tiles = Array.from(detail.querySelectorAll('.stat-label'))
+        .map((element) => element.firstChild.textContent.trim());
+
+    assert.deepEqual(tiles, ['Место', 'Очки', 'Игры', 'ГЗ', 'ГП']);
+
+    const values = Array.from(detail.querySelectorAll('.stat-value')).map((element) => element.textContent.trim());
+
+    assert.deepEqual(values, ['1', '3', '1', '2', '1'], 'Спартак: место, очки, игры, забитые, пропущенные');
+    assert.equal(detail.querySelectorAll('.stat-box[title="Голов забито"]').length, 1);
+    assert.equal(detail.querySelectorAll('.stat-box[title="Голов пропущено"]').length, 1);
+    assert.equal(detail.textContent.includes('Мячи'), false, 'плитки «Мячи» со счётом больше нет');
+
     assert.match(detail.textContent, /Победы: 1 · Ничьи: 0 · Поражения: 0/);
     assert.equal(detail.querySelectorAll('.chip-player').length, 3, 'состав с аватарами');
     assert.equal(detail.querySelectorAll('.match-card').length, 2, 'только матчи этой команды');
