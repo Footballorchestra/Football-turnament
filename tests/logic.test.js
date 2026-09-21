@@ -596,7 +596,7 @@ test('normalizeData: события матчей сохраняются, «му�
     assert.equal(result.data.version, 5, 'в данных отмечена новая версия формата');
 });
 
-test('лучшие бомбардиры: сортировка по голам, затем по карточкам', () => {
+test('лучшие бомбардиры: сортировка по голам, при равенстве — по имени', () => {
     const data = {
         teams: [
             { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.'] },
@@ -624,20 +624,20 @@ test('лучшие бомбардиры: сортировка по голам, �
 
     const rows = L.computePlayerStats(data);
 
-    // Иванов — два гола, затем при равных голах выше тот, у кого меньше карточек
-    assert.deepEqual(rows.map((row) => row.player), ['Иванов А.', 'Сидоров С.', 'Петров П.']);
+    // Сначала по голам, при равенстве — по имени: карточки на порядок не влияют
+    assert.deepEqual(rows.map((row) => row.player), ['Иванов А.', 'Петров П.', 'Сидоров С.']);
     assert.deepEqual(
         rows.map((row) => ({ goals: row.goals, yellow: row.yellow, red: row.red, team: row.teamName })),
         [
             { goals: 2, yellow: 0, red: 1, team: 'Спартак' },
-            { goals: 1, yellow: 0, red: 0, team: 'Динамо' },
-            { goals: 1, yellow: 1, red: 0, team: 'Спартак' }
+            { goals: 1, yellow: 1, red: 0, team: 'Спартак' },
+            { goals: 1, yellow: 0, red: 0, team: 'Динамо' }
         ]
     );
     assert.deepEqual(rows.map((row) => row.place), [1, 2, 3]);
 });
 
-test('лучшие бомбардиры: при равных голах выше игрок без карточек, игроки без записей не попадают', () => {
+test('лучшие бомбардиры: только забивавшие, равные голы — по имени', () => {
     const data = {
         teams: [
             { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.', 'Сидоров С.'] },
@@ -648,16 +648,20 @@ test('лучшие бомбардиры: при равных голах выше
             events: [
                 { team: 1, player: 'Петров П.', type: 'goal' },
                 { team: 1, player: 'Иванов А.', type: 'goal' },
-                { team: 1, player: 'Иванов А.', type: 'yellow' }
+                { team: 1, player: 'Иванов А.', type: 'yellow' },
+                { team: 1, player: 'Сидоров С.', type: 'yellow' }
             ]
         }]
     };
 
     const rows = L.computePlayerStats(data);
 
-    // Один гол у обоих, но у Иванова есть жёлтая карточка — он ниже
-    assert.deepEqual(rows.map((row) => row.player), ['Петров П.', 'Иванов А.']);
-    assert.equal(rows.some((row) => row.player === 'Сидоров С.'), false, 'игрок без записей не показан');
+    // Один гол у обоих: порядок решает имя, карточка у Иванова его не опускает
+    assert.deepEqual(rows.map((row) => row.player), ['Иванов А.', 'Петров П.']);
+    assert.equal(rows.some((row) => row.player === 'Сидоров С.'), false, 'игрок только с карточкой не бомбардир');
+
+    // Нумерация идёт подряд — без пропусков из-за отброшенных записей
+    assert.deepEqual(rows.map((row) => row.place), [1, 2]);
 });
 
 test('лучшие бомбардиры: пустые данные и записи игроков без заявки', () => {

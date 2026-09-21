@@ -589,11 +589,11 @@
     }
 
     /**
-     * Лучшие бомбардиры: голы, жёлтые и красные карточки по всем матчам турнира.
-     * Сортировка — сначала по голам (больше — выше), затем по карточкам
-     * (меньше — выше), затем по имени.
-     * В список попадают только те, у кого есть хотя бы одна запись:
-     * это таблица результативности, а не весь заявочный лист.
+     * Лучшие бомбардиры: забитые мячи по всем матчам турнира.
+     * Сортировка — по голам (больше — выше), при равенстве — по имени.
+     * В список попадают только те, кто забивал: это таблица результативности,
+     * а не весь заявочный лист. Жёлтые и красные карточки в ней не показываются,
+     * но считаются в данных — они видны в карточке матча и в детальном результате.
      */
     function computePlayerStats(data) {
         var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
@@ -647,19 +647,22 @@
             });
         });
 
-        rows.sort(function (a, b) {
+        // В таблице бомбардиров остаются только те, кто забивал
+        var scorers = rows.filter(function (row) {
+            return row.goals > 0;
+        });
+
+        scorers.sort(function (a, b) {
             return b.goals - a.goals ||
-                a.yellow - b.yellow ||
-                a.red - b.red ||
                 String(a.player).localeCompare(String(b.player), 'ru') ||
                 String(a.teamName).localeCompare(String(b.teamName), 'ru');
         });
 
-        rows.forEach(function (row, index) {
+        scorers.forEach(function (row, index) {
             row.place = index + 1;
         });
 
-        return rows;
+        return scorers;
     }
 
     /* ------------------------------------------------------------------ */

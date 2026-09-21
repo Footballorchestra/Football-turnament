@@ -475,7 +475,7 @@ test('админ-панель целиком в браузере: вход, ко
     });
 
     assert.ok(bestPlayers.length > 0, 'игрок с голом попал в список');
-    assert.deepEqual(bestPlayers.slice(3), ['1', '0', '0'], 'в таблице: один гол, ноль жёлтых и красных карточек');
+    assert.deepEqual(bestPlayers.slice(3), ['1'], 'в таблице бомбардиров только голы');
 
     // Ничья 2:2 приносит по одному очку каждой команде
     const after = await dataSnapshot(page);
@@ -701,9 +701,12 @@ test('фото игрока: настоящее сжатие в браузере
     await clickInView(page, '[data-action="github-save-token"]');
     await page.waitForFunction(() => document.getElementById('github-token').placeholder.includes('сохранён'));
 
-    // 2. Открываем первую команду: у игроков есть кнопка загрузки фото
+    // 2. Открываем первую команду: у игроков есть кнопка загрузки фото.
+    // Сколько фото уже есть в данных — считаем заранее: в репозитории могут быть фото других игроков.
     await clickWhenReady(page, '#admin-teams-list [data-action="team-open"]');
     await page.waitForFunction(() => !!document.querySelector('#admin-players-list input[data-photo-team]'));
+
+    const photosBefore = await page.evaluate(() => Object.keys(window.FTApp.getData().photos || {}).length);
 
     // 3. Отдаём настоящее изображение (4×4 PNG рисуется прямо в браузере)
     await page.evaluate(() => new Promise((resolve) => {
@@ -736,22 +739,22 @@ test('фото игрока: настоящее сжатие в браузере
 
     const result = await page.evaluate(() => {
         const data = window.FTApp.getData();
-        const keys = Object.keys(data.photos);
+        const previews = Object.keys(window.FTApp.getState().photoPreviews);
         const image = document.querySelector('#admin-players-list img.player-avatar');
 
         return {
-            count: keys.length,
-            path: keys.length ? data.photos[keys[0]] : '',
-            previews: Object.keys(window.FTApp.getState().photoPreviews),
+            count: Object.keys(data.photos || {}).length,
+            path: previews.length ? previews[previews.length - 1] : '',
+            previews: previews,
             preview: image ? image.getAttribute('src').indexOf('data:image/jpeg;base64,') === 0 : false,
             width: image ? image.naturalWidth : 0,
             height: image ? image.naturalHeight : 0
         };
     });
 
-    assert.equal(result.count, 1, 'фото записано в данные');
+    assert.equal(result.count, photosBefore + 1, 'новое фото записано в данные');
     assert.match(result.path, /^assets\/photos\/[a-z0-9-]+-[0-9a-f]{6}\.jpg$/, 'имя файла безопасное и уникальное');
-    assert.equal(result.previews[0], result.path, 'файл и запись в данных совпадают');
+    assert.equal(result.previews.length, 1, 'предпросмотр ровно у загруженного фото');
     assert.equal(result.preview, true, 'показан локальный предпросмотр (сжатый JPEG)');
     assert.equal(result.width, result.height, 'фото приведено к квадрату');
     assert.ok(result.width > 200, 'сторона квадрата близка к настройке 512 (получилось: ' + result.width + ')');

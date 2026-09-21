@@ -682,14 +682,6 @@
         color: #1b5e20;
     }
 
-    .players-table .player-yellow {
-        color: #b58100;
-    }
-
-    .players-table .player-red {
-        color: #c62828;
-    }
-
     /* --- Админ-панель --- */
     .admin-panel {
         background: #202124;

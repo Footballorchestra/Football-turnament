@@ -7,18 +7,18 @@
          Разрешены соединения только с самого сайта и с API GitHub (чтение и публикация данных турнира).
          Тот же заголовок дополнительно отдаётся файлом _headers на Netlify/Cloudflare Pages. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; connect-src 'self' https://api.github.com https://raw.githubusercontent.com; base-uri 'none'; form-action 'none'; object-src 'none'">
-    <title>Футбольный турнир 2026 — таблица, команды, матчи</title>
+    <title>Чемпионат среди Артистов по футболу 2026-2027 — таблица, команды, матчи</title>
 
     <!-- SEO и предпросмотр в соцсетях -->
-    <meta name="description" content="Осенний Кубок 2026: турнирная таблица, состав команд, расписание и результаты матчей. Данные обновляются через панель администратора.">
+    <meta name="description" content="Чемпионат среди Артистов по футболу 2026-2027: турнирная таблица, составы команд, расписание и результаты матчей. Данные обновляются через панель администратора.">
     <meta name="theme-color" content="#1b5e20">
     <meta name="color-scheme" content="light">
     <link rel="canonical" href="./">
     <meta property="og:type" content="website">
     <meta property="og:locale" content="ru_RU">
-    <meta property="og:site_name" content="Футбольный турнир 2026">
-    <meta property="og:title" content="Осенний Кубок 2026 — футбольный турнир">
-    <meta property="og:description" content="Турнирная таблица, команды, расписание и результаты матчей Осеннего Кубка 2026.">
+    <meta property="og:site_name" content="Чемпионат среди Артистов по футболу 2026-2027">
+    <meta property="og:title" content="Чемпионат среди Артистов по футболу 2026-2027">
+    <meta property="og:description" content="Турнирная таблица, команды, расписание и результаты матчей Чемпионата среди Артистов по футболу 2026-2027.">
     <meta property="og:image" content="assets/og-image.png">
     <meta name="twitter:card" content="summary_large_image">
 
@@ -29,7 +29,7 @@
 
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=14">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=15">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -147,8 +147,8 @@
                 <button type="button" class="flex items-center gap-3 text-left" data-action="navigate" data-page="home">
                     <span class="team-badge badge-color-1">FT</span>
                     <span>
-                        <span class="block font-bold text-base sm:text-lg leading-tight">ФУТБОЛЬНЫЙ ТУРНИР</span>
-                        <span class="block text-xs sm:text-sm text-dark-600">Осенний Кубок 2026</span>
+                        <span class="block font-bold text-base sm:text-lg leading-tight">ЧЕМПИОНАТ СРЕДИ АРТИСТОВ</span>
+                        <span class="block text-xs sm:text-sm text-dark-600">по футболу 2026-2027</span>
                     </span>
                 </button>
 
@@ -203,7 +203,7 @@
                 <div class="bg-gradient-to-r from-primary-700 to-primary-900 p-6 sm:p-8 text-white">
                     <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
                         <div>
-                            <h1 class="text-2xl sm:text-3xl font-bold mb-1">Осенний Кубок 2026</h1>
+                            <h1 class="text-2xl sm:text-3xl font-bold mb-1">Чемпионат среди Артистов по футболу 2026-2027</h1>
                             <p class="text-primary-100">Турнирная таблица, составы команд и результаты матчей</p>
                         </div>
                         <div class="flex flex-wrap gap-3">
@@ -277,7 +277,7 @@
                 </div>
                 <div class="table-wrap">
                     <table class="data-table standings-table is-compact" id="standings-table">
-                        <caption class="sr-only">Турнирная таблица Осеннего Кубка 2026</caption>
+                        <caption class="sr-only">Турнирная таблица чемпионата среди Артистов по футболу 2026-2027</caption>
                         <thead>
                             <tr>
                                 <th class="num" scope="col" title="Место">#</th>
@@ -362,21 +362,20 @@
                         <svg class="icon text-primary-700" aria-hidden="true"><use href="#i-ball"></use></svg>Лучшие бомбардиры
                     </h2>
                     <p class="text-xs text-dark-600 sm:max-w-md">
-                        Сначала игроки с большим числом голов. Голы и карточки отмечает администратор
-                        в карточке матча, подробности видны при открытии матча.
+                        Сначала игроки с большим числом голов — в таблице только забитые мячи.
+                        Голы отмечает администратор в карточке матча, а карточки игроков видны
+                        при открытии матча.
                     </p>
                 </div>
                 <div class="table-wrap">
                     <table class="data-table players-table">
-                        <caption class="sr-only">Лучшие бомбардиры турнира: голы, жёлтые и красные карточки</caption>
+                        <caption class="sr-only">Лучшие бомбардиры чемпионата: забитые мячи</caption>
                         <thead>
                             <tr>
                                 <th class="num" scope="col" title="Место">#</th>
                                 <th scope="col">Игрок</th>
                                 <th class="col-optional" scope="col">Команда</th>
                                 <th class="num" scope="col" title="Забитые мячи">Голы</th>
-                                <th class="num" scope="col" title="Жёлтые карточки">ЖК</th>
-                                <th class="num" scope="col" title="Красные карточки">КК</th>
                             </tr>
                         </thead>
                         <tbody id="players-body"></tbody>
@@ -664,7 +663,7 @@
 
     <footer class="bg-dark-900 text-dark-400 py-6 mt-8">
         <div class="max-w-7xl mx-auto px-4 text-center text-sm space-y-2">
-            <p>&copy; 2026 Футбольный турнир. Осенний Кубок.</p>
+            <p>&copy; 2026–2027 Чемпионат среди Артистов по футболу.</p>
             <p class="text-xs flex flex-wrap items-center justify-center gap-2">
                 <span>Результаты обновляет администратор через
                     <button type="button" class="underline hover:text-white" data-action="navigate" data-page="admin">панель управления</button>.
@@ -682,10 +681,10 @@
 
     <!-- Логика: настройки → чистая логика → синхронизация с репозиторием → слой DOM.
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
-    <script src="assets/js/config.js?v=14" defer></script>
-    <script src="assets/js/logic.js?v=14" defer></script>
-    <script src="assets/js/sync.js?v=14" defer></script>
-    <script src="assets/js/photo.js?v=14" defer></script>
-    <script src="assets/js/app.js?v=14" defer></script>
+    <script src="assets/js/config.js?v=15" defer></script>
+    <script src="assets/js/logic.js?v=15" defer></script>
+    <script src="assets/js/sync.js?v=15" defer></script>
+    <script src="assets/js/photo.js?v=15" defer></script>
+    <script src="assets/js/app.js?v=15" defer></script>
 </body>
 </html>

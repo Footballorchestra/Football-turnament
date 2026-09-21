@@ -1201,9 +1201,9 @@
         var rows = L.computePlayerStats(state.data);
 
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="6" class="empty-state">' +
+            body.innerHTML = '<tr><td colspan="4" class="empty-state">' +
                 (state.data.matches.length
-                    ? 'Голы и карточки ещё не отмечены — их вносит администратор в карточке матча'
+                    ? 'Голы ещё не отмечены — их вносит администратор в карточке матча'
                     : 'Матчи ещё не добавлены') +
             '</td></tr>';
             return;
@@ -1225,8 +1225,6 @@
                     '</div>' +
                 '</td>' +
                 '<td class="num player-goals">' + row.goals + '</td>' +
-                '<td class="num player-yellow">' + row.yellow + '</td>' +
-                '<td class="num player-red">' + row.red + '</td>' +
             '</tr>';
         }).join('');
     }

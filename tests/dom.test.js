@@ -249,7 +249,7 @@ test('команды: карточки, поиск и состав', () => {
     assert.equal(app.$$('#teams-grid article').length, 4);
 });
 
-test('лучшие бомбардиры: страница собирает голы и карточки с матчей', () => {
+test('лучшие бомбардиры: таблица показывает только забитые мячи, без колонок карточек', () => {
     const app = boot();
 
     // Пока записей нет — понятная подсказка вместо пустой таблицы
@@ -265,18 +265,24 @@ test('лучшие бомбардиры: страница собирает го�
     app.click(app.markButton(1, 'Петров П.', 'yellow'));
     app.click(app.markButton(2, 'Кузнецов К.', 'goal'));
 
-    // Страница обновилась: сверху бомбардир, при равных голах выше игрок без карточек
+    // В таблице — только бомбардиры, отсортированные по голам
     app.navigate('players');
     const rows = Array.from(app.id('players-body').querySelectorAll('tr'));
     const numbers = (row) => Array.from(row.querySelectorAll('td.num')).map((cell) => cell.textContent.trim());
 
-    assert.equal(rows.length, 3, 'показаны только игроки с записями');
+    assert.equal(rows.length, 2, 'игрок только с карточкой в таблицу бомбардиров не попадает');
     assert.deepEqual(rows.map((row) => row.querySelector('.player-name').textContent),
-        ['Иванов А.', 'Кузнецов К.', 'Петров П.']);
-    assert.deepEqual(numbers(rows[0]), ['1', '2', '0', '0'], 'место, голы, жёлтые, красные');
+        ['Иванов А.', 'Кузнецов К.']);
+    assert.deepEqual(numbers(rows[0]), ['1', '2'], 'место и голы');
     assert.match(rows[0].querySelector('.col-optional').textContent, /Спартак/, 'команда игрока показана');
-    assert.deepEqual(numbers(rows[1]), ['2', '1', '0', '0']);
-    assert.deepEqual(numbers(rows[2]), ['3', '0', '1', '0'], 'жёлтая карточка без голов — ниже гола');
+    assert.deepEqual(numbers(rows[1]), ['2', '1']);
+
+    // Колонок жёлтых и красных карточек в таблице больше нет
+    const headers = Array.from(app.id('players-body').closest('table').querySelectorAll('thead th'))
+        .map((cell) => cell.textContent.trim());
+
+    assert.deepEqual(headers, ['#', 'Игрок', 'Команда', 'Голы']);
+    assert.equal(rows[0].querySelectorAll('td').length, 4, 'место, игрок, команда, голы');
 
     // Кнопка в меню ведёт на страницу
     app.click(app.$('[data-nav="players"]'));
