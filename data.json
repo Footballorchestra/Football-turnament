@@ -1,7 +1,7 @@
 {
-  "version": 6,
-  "revision": 255,
-  "updatedAt": "2026-09-21T18:16:44.500Z",
+  "version": 7,
+  "revision": 256,
+  "updatedAt": "2026-09-21T19:28:57.685Z",
   "teams": [
     {
       "id": 1,
@@ -18,7 +18,8 @@
         "Данилец Василий",
         "Артемов Федор",
         "Доброрадных Сергей",
-        "Грач Алексей"
+        "Грач Алексей",
+        "ТЕСТ"
       ]
     },
     {
@@ -382,5 +383,6 @@
   "photos": {
     "1|доброрадных сергей": "assets/photos/dobroradnykh-sergei-dcc974.jpg"
   },
-  "teamPhotos": {}
+  "teamPhotos": {},
+  "playerInfo": {}
 }
