@@ -845,3 +845,34 @@ test('страница команды: из турнирной таблицы в
     assert.deepEqual(problems, [], 'нет ошибок консоли и сбоев загрузки');
     await page.close();
 });
+
+test('кнопка «Назад» возвращает на предыдущую страницу', { skip }, async () => {
+    const { page, problems } = await openPage();
+
+    // На старте возвращаться некуда
+    assert.equal(await sectionVisible(page, 'back-row'), false, 'кнопка скрыта');
+
+    // Таблица → команда: кнопка знает, куда вернуться
+    await page.click('[data-nav="standings"]');
+    assert.equal(await sectionVisible(page, 'back-row'), true, 'кнопка появилась');
+    assert.match(await textOf(page, '#back-target'), /Главная/);
+
+    const teamId = await page.$eval('#standings-body tr[data-action="team-public-open"]',
+        (row) => row.getAttribute('data-id'));
+
+    await clickInView(page, '#standings-body tr[data-action="team-public-open"][data-id="' + teamId + '"]');
+    assert.equal(await sectionVisible(page, 'team-detail-view'), true, 'открылась страница команды');
+    assert.match(await textOf(page, '#back-target'), /Таблица/);
+
+    await clickInView(page, '[data-action="go-back"]');
+    assert.equal(await sectionVisible(page, 'page-standings'), true, 'вернулись в турнирную таблицу');
+    assert.equal(await page.evaluate(() => window.location.hash), '#/standings');
+
+    // И ещё раз — на главную: история пуста, кнопка снова скрыта
+    await clickInView(page, '[data-action="go-back"]');
+    assert.equal(await sectionVisible(page, 'page-home'), true, 'вернулись на главную');
+    assert.equal(await sectionVisible(page, 'back-row'), false, 'история пуста — кнопки нет');
+
+    assert.deepEqual(problems, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+});

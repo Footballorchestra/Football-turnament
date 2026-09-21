@@ -41,6 +41,8 @@
         publicMatchId: null,
         /** Открытая команда на публичной странице команд (null — показывается список). */
         publicTeamId: null,
+        /** Стек посещённых страниц для кнопки «Назад» (в памяти, до перезагрузки). */
+        history: [],
         /** Предпросмотр только что загруженных фото: путь → data-URL (до появления файла на сайте). */
         photoPreviews: {},
         /** Игрок, чьё фото сейчас загружается: { teamId, index } (null — никто). */
@@ -2185,11 +2187,122 @@
         return 'page-' + route;
     }
 
+    /* --- Кнопка «Назад»: возвращает на предыдущую страницу --- */
+
+    /** Сколько страниц помним, чтобы стек не рос бесконечно. */
+    var HISTORY_LIMIT = 20;
+
+    /** Названия страниц для кнопки «Назад». */
+    var PAGE_TITLES = {
+        home: 'Главная',
+        standings: 'Таблица',
+        teams: 'Команды',
+        matches: 'Матчи',
+        players: 'Лучшие бомбардиры',
+        admin: 'Админ-панель'
+    };
+
+    /** Текущая страница как запись истории: маршрут и открытая детальная страница. */
+    function currentPage() {
+        return {
+            route: state.route,
+            matchId: state.publicMatchId,
+            teamId: state.publicTeamId
+        };
+    }
+
+    /** Это одна и та же страница? */
+    function samePage(a, b) {
+        return a.route === b.route &&
+            L.toInt(a.matchId) === L.toInt(b.matchId) &&
+            L.toInt(a.teamId) === L.toInt(b.teamId);
+    }
+
+    /** Название страницы для подписи у кнопки «Назад». */
+    function pageTitle(page) {
+        return PAGE_TITLES[page.route] || PAGE_TITLES.home;
+    }
+
+    /** Хэш-адрес страницы (с учётом открытого матча или команды). */
+    function hashForPage(page) {
+        if (page.route === 'matches' && page.matchId) {
+            return matchHash(page.matchId);
+        }
+
+        if (page.route === 'teams' && page.teamId) {
+            return teamHash(page.teamId);
+        }
+
+        return '#/' + page.route;
+    }
+
+    /** Показывает кнопку «Назад», если есть куда возвращаться. */
+    function renderBackButton() {
+        var row = $('back-row');
+        var label = $('back-target');
+
+        if (!row) {
+            return;
+        }
+
+        var previous = state.history.length ? state.history[state.history.length - 1] : null;
+
+        row.hidden = !previous;
+
+        if (label) {
+            label.textContent = previous ? '— вернуться на «' + pageTitle(previous) + '»' : '';
+        }
+
+        var button = row.querySelector('[data-action="go-back"]');
+
+        if (button) {
+            var title = previous ? 'Вернуться на страницу «' + pageTitle(previous) + '»' : 'Нечего возвращать';
+
+            button.setAttribute('title', title);
+            button.setAttribute('aria-label', title);
+        }
+    }
+
+    /** Запоминает страницу, с которой уходим (детальные страницы внутри раздела не считаются). */
+    function rememberPage(page, target) {
+        if (page.route === target.route || !page.route) {
+            return;
+        }
+
+        state.history.push(page);
+
+        if (state.history.length > HISTORY_LIMIT) {
+            state.history.shift();
+        }
+    }
+
+    /** Возвращает на предыдущую страницу. */
+    function goBack() {
+        var previous = state.history.pop();
+
+        if (!previous) {
+            return;
+        }
+
+        applyRoute(previous.route, {
+            back: true,
+            scroll: false,
+            matchId: previous.matchId === undefined ? null : previous.matchId,
+            teamId: previous.teamId === undefined ? null : previous.teamId,
+            hash: hashForPage(previous)
+        });
+
+        if (typeof window.scrollTo === 'function') {
+            window.scrollTo(0, 0);
+        }
+    }
+
     /** Переключение страницы: активная секция, подсветка меню (в т.ч. мобильного), хэш. */
     function applyRoute(route, options) {
         var opts = options || {};
         var target = ROUTES[route] ? route : 'home';
         var sectionId = sectionForRoute(target);
+        var previous = currentPage();
 
         /* Какая страница открыта: список или детальная страница (матч, команда).
            opts.matchId / opts.teamId === null — показать список, число — открыть
@@ -2204,6 +2317,13 @@
             state.publicTeamId = L.toInt(opts.teamId);
         } else if (target !== 'teams') {
             state.publicTeamId = null;
+        }
+
+        /* Кнопка «Назад»: запоминаем страницу, с которой уходим. Переходы внутри
+           раздела (список ⇄ матч, список ⇄ команда) новой страницей не считаются,
+           возврат по кнопке и стартовый переход тоже не записываются. */
+        if (!opts.back && !opts.replace) {
+            rememberPage(previous, { route: target });
         }
 
         state.route = target;
@@ -2255,6 +2375,8 @@
         } else if (target === 'players') {
             renderPlayers();
         }
+
+        renderBackButton();
     }
 
     function prepareAdminPage() {
@@ -2891,6 +3013,8 @@
         if (action === 'navigate') {
             /* Переход по меню всегда закрывает открытый матч или команду и показывает список */
             applyRoute(element.getAttribute('data-page') || 'home', { matchId: null, teamId: null });
+        } else if (action === 'go-back') {
+            goBack();
         } else if (action === 'toggle-menu') {
             var menu = $('mobile-menu');
 
@@ -3093,7 +3217,8 @@
                 updateHash: false,
                 scroll: false,
                 matchId: parsed.matchId,
-                teamId: parsed.teamId
+                teamId: parsed.teamId,
+                replace: true
             });
         });
     }
@@ -3135,7 +3260,12 @@
 
         var route = parseHash();
 
-        applyRoute(route.route, { updateHash: false, matchId: route.matchId, teamId: route.teamId });
+        applyRoute(route.route, {
+            updateHash: false,
+            matchId: route.matchId,
+            teamId: route.teamId,
+            replace: true
+        });
         fillSyncInputs();
         renderSyncStatus();
 

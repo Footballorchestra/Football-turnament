@@ -520,6 +520,62 @@ test('названия команд кликабельны везде, где о
     assert.match(app.id('team-detail').textContent, /Спартак/);
 });
 
+test('кнопка «Назад» возвращает на предыдущую страницу', () => {
+    const app = boot();
+
+    // На старте возвращаться некуда — кнопки не видно
+    assert.equal(app.id('back-row').hidden, true, 'кнопка скрыта, пока история пуста');
+
+    // Главная → Таблица: кнопка появилась и ведёт на «Главную»
+    app.navigate('standings');
+    assert.equal(app.id('back-row').hidden, false, 'кнопка показана');
+    assert.match(app.id('back-target').textContent, /Главная/);
+
+    app.click(app.button('go-back'));
+    assert.equal(app.activeSection(), 'page-home');
+    assert.equal(app.window.location.hash, '#/home');
+    assert.equal(app.id('back-row').hidden, true, 'вернулись к началу — история пуста');
+
+    // Таблица → команда: «Назад» возвращает в таблицу, а не в список команд
+    app.navigate('standings');
+    app.click(app.id('standings-body').querySelector('tr[data-action="team-public-open"][data-id="1"]'));
+
+    assert.equal(app.id('team-detail-view').hidden, false, 'открылась страница команды');
+    assert.match(app.id('back-target').textContent, /Таблица/);
+
+    app.click(app.button('go-back'));
+
+    assert.equal(app.activeSection(), 'page-standings', 'вернулись в турнирную таблицу');
+    assert.equal(app.window.location.hash, '#/standings');
+
+    // Главная → матч → команда: назад сначала к матчу, затем на главную
+    app.navigate('home');
+    app.click(app.id('latest-results').querySelector('.match-card[data-id="1"]'));
+    assert.equal(app.id('match-detail-view').hidden, false, 'открылся детальный результат матча');
+
+    app.click(app.id('match-detail').querySelector('a.match-detail-team'));
+    assert.equal(app.id('team-detail-view').hidden, false, 'открылась страница команды');
+    assert.match(app.id('back-target').textContent, /Матчи/);
+
+    app.click(app.button('go-back'));
+    assert.equal(app.id('match-detail-view').hidden, false, 'вернулись к матчу');
+    assert.equal(app.window.location.hash, '#/match/1');
+
+    app.click(app.button('go-back'));
+    assert.equal(app.activeSection(), 'page-home', 'а затем на главную');
+
+    // Переходы внутри раздела (список ⇄ деталь) новую страницу не создают
+    app.navigate('matches');
+    assert.match(app.id('back-target').textContent, /Главная/);
+
+    app.click(app.id('matches-list').querySelector('.match-card[data-id="1"]'));
+    assert.equal(app.id('match-detail-view').hidden, false);
+    assert.match(app.id('back-target').textContent, /Главная/, 'детальный результат — не новая страница');
+
+    app.click(app.button('go-back'));
+    assert.equal(app.activeSection(), 'page-home', 'и возвращает на главную');
+});
+
 test('админка: вход только по паролю, сессия сохраняется, выход работает', () => {
     const app = boot();
 
