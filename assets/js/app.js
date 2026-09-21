@@ -45,6 +45,8 @@
         history: [],
         /** Предпросмотр только что загруженных фото: путь → data-URL (до появления файла на сайте). */
         photoPreviews: {},
+        /** Сколько раз пытались догрузить картинку: путь → число попыток. */
+        photoRetries: {},
         /** Игрок, чьё фото сейчас загружается: { teamId, index } (null — никто). */
         photoBusy: null,
         /* Турнирная таблица: компактный вид (без горизонтальной прокрутки).
@@ -274,11 +276,94 @@
         var url = teamPhotoUrl(team.id);
 
         if (url) {
-            return '<img class="' + className + '" src="' + esc(url) + '" alt="" loading="lazy" width="' + side +
-                '" height="' + side + '">';
+            return photoImage(url, {
+                className: className,
+                side: side,
+                path: L.getTeamPhoto(state.data, team.id),
+                fallbackClass: 'team-badge ' + L.badgeColorForTeam(team.id) +
+                    (opts.big ? ' team-badge-lg' : (opts.small ? ' team-badge-sm' : '')),
+                fallbackText: L.getTeamInitials(team.name)
+            });
         }
 
         return teamBadge(team, opts.small);
+    }
+
+    /**
+     * Паузы перед повторной попыткой догрузить картинку, миллисекунды.
+     * Публикация файла на сайте занимает около минуты: за это время фото успевает
+     * появиться, а без повторов браузер запомнил бы ответ 404 и показал «сломанную»
+     * картинку ещё долго после публикации.
+     */
+    function photoRetryDelays() {
+        var delays = PHOTO.retryDelays;
+
+        return Array.isArray(delays) && delays.length ? delays : [4000, 15000, 45000];
+    }
+
+    /**
+     * Картинка аватара. Для файлов из репозитория добавляем служебные атрибуты:
+     * путь (для повторной попытки) и запасной бейдж с инициалами.
+     */
+    function photoImage(url, options) {
+        var opts = options || {};
+        var size = ' alt="" loading="lazy" width="' + opts.side + '" height="' + opts.side + '"';
+        var local = String(url).indexOf('data:') === 0;
+
+        // Предпросмотр из памяти (data:…) всегда на месте — повторять нечего
+        if (local) {
+            return '<img class="' + opts.className + '" src="' + esc(url) + '"' + size + '>';
+        }
+
+        return '<img class="' + opts.className + ' photo-retry" src="' + esc(url) + '"' + size +
+            ' data-photo-path="' + esc(opts.path) + '"' +
+            ' data-fallback-class="' + esc(opts.fallbackClass) + '"' +
+            ' data-fallback-text="' + esc(opts.fallbackText) + '">';
+    }
+
+    /** Картинка не загрузилась: пробуем ещё раз (с обходом кэша), затем показываем инициалы. */
+    function handlePhotoError(image) {
+        var path = image.getAttribute('data-photo-path') || '';
+        var delays = photoRetryDelays();
+        var attempt = (state.photoRetries[path] || 0) + 1;
+        var delay = attempt <= delays.length ? delays[attempt - 1] : 0;
+
+        state.photoRetries[path] = attempt;
+
+        if (delay && image.isConnected) {
+            window.setTimeout(function () {
+                if (image.isConnected) {
+                    // ?t= — обход кэша: 404 запомнился бы браузером на 10 минут
+                    image.setAttribute('src', path + '?t=' + Date.now());
+                }
+            }, delay);
+
+            return;
+        }
+
+        // Файл так и не появился — вместо «сломанной» картинки показываем инициалы
+        if (image.parentNode) {
+            var fallback = document.createElement('span');
+
+            fallback.className = image.getAttribute('data-fallback-class') || '';
+            fallback.setAttribute('aria-hidden', 'true');
+            fallback.textContent = image.getAttribute('data-fallback-text') || '';
+
+            image.parentNode.replaceChild(fallback, image);
+        }
+    }
+
+    /** Подписка на ошибки загрузки картинок (событие error не всплывает — слушаем перехват). */
+    function bindPhotoRetries() {
+        document.addEventListener('error', function (event) {
+            var image = event.target;
+
+            if (!image || image.tagName !== 'IMG' || !image.classList || !image.classList.contains('photo-retry')) {
+                return;
+            }
+
+            handlePhotoError(image);
+        }, true);
     }
 
     /**
@@ -292,8 +377,13 @@
         var url = photoUrl(teamId, player);
 
         if (url) {
-            return '<img class="' + className + '" src="' + esc(url) + '" alt="" loading="lazy" width="' + side +
-                '" height="' + side + '">';
+            return photoImage(url, {
+                className: className,
+                side: side,
+                path: L.getPhoto(state.data, teamId, player),
+                fallbackClass: className + ' player-avatar-empty',
+                fallbackText: L.getTeamInitials(player)
+            });
         }
 
         return '<span class="' + className + ' player-avatar-empty" aria-hidden="true">' +
@@ -392,7 +482,8 @@
                     sync.lastCommitUrl = result.htmlUrl;
                 }
 
-                saveData(opts.done + ' (' + P.formatBytes(result.bytes) + ')');
+                saveData(opts.done + ' (' + P.formatBytes(result.bytes) +
+                    ') — файл появится на сайте через ~минуту');
             });
     }
 
@@ -3369,6 +3460,9 @@
         document.addEventListener('change', handleChange);
         document.addEventListener('input', handleInput);
         document.addEventListener('keydown', handleKeydown);
+
+        // Картинки, которые не догрузились, повторяем сами (см. bindPhotoRetries)
+        bindPhotoRetries();
 
         window.addEventListener('hashchange', function () {
             var parsed = parseHash();

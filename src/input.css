@@ -149,6 +149,13 @@
         font-size: 0.75rem;
     }
 
+    .team-badge-lg {
+        width: 56px;
+        height: 56px;
+        font-size: 1rem;
+        border-radius: 6px;
+    }
+
     /* Цвета бейджей задаются классами (без inline-стилей), чтобы работала строгая CSP */
     .badge-color-1 { background: #1b5e20; }
     .badge-color-2 { background: #1d4ed8; }

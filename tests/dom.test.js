@@ -1502,6 +1502,8 @@ test('админка: фото игрока уходит в репозитори
     // Путь записан в данные (их публикует обычная авто-публикация)
     assert.equal(app.storedData().photos['1|иванов а.'], prepared.path);
     assert.match(app.id('toast-container').textContent, /загружено/);
+    assert.match(app.id('toast-container').textContent, /файл появится на сайте через ~минуту/,
+        'подсказка, что файл публикуется отдельно от данных');
 
     // Аватар показывается сразу — из памяти, хотя файл на сайте появится позже
     const avatar = app.id('admin-players-list').querySelector('img.player-avatar');
@@ -1639,4 +1641,69 @@ test('админка: без токена фото не уходит в репо
 
     assert.deepEqual(second.storedData().photos, {}, 'фото удалённого игрока убрано');
     assert.equal(second.storedData().teams[0].players.length, 2);
+});
+
+test('фото, которого ещё нет на сайте: повторные попытки и инициалы вместо сломанной картинки', async () => {
+    // Так выглядит «другое устройство»: путь к фото уже пришёл из репозитория,
+    // а сам файл сайт отдаст примерно через минуту после загрузки.
+    const seeded = remoteData();
+
+    seeded.photos = { '1|иванов а.': 'assets/photos/ivanov-a-abc123.jpg' };
+    seeded.teamPhotos = { '1': 'assets/photos/team-spartak-abc123.jpg' };
+
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+    const { window } = app;
+
+    // Паузы повторной загрузки сокращаем: в жизни это 4, 15 и 45 секунд
+    window.FT_CONFIG.photo.retryDelays = [5, 8, 10];
+
+    // Картинка «не загрузилась»: в jsdom изображения не скачиваются, событие отправляем сами
+    const fail = (image) => image.dispatchEvent(new window.Event('error'));
+
+    const avatar = app.id('teams-grid').querySelector('.chip-player img.player-avatar');
+
+    assert.ok(avatar, 'аватар игрока показан');
+    assert.equal(avatar.getAttribute('src'), 'assets/photos/ivanov-a-abc123.jpg');
+    assert.equal(avatar.getAttribute('data-photo-path'), 'assets/photos/ivanov-a-abc123.jpg');
+    assert.equal(avatar.classList.contains('photo-retry'), true, 'картинку можно перезагрузить');
+
+    fail(avatar);
+    await app.wait(20);
+
+    assert.match(avatar.getAttribute('src'), /^assets\/photos\/ivanov-a-abc123\.jpg\?t=\d+$/,
+        'повторная попытка с обходом кэша');
+
+    const firstRetry = avatar.getAttribute('src');
+
+    fail(avatar);
+    await app.wait(20);
+
+    assert.notEqual(avatar.getAttribute('src'), firstRetry, 'и ещё одна попытка');
+
+    for (let attempt = 0; attempt < 4 && avatar.isConnected; attempt += 1) {
+        fail(avatar);
+        await app.wait(20);
+    }
+
+    const chip = app.id('teams-grid').querySelector('.chip-player');
+
+    assert.equal(chip.querySelector('img.player-avatar'), null, 'сломанная картинка убрана');
+    assert.equal(chip.querySelector('.player-avatar-empty').textContent, 'ИА', 'видны инициалы');
+
+    // У эмблемы команды та же защита: в турнирной таблице возвращается бейдж с инициалами
+    const logo = app.id('standings-body').querySelector('tr[data-id="1"] img.team-photo');
+
+    assert.ok(logo, 'эмблема в турнирной таблице');
+    assert.equal(logo.getAttribute('data-fallback-text'), 'СП');
+    assert.match(logo.getAttribute('data-fallback-class'), /team-badge/);
+
+    for (let attempt = 0; attempt < 6 && logo.isConnected; attempt += 1) {
+        fail(logo);
+        await app.wait(20);
+    }
+
+    const row = app.id('standings-body').querySelector('tr[data-id="1"]');
+
+    assert.equal(row.querySelector('img.team-photo'), null, 'сломанная эмблема убрана');
+    assert.equal(row.querySelector('.team-badge').textContent, 'СП', 'бейдж с инициалами вернулся');
 });

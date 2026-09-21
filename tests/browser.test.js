@@ -975,3 +975,73 @@ test('эмблема команды: загрузка из админки, сж�
     assert.deepEqual(meaningful, [], 'нет других ошибок консоли и сбоев загрузки');
     await page.close();
 });
+
+/**
+ * Так выглядит устройство, открывшее сайт раньше, чем GitHub Pages опубликовал файл:
+ * путь к фото уже есть в данных, а сам файл ещё отвечает 404 (и этот ответ браузер
+ * запоминает на 10 минут). Приложение должно само повторить загрузку картинки,
+ * а если файл так и не появился — показать инициалы вместо «сломанной» картинки.
+ */
+test('фото, которого нет на сайте: повторные попытки загрузки и инициалы вместо сломанной картинки', { skip }, async () => {
+    const before = mockRepository.state.data;
+    const withPendingPhoto = JSON.parse(JSON.stringify(before));
+    const team = withPendingPhoto.teams[0];
+    const player = team.players[0];
+    const pending = 'assets/photos/pending-abc123.jpg';
+
+    withPendingPhoto.photos = {};
+    withPendingPhoto.photos[team.id + '|' + player.toLowerCase()] = pending;
+    mockRepository.changeExternally(withPendingPhoto);
+
+    // Файла с таким именем на диске сайта нет — как и у ещё не опубликованного фото
+    const { page, problems } = await openPage({
+        url: mockBaseUrl + '/',
+        isolated: true,
+        config: Object.assign({}, SITE_CONFIG, { photo: { retryDelays: [900, 900, 900] } })
+    });
+
+    const failed = [];
+
+    page.on('response', (response) => {
+        if (response.status() === 404 && response.url().includes('pending-abc123.jpg')) {
+            failed.push(response.url());
+        }
+    });
+
+    assert.equal(await page.evaluate((path) => Object.values(window.FTApp.getData().photos || {}).includes(path),
+        pending), true, 'путь к фото пришёл из репозитория');
+
+    // Фото из заявки видно в списке команд
+    await clickWhenReady(page, '[data-nav="teams"]');
+
+    // Ждём, пока приложение исчерпает попытки и покажет инициалы
+    await page.waitForFunction((name) => {
+        const chip = Array.from(document.querySelectorAll('#teams-grid .chip-player'))
+            .find((item) => item.textContent.includes(name));
+
+        return !!chip && !!chip.querySelector('.player-avatar-empty');
+    }, { timeout: 20000 }, player);
+
+    const view = await page.evaluate((name) => {
+        const chip = Array.from(document.querySelectorAll('#teams-grid .chip-player'))
+            .find((item) => item.textContent.includes(name));
+
+        return {
+            broken: !!chip.querySelector('img.player-avatar'),
+            initials: (chip.querySelector('.player-avatar-empty') || {}).textContent || ''
+        };
+    }, player);
+
+    assert.equal(view.broken, false, 'сломанная картинка не осталась');
+    assert.match(view.initials, /^[А-ЯЁA-Z]{1,3}$/, 'показаны инициалы игрока');
+    assert.ok(failed.length >= 2, 'картинка запрашивалась повторно: ' + failed.join(', '));
+    assert.equal(failed.some((url) => url.includes('?t=')), true, 'повтор с обходом кэша: ' + failed.join(', '));
+
+    const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
+
+    assert.deepEqual(meaningful, [], 'нет других ошибок консоли и сбоев загрузки');
+
+    // Возвращаем данные макета для остальных тестов
+    mockRepository.changeExternally(before);
+    await page.close();
+});
