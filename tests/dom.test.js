@@ -432,7 +432,8 @@ test('матч для посетителей: клик по карточке о�
     app.navigate('matches');
     assert.equal(app.id('match-list-view').hidden, false, 'показан список матчей');
     assert.equal(app.id('match-detail-view').hidden, true, 'детальный результат скрыт');
-    assert.equal(app.$$('#matches-list [data-action="match-public-open"]').length, 4, 'карточки матчей кликабельны');
+    assert.equal(app.$$('#matches-list .match-card').length, 4, 'карточки матчей кликабельны');
+    assert.equal(app.$$('#matches-list .match-card .team-link').length, 8, 'названия команд в карточках — ссылки');
 
     // Клик по матчу открывает детальный результат: счёт, кто играл, голы и карточки
     app.click(app.$('#matches-list [data-action="match-public-open"][data-id="1"]'));
@@ -469,6 +470,54 @@ test('матч для посетителей: клик по карточке о�
     assert.equal(app.id('match-list-view').hidden, false);
     assert.equal(app.id('match-detail-view').hidden, true);
     assert.equal(app.window.location.hash, '#/matches');
+});
+
+test('названия команд кликабельны везде, где они встречаются', () => {
+    const app = boot();
+
+    // Главная: в карточках матчей обе команды — ссылки
+    const homeCards = app.$$('#latest-results .match-card').length + app.$$('#upcoming-matches .match-card').length;
+
+    assert.ok(homeCards > 0, 'на главной есть карточки матчей');
+    assert.equal(app.$$('#latest-results .team-link, #upcoming-matches .team-link').length, homeCards * 2,
+        'на главной у каждой команды в карточке матча — ссылка');
+
+    // Страница матчей: то же самое
+    app.navigate('matches');
+    assert.equal(app.$$('#matches-list .team-link').length, app.$$('#matches-list .match-card').length * 2);
+
+    // Детальный результат: названия у счёта и заголовки составов
+    app.click(app.$('#matches-list .match-card[data-id="1"]'));
+
+    assert.equal(app.$$('#match-detail a.match-detail-team').length, 2, 'названия команд у счёта — ссылки');
+    assert.equal(app.$$('#match-detail .squad-team a').length, 2, 'заголовки составов — ссылки на команды');
+
+    // Переход по названию команды прямо из детального результата
+    app.click(app.$('#match-detail a.match-detail-team'));
+
+    assert.equal(app.id('team-detail-view').hidden, false, 'открылась страница команды');
+    assert.match(app.id('team-detail').textContent, /Спартак/);
+    assert.equal(app.window.location.hash, '#/team/1');
+
+    // Турнирная таблица: и вся строка, и название команды
+    app.navigate('standings');
+    assert.equal(app.$$('#standings-body tr[data-action="team-public-open"]').length, 4, 'строки таблицы кликабельны');
+    assert.equal(app.$$('#standings-body .team-link').length, 4, 'названия команд в таблице — ссылки');
+
+    // Лучшие бомбардиры: команда в столбце — ссылка
+    app.login();
+    app.openMatch(1);
+    app.click(app.markButton(1, 'Иванов А.', 'goal'));
+
+    app.navigate('players');
+    const teamCell = app.id('players-body').querySelector('.col-optional .team-link');
+
+    assert.ok(teamCell, 'в бомбардирах команда — ссылка');
+    assert.equal(teamCell.getAttribute('href'), '#/team/1');
+
+    app.click(teamCell);
+    assert.equal(app.id('team-detail-view').hidden, false, 'из бомбардиров тоже открывается команда');
+    assert.match(app.id('team-detail').textContent, /Спартак/);
 });
 
 test('админка: вход только по паролю, сессия сохраняется, выход работает', () => {

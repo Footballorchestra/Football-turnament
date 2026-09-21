@@ -1021,37 +1021,56 @@
     }
 
     /**
-     * Карточка матча для публичных списков.
-     * Это кнопка: нажатие открывает детальный результат матча (#/match/<номер>).
+     * Название команды ссылкой на её страницу (для карточек матчей и списков).
+     * team — команда (null, если она удалена: тогда выводится просто текст).
+     * reverse — бейдж справа, small — уменьшенный бейдж.
+     */
+    function teamLink(team, name, reverse, small) {
+        var badge = team ? teamBadge(team, small) : '';
+        var label = '<span class="team-name font-medium">' + esc(name) + '</span>';
+        var content = reverse ? label + badge : badge + label;
+
+        if (!team) {
+            return '<span class="flex items-center gap-2 min-w-0">' + content + '</span>';
+        }
+
+        return '<a class="team-link' + (reverse ? ' justify-end' : '') + '" href="' + teamHash(team.id) +
+            '" data-action="team-public-open" data-id="' + L.toInt(team.id) + '" title="Открыть страницу команды">' +
+            content +
+        '</a>';
+    }
+
+    /**
+     * Карточка матча для публичных списков. Названия команд ведут на их страницы,
+     * счёт — в детальный результат матча; клик по остальной части карточки тоже
+     * открывает матч (data-action стоит и на самой карточке).
      */
     function matchCard(match) {
         var teamA = L.findTeam(state.data.teams, match.teamA);
         var teamB = L.findTeam(state.data.teams, match.teamB);
+        var score = match.finished
+            ? '<span class="score-display">' + match.scoreA + ' : ' + match.scoreB + '</span>'
+            : '<span class="text-dark-500 text-sm">против</span>';
 
         return '' +
-            '<button type="button" class="match-card ' + (match.finished ? 'finished' : 'upcoming') + '"' +
+            '<article class="match-card ' + (match.finished ? 'finished' : 'upcoming') + '"' +
                 ' data-action="match-public-open" data-id="' + match.id + '" title="Подробности матча">' +
-                '<span class="flex items-center gap-2 sm:gap-3">' +
-                    '<span class="flex items-center gap-2 flex-1 min-w-0">' +
-                        teamBadge(teamA, true) +
-                        '<span class="font-medium truncate">' + esc(teamA ? teamA.name : 'Команда удалена') + '</span>' +
-                    '</span>' +
-                    '<span class="px-1.5 sm:px-2 text-center">' +
-                        (match.finished
-                            ? '<span class="score-display">' + match.scoreA + ' : ' + match.scoreB + '</span>'
-                            : '<span class="text-dark-500 text-sm">против</span>') +
-                    '</span>' +
-                    '<span class="flex items-center gap-2 flex-1 min-w-0 justify-end">' +
-                        '<span class="font-medium truncate text-right">' + esc(teamB ? teamB.name : 'Команда удалена') + '</span>' +
-                        teamBadge(teamB, true) +
-                    '</span>' +
-                '</span>' +
-                '<span class="mt-2 text-xs text-dark-600 flex flex-wrap items-center gap-3">' +
+                '<div class="flex items-center gap-2 sm:gap-3">' +
+                    '<div class="flex items-center gap-2 flex-1 min-w-0">' +
+                        teamLink(teamA, teamA ? teamA.name : 'Команда удалена', false, true) +
+                    '</div>' +
+                    '<a class="match-card-score" href="' + matchHash(match.id) + '"' +
+                        ' data-action="match-public-open" data-id="' + match.id + '" title="Открыть матч">' + score + '</a>' +
+                    '<div class="flex items-center gap-2 flex-1 min-w-0 justify-end">' +
+                        teamLink(teamB, teamB ? teamB.name : 'Команда удалена', true, true) +
+                    '</div>' +
+                '</div>' +
+                '<div class="mt-2 text-xs text-dark-600 flex flex-wrap items-center gap-3">' +
                     '<span class="inline-flex items-center gap-1">' + icon('calendar') + esc(L.formatDate(match.date, 'long')) + '</span>' +
                     statusPill(match) +
                     matchSummary(match) +
-                '</span>' +
-            '</button>';
+                '</div>' +
+            '</article>';
     }
 
     /**
@@ -1244,13 +1263,12 @@
                     '<span class="player-line">' + playerAvatar(row.teamId, row.player, { small: true }) +
                         '<span class="player-name">' + esc(row.player) + '</span></span>' +
                     // На телефоне столбец «Команда» скрыт, и название выводится под именем
-                    '<span class="row-detail">' + esc(row.teamName) + '</span>' +
+                    '<span class="row-detail">' +
+                        teamLink(L.findTeam(state.data.teams, row.teamId), row.teamName, false, false) +
+                    '</span>' +
                 '</td>' +
                 '<td class="col-optional">' +
-                    '<div class="flex items-center gap-3">' +
-                        teamBadge({ id: row.teamId, name: row.teamName }, true) +
-                        '<span>' + esc(row.teamName) + '</span>' +
-                    '</div>' +
+                    teamLink(L.findTeam(state.data.teams, row.teamId), row.teamName, false, true) +
                 '</td>' +
                 '<td class="num player-goals">' + row.goals + '</td>' +
             '</tr>';
@@ -1457,9 +1475,28 @@
             : '<p class="text-dark-500 text-sm">Состав не заполнен</p>';
 
         return '<section class="squad-column">' +
-            '<h3 class="squad-team">' + esc(teamName) + '</h3>' +
+            '<h3 class="squad-team">' +
+                (team
+                    ? '<a class="team-name" href="' + teamHash(team.id) + '" data-action="team-public-open" data-id="' +
+                        L.toInt(team.id) + '" title="Открыть страницу команды">' + esc(teamName) + '</a>'
+                    : esc(teamName)) +
+            '</h3>' +
             rows +
         '</section>';
+    }
+
+    /** Название команды в детальном результате: ссылка на страницу команды. */
+    function matchDetailTeam(team, name, reverse) {
+        var badge = team ? teamBadge(team, true) : '';
+        var label = '<span class="match-detail-name">' + esc(name) + '</span>';
+        var content = reverse ? label + badge : badge + label;
+
+        if (!team) {
+            return '<span class="match-detail-team">' + content + '</span>';
+        }
+
+        return '<a class="match-detail-team" href="' + teamHash(team.id) + '" data-action="team-public-open" data-id="' +
+            L.toInt(team.id) + '" title="Открыть страницу команды">' + content + '</a>';
     }
 
     /** Детальный результат матча для посетителей сайта. */
@@ -1490,14 +1527,11 @@
                 statusPill(match) +
             '</div>' +
             '<div class="match-detail-score">' +
-                '<span class="match-detail-team">' + teamBadge(teamA, true) +
-                    '<span class="match-detail-name">' + esc(nameA) + '</span></span>' +
+                matchDetailTeam(teamA, nameA, false) +
                 (match.finished
                     ? '<span class="score-display">' + match.scoreA + ' : ' + match.scoreB + '</span>'
                     : '<span class="text-dark-500 text-sm">против</span>') +
-                '<span class="match-detail-team">' +
-                    '<span class="match-detail-name">' + esc(nameB) + '</span>' + teamBadge(teamB, true) +
-                '</span>' +
+                matchDetailTeam(teamB, nameB, true) +
             '</div>' +
             '<p class="match-detail-hint">' + esc(hint) + '</p>' +
             '<div class="match-detail-squads">' +
@@ -1697,6 +1731,11 @@
         state.selectedTeamId = L.toInt(teamId);
         state.editingTeamId = null;
         state.editingPlayer = null;
+
+        // Карточка команды живёт в разделе «Команды»: открываем его,
+        // даже если нажали на название команды из раздела «Матчи»
+        showAdminTab('teams');
+
         renderAdminTeams();
         renderAdminPlayers();
 
@@ -1805,6 +1844,12 @@
         '</button>';
     }
 
+    /** Название команды в карточке матча админки: нажатие открывает её карточку в разделе «Команды». */
+    function adminTeamLink(teamId, name) {
+        return '<button type="button" class="admin-score-team admin-score-link" data-action="team-open" data-id="' +
+            L.toInt(teamId) + '" title="Открыть команду в разделе «Команды»">' + esc(name) + '</button>';
+    }
+
     /** Карточка матча: счёт, состав обеих команд и отметки голов и карточек. */
     function renderAdminMatchCard(match) {
         var scoreBox = $('admin-match-score');
@@ -1833,11 +1878,11 @@
                 statusPill(match) +
             '</div>' +
             '<div class="admin-score-line">' +
-                '<span class="admin-score-team">' + esc(nameA) + '</span>' +
+                adminTeamLink(match.teamA, nameA) +
                 scoreInput(match, 'a', nameA) +
                 '<span class="admin-muted">:</span>' +
                 scoreInput(match, 'b', nameB) +
-                '<span class="admin-score-team">' + esc(nameB) + '</span>' +
+                adminTeamLink(match.teamB, nameB) +
             '</div>' +
             '<div class="flex flex-wrap items-center gap-3 mt-3">' +
                 '<button type="button" class="btn btn-primary" data-action="match-save-score" data-id="' + match.id + '">' +

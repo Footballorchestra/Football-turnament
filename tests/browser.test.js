@@ -827,6 +827,11 @@ test('страница команды: из турнирной таблицы в
     );
     assert.ok(await page.$$eval('#team-detail .chip-player', (chips) => chips.length) > 0, 'состав показан');
     assert.equal(await page.$$eval('#team-detail .match-card', (cards) => cards.length), target.matches, 'только её матчи');
+    assert.equal(
+        await page.$$eval('#team-detail .match-card .team-link', (links) => links.length),
+        target.matches * 2,
+        'в матчах команды названия команд — ссылки'
+    );
 
     // Из страницы команды открывается детальный результат матча
     await clickInView(page, '#team-detail [data-action="match-public-open"]');

@@ -636,6 +636,41 @@
         white-space: nowrap;
     }
 
+    /* --- Названия команд — ссылки на их страницы --- */
+
+    /* Счёт в карточке матча: ссылка в детальный результат */
+    .match-card-score {
+        display: inline-flex;
+        align-items: center;
+        flex: none;
+    }
+
+    .match-card-score:hover .score-display,
+    .match-card-score:focus-visible .score-display {
+        outline: 2px solid #1b5e20;
+        outline-offset: 2px;
+    }
+
+    /* Названия команд в детальном результате и в составах подсвечиваются при наведении */
+    .match-detail-team:hover .match-detail-name,
+    .squad-team a:hover,
+    .squad-team a:focus-visible {
+        text-decoration: underline;
+    }
+
+    /* Название команды в карточке матча админки — кнопка на раздел «Команды» */
+    .admin-score-link {
+        background: none;
+        border: 0;
+        padding: 0;
+        font: inherit;
+        cursor: pointer;
+    }
+
+    .admin-score-link:hover {
+        text-decoration: underline;
+    }
+
     /* --- Статусы матча --- */
     .status-pill {
         display: inline-flex;
