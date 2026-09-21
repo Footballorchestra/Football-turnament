@@ -151,7 +151,7 @@ npm run serve          # http://127.0.0.1:8080
 npm ci                 # dev-зависимости: tailwindcss, jsdom, puppeteer-core
 npm run build:css      # пересобрать assets/css/tailwind.css после правок классов
 npm run watch:css      # то же в режиме наблюдения
-npm test               # 101 тест: логика, фото, синхронизация, интерфейс (jsdom)
+npm test               # 102 теста: логика, фото, синхронизация, интерфейс (jsdom)
 npm run test:browser   # 9 e2e-тестов в настоящем Chrome (включая публикацию и загрузку фото)
 ```
 
