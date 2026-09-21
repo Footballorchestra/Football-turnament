@@ -31,6 +31,7 @@
     /** Значения по умолчанию; переопределяются из window.FT_CONFIG.photo (см. config.js). */
     var DEFAULTS = {
         folder: 'assets/photos/',          // папка с фото в репозитории
+        prefix: '',                        // префикс имени файла: 'team-' для эмблем команд
         maxSize: 512,                      // сторона квадрата, px
         quality: 0.82,                     // качество JPEG
         maxSourceBytes: 15 * 1024 * 1024,  // исходник: до 15 МБ
@@ -98,14 +99,15 @@
         return ('0000000' + hash.toString(16)).slice(-8);
     }
 
-    /** Путь к фото игрока в репозитории (его же хранит карта data.photos). */
+    /** Путь к фото в репозитории: фото игрока или эмблема команды (префикс). */
     function buildPath(teamId, player, options) {
         var config = settings(options);
         var folder = String(config.folder).replace(/\/+$/, '') + '/';
+        var prefix = String(config.prefix || '');
         var slug = slugify(player) || 'player';
         var suffix = hashOf(String(teamId) + '|' + String(player)).slice(0, 6);
 
-        return folder + slug + '-' + suffix + '.jpg';
+        return folder + prefix + slug + '-' + suffix + '.jpg';
     }
 
     /** Размер файла понятными словами. */

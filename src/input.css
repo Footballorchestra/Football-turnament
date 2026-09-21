@@ -671,6 +671,31 @@
         text-decoration: underline;
     }
 
+    /* --- Эмблема команды: фото вместо бейджа с инициалами --- */
+    .team-photo {
+        width: 40px;
+        height: 40px;
+        border-radius: 6px;
+        object-fit: cover;
+        background: #e8eaed;
+        flex: none;
+    }
+
+    .team-photo-sm {
+        width: 32px;
+        height: 32px;
+    }
+
+    .team-photo-lg {
+        width: 56px;
+        height: 56px;
+    }
+
+    /* В компактной турнирной таблице (телефон) эмблема, как и бейдж, скрывается */
+    .standings-table.is-compact .team-photo {
+        display: none;
+    }
+
     /* --- Статусы матча --- */
     .status-pill {
         display: inline-flex;

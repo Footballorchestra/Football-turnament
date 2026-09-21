@@ -334,7 +334,7 @@ test('нормализация фото: валидные пути остают�
     assert.deepEqual(Object.keys(result.data.photos), ['1|иванов а.'], 'осталось только фото игрока из заявки');
     assert.equal(result.data.photos['1|иванов а.'], 'assets/photos/ivanov-a-1a2b3c.jpg');
     assert.equal(result.repaired, true, 'отброшенные записи — это исправление данных');
-    assert.equal(result.data.version, 5);
+    assert.equal(result.data.version, 6);
 
     // Старый файл без карты фото грузится без предупреждений
     const legacy = L.normalizeData({ teams: [{ id: 1, name: 'A', players: ['X'] }], matches: [] });
@@ -346,14 +346,55 @@ test('экспорт и импорт данных переносят фото', 
     const data = L.createDefaultData();
 
     L.setPhoto(data, 1, 'Иванов А.', 'assets/photos/ivanov-a-1a2b3c.jpg');
+    L.setTeamPhoto(data, 1, 'assets/photos/team-spartak-4d5e6f.jpg');
 
     const text = L.serializeData(data);
 
     assert.ok(text.indexOf('assets/photos/ivanov-a-1a2b3c.jpg') !== -1, 'путь к фото попал в экспорт');
+    assert.ok(text.indexOf('assets/photos/team-spartak-4d5e6f.jpg') !== -1, 'эмблема команды попала в экспорт');
 
     const imported = L.parseImport(text);
     assert.equal(imported.ok, true);
     assert.equal(L.getPhoto(imported.data, 1, 'Иванов А.'), 'assets/photos/ivanov-a-1a2b3c.jpg');
+    assert.equal(L.getTeamPhoto(imported.data, 1), 'assets/photos/team-spartak-4d5e6f.jpg');
+});
+
+test('эмблема команды: запись, чтение, удаление и нормализация', () => {
+    const data = L.createDefaultData();
+    const path = 'assets/photos/team-spartak-33abcd.jpg';
+
+    assert.equal(L.teamPhotoKey(1), '1');
+    assert.equal(L.getTeamPhoto(data, 1), '', 'эмблемы ещё нет');
+    assert.equal(L.hasTeamPhoto(data, 1), false);
+
+    L.setTeamPhoto(data, 1, path);
+    assert.equal(L.getTeamPhoto(data, 1), path);
+    assert.equal(L.hasTeamPhoto(data, 1), true);
+    assert.equal(L.getTeamPhoto(data, 2), '', 'у другой команды своя эмблема');
+
+    // Недопустимый путь не сохраняется
+    L.setTeamPhoto(data, 1, 'team-spartak.png');
+    assert.equal(L.getTeamPhoto(data, 1), '');
+
+    // Нормализация: остаются только эмблемы существующих команд с корректным путём
+    const result = L.normalizeData({
+        teams: [{ id: 1, name: 'Спартак', players: [] }, { id: 2, name: 'Зенит', players: [] }],
+        matches: [],
+        teamPhotos: {
+            '1': 'assets/photos/team-spartak-33abcd.jpg',
+            '9': 'assets/photos/team-gone-111111.jpg',
+            '2': '../evil.jpg'
+        }
+    });
+
+    assert.deepEqual(result.data.teamPhotos, { '1': 'assets/photos/team-spartak-33abcd.jpg' });
+    assert.equal(result.repaired, true, 'отброшенные эмблемы — исправление данных');
+    assert.equal(result.data.version, 6);
+
+    // Удаление и данные без карты эмблем загружаются без предупреждений
+    L.removeTeamPhoto(data, 1);
+    assert.equal(L.getTeamPhoto(data, 1), '');
+    assert.equal(L.normalizeData({ teams: [{ id: 1, name: 'A', players: [] }], matches: [] }).repaired, false);
 });
 
 test('normalizeData: мусор на входе даёт демонстрационные данные', () => {
@@ -611,7 +652,7 @@ test('normalizeData: события матчей сохраняются, «му�
 
     assert.equal(result.repaired, true, 'событие чужой команды — это исправление данных');
     assert.deepEqual(result.data.matches[0].events, [{ team: 1, player: 'Иванов А.', type: 'goal' }]);
-    assert.equal(result.data.version, 5, 'в данных отмечена новая версия формата');
+    assert.equal(result.data.version, 6, 'в данных отмечена новая версия формата');
 });
 
 test('лучшие бомбардиры: сортировка по голам, при равенстве — по имени', () => {

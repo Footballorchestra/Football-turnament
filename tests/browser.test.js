@@ -848,7 +848,6 @@ test('страница команды: из турнирной таблицы в
 
 test('кнопка «Назад» возвращает на предыдущую страницу', { skip }, async () => {
     const { page, problems } = await openPage();
-
     // На старте возвращаться некуда
     assert.equal(await sectionVisible(page, 'back-row'), false, 'кнопка скрыта');
 
@@ -874,5 +873,105 @@ test('кнопка «Назад» возвращает на предыдущую
     assert.equal(await sectionVisible(page, 'back-row'), false, 'история пуста — кнопки нет');
 
     assert.deepEqual(problems, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+});
+
+test('эмблема команды: загрузка из админки, сжатие и показ в турнирной таблице', { skip }, async () => {
+    const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
+
+    // Диагностика: какие адреса отвечают 404
+    const notFound = [];
+
+    page.on('response', (response) => {
+        if (response.status() === 404) {
+            notFound.push(response.url());
+        }
+    });
+
+    // Вход и токен публикации
+    await clickWhenReady(page, '[data-nav="admin"]');
+    await page.type('#admin-password', 'admin');
+    await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
+    await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
+
+    await clickInView(page, '[data-action="toggle-settings"]');
+    await page.type('#github-token', 'test-token');
+    await clickInView(page, '[data-action="github-save-token"]');
+    await page.waitForFunction(() => document.getElementById('github-token').placeholder.includes('сохранён'));
+
+    const logosBefore = await page.evaluate(() => Object.keys(window.FTApp.getData().teamPhotos || {}).length);
+
+    // Открываем первую команду: в карточке есть загрузка эмблемы
+    await clickWhenReady(page, '#admin-teams-list [data-action="team-open"]');
+    await page.waitForFunction(() => !!document.querySelector('#admin-team-photo input[data-photo-kind="team"]'));
+
+    // Отдаём настоящее изображение (6×6 PNG рисуется в браузере)
+    await page.evaluate(() => new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        canvas.width = 6;
+        canvas.height = 6;
+        context.fillStyle = '#1b5e20';
+        context.fillRect(0, 0, 6, 6);
+
+        canvas.toBlob((blob) => {
+            const input = document.querySelector('#admin-team-photo input[data-photo-kind="team"]');
+            const transfer = new DataTransfer();
+
+            transfer.items.add(new File([blob], 'logo.png', { type: 'image/png' }));
+            input.files = transfer.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            resolve(true);
+        }, 'image/png');
+    }));
+
+    await page.waitForFunction(() => {
+        const image = document.querySelector('#admin-team-photo img.team-photo');
+
+        return !!image && image.complete && image.naturalWidth > 0;
+    });
+
+    const result = await page.evaluate(() => {
+        const data = window.FTApp.getData();
+        const team = data.teams[0];
+        const image = document.querySelector('#admin-team-photo img.team-photo');
+
+        return {
+            count: Object.keys(data.teamPhotos || {}).length,
+            path: team ? (data.teamPhotos[String(team.id)] || '') : '',
+            previews: Object.keys(window.FTApp.getState().photoPreviews).length,
+            width: image ? image.naturalWidth : 0
+        };
+    });
+
+    assert.equal(result.count, logosBefore + 1, 'эмблема записана в данные');
+    assert.match(result.path, /^assets\/photos\/team-[a-z0-9-]+-[0-9a-f]{6}\.jpg$/, 'имя файла эмблемы');
+    assert.equal(result.previews, 1, 'предпросмотр эмблемы');
+    assert.equal(result.width, 512, 'эмблема сжата до квадрата 512');
+    assert.ok(mockRepository.state.files[result.path], 'файл эмблемы в репозитории');
+
+    // Эмблема видна в турнирной таблице (из памяти, не дожидаясь публикации файла)
+    await clickWhenReady(page, '[data-nav="standings"]');
+    await page.waitForFunction(() => {
+        const images = Array.from(document.querySelectorAll('#standings-body img.team-photo'));
+
+        return images.some((image) => image.getAttribute('src').indexOf('data:image/jpeg;base64,') === 0);
+    });
+
+    // Проверка «есть ли уже такой файл» штатно отвечает 404 — браузер пишет об этом в консоль.
+    // В ответах 404 есть и запрос про файл эмблемы (значит, файл новый и sha не нужен).
+    // Остальные 404 — фото из макетного репозитория: их «отдаёт» репозиторий, а на диске сайта
+    // их нет (в жизни такие файлы лежат в репозитории рядом с сайтом и отдаются нормально).
+    assert.equal(notFound.some((url) => /\/contents\/assets\/photos\/team-/.test(url)), true,
+        'не было проверки файла эмблемы: ' + notFound.join(', '));
+
+    const unexpected = notFound.filter((url) => url.indexOf('/assets/photos/') === -1);
+
+    assert.deepEqual(unexpected, [], 'неожиданные 404: ' + unexpected.join(', '));
+
+    const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
+
+    assert.deepEqual(meaningful, [], 'нет других ошибок консоли и сбоев загрузки');
     await page.close();
 });

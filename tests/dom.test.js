@@ -1525,6 +1525,72 @@ test('админка: фото игрока уходит в репозитори
     assert.match(app.id('toast-container').textContent, /слишком большой/, 'понятная ошибка вместо кода 413');
 });
 
+test('админка: эмблема команды загружается, видна везде и убирается', async () => {
+    const mock = createMockRepository({ data: remoteData() });
+    const app = boot({ mock, autoPublishDelayMs: 10000 });
+
+    app.login();
+    app.saveToken('test-token');
+    app.openTeam('Спартак');
+
+    const input = app.id('admin-team-photo').querySelector('input[data-photo-kind="team"]');
+    assert.ok(input, 'в карточке команды есть загрузка эмблемы');
+    assert.match(app.id('admin-team-photo').textContent, /Загрузить эмблему/);
+
+    // Сжатие в браузере подменяем: canvas в jsdom нет, остальной путь проверяем целиком
+    const prepared = {
+        ok: true,
+        base64: 'QUJD',
+        bytes: 2048,
+        mime: 'image/jpeg',
+        size: 512,
+        path: 'assets/photos/team-spartak-abc123.jpg'
+    };
+
+    app.window.FTPhoto.prepare = () => Promise.resolve(prepared);
+
+    Object.defineProperty(input, 'files', { value: [{ size: 4096, type: 'image/png', name: 'logo.png' }] });
+    app.change(input);
+    await app.wait(20);
+
+    // Файл ушёл в репозиторий своим коммитом, путь записан в данные
+    assert.equal(mock.state.files[prepared.path].content, 'QUJD', 'файл эмблемы в репозитории');
+    assert.equal(mock.state.commits.some((commit) =>
+        commit.message === 'Эмблема команды «Спартак» — файл сайта'), true, 'коммит с эмблемой');
+    assert.equal(app.storedData().teamPhotos['1'], prepared.path);
+    assert.match(app.id('toast-container').textContent, /Эмблема команды «Спартак» загружена/);
+
+    // Превью видно сразу — из памяти, не дожидаясь публикации файла
+    const adminAvatar = app.id('admin-team-photo').querySelector('img.team-photo');
+
+    assert.ok(adminAvatar, 'превью в карточке команды');
+    assert.equal(adminAvatar.getAttribute('src'), 'data:image/jpeg;base64,QUJD');
+
+    // Эмблема видна в турнирной таблице и в списке команд
+    app.navigate('standings');
+    assert.equal(app.id('standings-body').querySelector('tr[data-id="1"] img.team-photo').getAttribute('src'),
+        'data:image/jpeg;base64,QUJD', 'эмблема в турнирной таблице');
+
+    app.navigate('teams');
+    assert.ok(app.id('teams-grid').querySelector('article[data-id="1"] img.team-photo'), 'эмблема в списке команд');
+
+    // И на странице команды — крупно
+    app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="1"]'));
+    assert.ok(app.id('team-detail').querySelector('img.team-photo.team-photo-lg'), 'эмблема на странице команды');
+
+    // Убираем эмблему: данные чистые, снова бейдж с инициалами
+    app.navigate('admin');
+    app.openTeam('Спартак');
+    assert.match(app.id('admin-team-photo').textContent, /Заменить эмблему/);
+
+    app.click(app.$('#admin-team-photo [data-action="team-photo-remove"]'));
+
+    assert.deepEqual(app.storedData().teamPhotos, {}, 'эмблема убрана из данных');
+    assert.match(app.id('toast-container').textContent, /Эмблема команды «Спартак» убрана/);
+    assert.equal(app.id('admin-team-photo').querySelector('img.team-photo'), null, 'вернулся бейдж');
+    assert.ok(app.id('admin-team-photo').querySelector('.team-badge'), 'бейдж на месте');
+});
+
 test('админка: без токена фото не уходит в репозиторий, а готовое фото можно убрать', async () => {
     // Токен не сохранён — загрузка даже не начинается
     const mock = createMockRepository({ data: remoteData() });

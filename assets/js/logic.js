@@ -30,7 +30,8 @@
         // 3 — в матчах появились события (голы и голевые передачи игроков)
         // 4 — вместо голевых передач отмечаются жёлтые и красные карточки
         // 5 — у игроков появились фото (карта photos с путями к файлам репозитория)
-        dataVersion: 5,
+        // 6 — у команд появились эмблемы (карта teamPhotos)
+        dataVersion: 6,
         // Пароль администратора. Внимание: это демонстрационная защита,
         // на статическом хостинге реальную авторизацию без сервера сделать нельзя
         // (подробности — в README.md).
@@ -57,6 +58,7 @@
             revision: 1,
             updatedAt: new Date().toISOString(),
             photos: {},
+            teamPhotos: {},
             teams: [
                 { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.', 'Сидоров С.'] },
                 { id: 2, name: 'Локомотив', players: ['Кузнецов К.', 'Попов П.'] },
@@ -971,6 +973,91 @@
         return data;
     }
 
+    /* --- Эмблема (фото) команды: отдельная карта teamPhotos, ключ — id команды --- */
+
+    /** Ключ эмблемы команды. */
+    function teamPhotoKey(teamId) {
+        var id = toInt(teamId);
+
+        return id === null ? '' : String(id);
+    }
+
+    /** Эмблема команды ('' — фото нет). */
+    function getTeamPhoto(data, teamId) {
+        var photos = (data && isPlainObject(data.teamPhotos)) ? data.teamPhotos : {};
+        var value = photos[teamPhotoKey(teamId)];
+
+        return isValidPhotoPath(value) ? value.trim() : '';
+    }
+
+    /** Есть ли у команды эмблема. */
+    function hasTeamPhoto(data, teamId) {
+        return getTeamPhoto(data, teamId) !== '';
+    }
+
+    /** Записывает эмблему команды; пустой путь удаляет запись. */
+    function setTeamPhoto(data, teamId, path) {
+        if (!isPlainObject(data)) {
+            return data;
+        }
+
+        if (!isPlainObject(data.teamPhotos)) {
+            data.teamPhotos = {};
+        }
+
+        var key = teamPhotoKey(teamId);
+        var value = typeof path === 'string' ? path.trim() : '';
+
+        if (!key) {
+            return data;
+        }
+
+        if (value && isValidPhotoPath(value)) {
+            data.teamPhotos[key] = value;
+        } else {
+            delete data.teamPhotos[key];
+        }
+
+        return data;
+    }
+
+    /** Убирает эмблему команды. */
+    function removeTeamPhoto(data, teamId) {
+        return setTeamPhoto(data, teamId, '');
+    }
+
+    /**
+     * Приводит карту эмблем к корректному виду: остаются только пути внутрь папки
+     * фотографий у команд, которые есть в турнире.
+     */
+    function normalizeTeamPhotos(rawPhotos, teams) {
+        var photos = {};
+
+        if (rawPhotos === undefined || rawPhotos === null) {
+            return { photos: photos, repaired: false };
+        }
+
+        if (!isPlainObject(rawPhotos)) {
+            return { photos: photos, repaired: true };
+        }
+
+        var repaired = false;
+
+        Object.keys(rawPhotos).forEach(function (key) {
+            var value = rawPhotos[key];
+            var team = findTeam(teams, key);
+
+            if (!isValidPhotoPath(value) || !team) {
+                repaired = true;
+                return;
+            }
+
+            photos[teamPhotoKey(team.id)] = value.trim();
+        });
+
+        return { photos: photos, repaired: repaired };
+    }
+
     /**
      * Приводит карту фото к корректному виду: остаются только пути внутрь папки
      * фотографий у игроков, которые есть в заявке своей команды.
@@ -1100,7 +1187,8 @@
                     updatedAt: updatedAt,
                     teams: [],
                     matches: [],
-                    photos: {}
+                    photos: {},
+                    teamPhotos: {}
                 },
                 repaired: repaired,
                 reason: repaired ? 'Часть данных была исправлена автоматически' : ''
@@ -1173,8 +1261,9 @@
         });
 
         var normalizedPhotos = normalizePhotos(raw.photos, teams);
+        var normalizedTeamPhotos = normalizeTeamPhotos(raw.teamPhotos, teams);
 
-        if (normalizedPhotos.repaired) {
+        if (normalizedPhotos.repaired || normalizedTeamPhotos.repaired) {
             repaired = true;
         }
 
@@ -1185,7 +1274,8 @@
                 updatedAt: updatedAt,
                 teams: teams,
                 matches: matches,
-                photos: normalizedPhotos.photos
+                photos: normalizedPhotos.photos,
+                teamPhotos: normalizedTeamPhotos.photos
             },
             repaired: repaired,
             reason: repaired ? 'Часть данных была исправлена автоматически' : ''
@@ -1293,7 +1383,8 @@
             exportedAt: new Date().toISOString(),
             teams: (data && data.teams) || [],
             matches: (data && data.matches) || [],
-            photos: (data && data.photos) || {}
+            photos: (data && data.photos) || {},
+            teamPhotos: (data && data.teamPhotos) || {}
         }, null, 2);
     }
 
@@ -1346,6 +1437,12 @@
         renamePlayerPhoto: renamePlayerPhoto,
         removeTeamPhotos: removeTeamPhotos,
         normalizePhotos: normalizePhotos,
+        teamPhotoKey: teamPhotoKey,
+        getTeamPhoto: getTeamPhoto,
+        hasTeamPhoto: hasTeamPhoto,
+        setTeamPhoto: setTeamPhoto,
+        removeTeamPhoto: removeTeamPhoto,
+        normalizeTeamPhotos: normalizeTeamPhotos,
         validateTeamName: validateTeamName,
         validatePlayerName: validatePlayerName,
         normalizeScore: normalizeScore,

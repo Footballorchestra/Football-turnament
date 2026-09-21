@@ -41,6 +41,15 @@ test('buildPath: путь внутрь папки фото, совместимы
     assert.match(P.buildPath(1, '..'), /^assets\/photos\/player-[0-9a-f]{6}\.jpg$/);
     assert.equal(L.isValidPhotoPath(P.buildPath(1, '..')), true);
 
+    // Эмблема команды: своё имя файла с префиксом team-
+    const logo = P.buildPath(3, 'Спартак', { prefix: 'team-' });
+
+    assert.equal(logo, 'assets/photos/team-spartak-' + P.hashOf('3|Спартак').slice(0, 6) + '.jpg');
+    assert.equal(L.isValidPhotoPath(logo), true);
+    assert.notEqual(logo, P.buildPath(3, 'Спартак'), 'файл эмблемы не совпадает с файлом игрока');
+    assert.equal(P.settings({ prefix: 'team-' }).prefix, 'team-');
+    assert.equal(P.settings({}).prefix, '', 'по умолчанию префикса нет');
+
     // Длина пути укладывается в ограничение логики
     assert.ok(P.buildPath(1, 'Оченьдлинноеимяигрока'.repeat(3)).length <= L.CONFIG.maxPhotoPathLength);
 });

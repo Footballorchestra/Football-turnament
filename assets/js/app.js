@@ -243,6 +243,44 @@
         return photoUrl(teamId, player) !== '';
     }
 
+    /** Адрес эмблемы команды (или только что загруженной — из памяти). */
+    function teamPhotoUrl(teamId) {
+        var path = L.getTeamPhoto(state.data, teamId);
+
+        if (!path) {
+            return '';
+        }
+
+        return state.photoPreviews[path] || path;
+    }
+
+    /** Есть ли у команды эмблема. */
+    function hasTeamPhoto(teamId) {
+        return teamPhotoUrl(teamId) !== '';
+    }
+
+    /**
+     * Эмблема команды, а если её нет — бейдж с инициалами.
+     * options: { small } — 32 px, { big } — 56 px, иначе 40 px.
+     */
+    function teamAvatar(team, options) {
+        if (!team) {
+            return '';
+        }
+
+        var opts = options || {};
+        var side = opts.big ? 56 : (opts.small ? 32 : 40);
+        var className = 'team-photo' + (opts.big ? ' team-photo-lg' : (opts.small ? ' team-photo-sm' : ''));
+        var url = teamPhotoUrl(team.id);
+
+        if (url) {
+            return '<img class="' + className + '" src="' + esc(url) + '" alt="" loading="lazy" width="' + side +
+                '" height="' + side + '">';
+        }
+
+        return teamBadge(team, opts.small);
+    }
+
     /**
      * Аватар игрока: фото, а если его нет — кружок с инициалами.
      * options: { small } — 24 px (списки), без флага — 36 px, { big } — 48 px.
@@ -274,20 +312,21 @@
     }
 
     /**
-     * Загрузка фото игрока: сжатие в браузере → файл в репозиторий → путь в данных.
-     * Это два отдельных коммита: сначала картинка, потом ссылка на неё в data.json
-     * (публикация данных идёт обычным путём, через saveData).
+     * Общая загрузка фото (игрока или эмблемы команды): сжатие в браузере →
+     * файл в репозиторий → путь в данных. Это два отдельных коммита: сначала
+     * картинка, потом ссылка на неё в data.json (публикуется как обычно, saveData).
+     *
+     * options: { kind, teamId, index, name, prefix, action, done, apply }
+     *   kind   — 'player' или 'team' (для индикатора «Загружаю…»),
+     *   name   — имя для файла и текстов, prefix — префикс имени файла (team-),
+     *   action — текст коммита файла, done — сообщение после загрузки,
+     *   apply  — записывает готовый путь в данные.
      */
-    function uploadPlayerPhoto(teamId, index, file) {
-        var team = L.findTeam(state.data.teams, teamId);
-        var player = (team && team.players[index] !== undefined) ? team.players[index] : '';
+    function uploadPhoto(file, options) {
+        var opts = options || {};
+        var team = L.findTeam(state.data.teams, opts.teamId);
 
-        if (!team || !player) {
-            toast('Игрок не найден', 'error');
-            return;
-        }
-
-        if (!file) {
+        if (!team || !file) {
             return;
         }
 
@@ -306,22 +345,26 @@
             return;
         }
 
-        state.photoBusy = { teamId: L.toInt(team.id), index: index };
-        renderAdminPlayers();
+        state.photoBusy = {
+            kind: opts.kind || 'player',
+            teamId: L.toInt(team.id),
+            index: opts.index === undefined ? null : opts.index
+        };
+        renderAdmin();
 
-        var options = photoSettings();
+        var settings = photoSettings();
 
-        options.teamId = L.toInt(team.id);
-        options.player = player;
+        settings.teamId = L.toInt(team.id);
+        settings.player = opts.name || team.name;
+        settings.prefix = opts.prefix || '';
 
-        P.prepare(file, options)
+        P.prepare(file, settings)
             .then(function (prepared) {
                 if (!prepared.ok) {
                     return { ok: false, error: prepared.error };
                 }
 
-                return sync.client.uploadFile(prepared.path, prepared.base64,
-                    'Фото игрока «' + player + '» (' + team.name + ')').then(function (result) {
+                return sync.client.uploadFile(prepared.path, prepared.base64, opts.action).then(function (result) {
                     if (result.ok) {
                         result.path = prepared.path;
                         result.bytes = prepared.bytes;
@@ -335,7 +378,7 @@
                 state.photoBusy = null;
 
                 if (!result || !result.ok) {
-                    renderAdminPlayers();
+                    renderAdmin();
                     toast((result && result.error) || 'Не удалось загрузить фото', 'error');
                     return;
                 }
@@ -343,14 +386,61 @@
                 // Файл на сайте появится через минуту: до перезагрузки показываем его из памяти
                 state.photoPreviews[result.path] = result.preview;
 
-                L.setPhoto(state.data, team.id, player, result.path);
+                opts.apply(result.path);
 
                 if (result.htmlUrl) {
                     sync.lastCommitUrl = result.htmlUrl;
                 }
 
-                saveData('Фото игрока «' + player + '» загружено (' + P.formatBytes(result.bytes) + ')');
+                saveData(opts.done + ' (' + P.formatBytes(result.bytes) + ')');
             });
+    }
+
+    /** Загрузка фото игрока. */
+    function uploadPlayerPhoto(teamId, index, file) {
+        var team = L.findTeam(state.data.teams, teamId);
+        var player = (team && team.players[index] !== undefined) ? team.players[index] : '';
+
+        if (!team || !player) {
+            toast('Игрок не найден', 'error');
+            return;
+        }
+
+        uploadPhoto(file, {
+            kind: 'player',
+            teamId: team.id,
+            index: index,
+            name: player,
+            prefix: '',
+            action: 'Фото игрока «' + player + '» (' + team.name + ')',
+            done: 'Фото игрока «' + player + '» загружено',
+            apply: function (path) {
+                L.setPhoto(state.data, team.id, player, path);
+            }
+        });
+    }
+
+    /** Загрузка эмблемы (фото) команды. */
+    function uploadTeamPhoto(teamId, file) {
+        var team = L.findTeam(state.data.teams, teamId);
+
+        if (!team) {
+            toast('Команда не найдена', 'error');
+            return;
+        }
+
+        uploadPhoto(file, {
+            kind: 'team',
+            teamId: team.id,
+            index: null,
+            name: team.name,
+            prefix: 'team-',
+            action: 'Эмблема команды «' + team.name + '»',
+            done: 'Эмблема команды «' + team.name + '» загружена',
+            apply: function (path) {
+                L.setTeamPhoto(state.data, team.id, path);
+            }
+        });
     }
 
     /** Убирает фото игрока из данных (сам файл остаётся в истории репозитория). */
@@ -378,6 +468,32 @@
         L.removePhoto(state.data, team.id, player);
 
         saveData('Фото игрока «' + player + '» убрано');
+    }
+
+    /** Убирает эмблему команды из данных (сам файл остаётся в истории репозитория). */
+    function removeTeamPhoto(teamId) {
+        var team = L.findTeam(state.data.teams, teamId);
+
+        if (!team) {
+            return;
+        }
+
+        if (!L.hasTeamPhoto(state.data, team.id)) {
+            toast('У команды «' + team.name + '» нет эмблемы');
+            return;
+        }
+
+        if (!askConfirm('Убрать эмблему команды «' + team.name + '»?\n\n' +
+            'Сам файл останется в истории репозитория — при необходимости его можно вернуть.')) {
+            return;
+        }
+
+        var path = L.getTeamPhoto(state.data, team.id);
+
+        delete state.photoPreviews[path];
+        L.removeTeamPhoto(state.data, team.id);
+
+        saveData('Эмблема команды «' + team.name + '» убрана');
     }
 
     /* ================================================================== */
@@ -1028,7 +1144,7 @@
      * reverse — бейдж справа, small — уменьшенный бейдж.
      */
     function teamLink(team, name, reverse, small) {
-        var badge = team ? teamBadge(team, small) : '';
+        var badge = team ? teamAvatar(team, { small: !!small }) : '';
         var label = '<span class="team-name font-medium">' + esc(name) + '</span>';
         var content = reverse ? label + badge : badge + label;
 
@@ -1148,7 +1264,7 @@
                     '<td class="cell-team">' +
                         '<button type="button" class="team-link" data-action="team-public-open" data-id="' + row.id +
                                 '" title="Открыть страницу команды">' +
-                            teamBadge({ id: row.id, name: row.name }, true) +
+                            teamAvatar({ id: row.id, name: row.name }, { small: true }) +
                             '<span class="team-name font-medium">' + esc(row.name) + '</span>' +
                         '</button>' +
                         '<span class="row-detail">' + detail + '</span>' +
@@ -1218,7 +1334,7 @@
             return '' +
                 '<article class="card p-4" data-action="team-public-open" data-id="' + team.id + '">' +
                     '<div class="flex items-center gap-3 mb-3">' +
-                        teamBadge(team) +
+                        teamAvatar(team) +
                         '<div class="min-w-0 flex-1">' +
                             '<button type="button" class="team-link" data-action="team-public-open" data-id="' + team.id +
                                     '" title="Открыть страницу команды">' +
@@ -1414,7 +1530,7 @@
 
         box.innerHTML =
             '<div class="flex items-center gap-3 mb-4">' +
-                teamBadge(team) +
+                teamAvatar(team, { big: true }) +
                 '<div class="min-w-0">' +
                     '<h2 class="font-bold text-lg sm:text-xl truncate">' + esc(team.name) + '</h2>' +
                     '<p class="text-xs text-dark-600">Игроков в заявке: ' + (team.players || []).length + '</p>' +
@@ -1489,7 +1605,7 @@
 
     /** Название команды в детальном результате: ссылка на страницу команды. */
     function matchDetailTeam(team, name, reverse) {
-        var badge = team ? teamBadge(team, true) : '';
+        var badge = team ? teamAvatar(team, { small: true }) : '';
         var label = '<span class="match-detail-name">' + esc(name) + '</span>';
         var content = reverse ? label + badge : badge + label;
 
@@ -1679,7 +1795,7 @@
             }).length;
 
             return '<button type="button" class="admin-row" data-action="team-open" data-id="' + item.id + '">' +
-                '<span class="flex items-center gap-3 min-w-0">' + teamBadge(item, true) +
+                '<span class="flex items-center gap-3 min-w-0">' + teamAvatar(item, { small: true }) +
                     '<span class="font-medium truncate">' + esc(item.name) + '</span>' +
                 '</span>' +
                 '<span class="admin-row-meta">' +
@@ -1691,6 +1807,38 @@
         }).join('');
 
         renderAdminTeamCard(team);
+    }
+
+    /**
+     * Эмблема команды в админке: превью, загрузка файла и удаление.
+     * Фото сжимается в браузере и уходит файлом в репозиторий (см. uploadTeamPhoto).
+     */
+    function renderAdminTeamPhoto(team) {
+        var box = $('admin-team-photo');
+
+        if (!box || !team) {
+            return;
+        }
+
+        var busy = !!state.photoBusy && state.photoBusy.kind === 'team' &&
+            state.photoBusy.teamId === L.toInt(team.id);
+        var photo = hasTeamPhoto(team.id);
+        var label = photo ? 'Заменить эмблему' : 'Загрузить эмблему';
+
+        box.innerHTML =
+            teamAvatar(team, { big: true }) +
+            (busy
+                ? '<span class="admin-hint">Загружаю эмблему…</span>'
+                : '<label class="btn btn-sm btn-ghost" title="' + esc(label) + '">' +
+                    icon('photo') + esc(label) +
+                    '<input type="file" class="sr-only" accept="image/*" data-photo-kind="team"' +
+                        ' data-photo-team="' + L.toInt(team.id) + '" aria-label="' + esc(label + ': ' + team.name) + '">' +
+                '</label>') +
+            (photo && !busy
+                ? '<button type="button" class="btn btn-sm btn-ghost" data-action="team-photo-remove" data-id="' +
+                    L.toInt(team.id) + '" title="Убрать эмблему">' + icon('photo-off') + 'Убрать фото</button>'
+                : '') +
+            '<span class="admin-hint">Эмблема видна в таблице, в списках и на странице команды</span>';
     }
 
     /** Шапка карточки команды: название и действия «переименовать» / «удалить». */
@@ -1705,6 +1853,8 @@
         if (title) {
             title.textContent = team.name;
         }
+
+        renderAdminTeamPhoto(team);
 
         if (!actions) {
             return;
@@ -2040,8 +2190,8 @@
                 state.editingPlayer.teamId === team.id &&
                 state.editingPlayer.index === index;
             var hasPhoto = hasPlayerPhoto(team.id, player);
-            var isBusy = !!state.photoBusy && state.photoBusy.teamId === L.toInt(team.id) &&
-                state.photoBusy.index === index;
+            var isBusy = !!state.photoBusy && state.photoBusy.kind === 'player' &&
+                state.photoBusy.teamId === L.toInt(team.id) && state.photoBusy.index === index;
 
             if (isEditing) {
                 return '<div class="admin-card flex items-center gap-2">' +
@@ -2657,8 +2807,9 @@
             state.selectedTeamId = null;
         }
 
-        // Фото игроков удалённой команды больше не нужны (файлы остаются в истории)
+        // Фото игроков и эмблема удалённой команды больше не нужны (файлы остаются в истории)
         L.removeTeamPhotos(state.data, team.id);
+        L.removeTeamPhoto(state.data, team.id);
 
         saveData('Команда «' + team.name + '» удалена');
     }
@@ -3087,6 +3238,8 @@
             deletePlayer(teamId, index);
         } else if (action === 'player-photo-remove') {
             removePlayerPhoto(teamId, index);
+        } else if (action === 'team-photo-remove') {
+            removeTeamPhoto(id);
         } else if (action === 'github-save-token') {
             saveTokenFromInput();
         } else if (action === 'github-forget-token') {
@@ -3131,11 +3284,18 @@
         }
 
         // Выбор файла с фото игрока: <input type="file" data-photo-team data-photo-index>
+        // или эмблемы команды: <input type="file" data-photo-kind="team" data-photo-team>
         if (typeof target.hasAttribute === 'function' && target.hasAttribute('data-photo-team')) {
             var files = target.files || [];
+            var photoTeam = L.toInt(target.getAttribute('data-photo-team'));
+            var photoFile = files.length ? files[0] : null;
 
-            uploadPlayerPhoto(L.toInt(target.getAttribute('data-photo-team')),
-                L.toInt(target.getAttribute('data-photo-index')), files.length ? files[0] : null);
+            if (target.getAttribute('data-photo-kind') === 'team') {
+                uploadTeamPhoto(photoTeam, photoFile);
+            } else {
+                uploadPlayerPhoto(photoTeam, L.toInt(target.getAttribute('data-photo-index')), photoFile);
+            }
+
             return;
         }
 
