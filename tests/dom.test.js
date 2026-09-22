@@ -1355,18 +1355,24 @@ test('токен живёт только в браузере устройств�
     assert.equal(app.id('github-token').placeholder, 'github_pat_…');
 });
 
-test('кнопка «Обновить данные» подтягивает свежие результаты', async () => {
+test('админка: «Забрать из репозитория» подтягивает свежие результаты', async () => {
     const mock = createMockRepository({ data: remoteData() });
-    const app = boot({ mock });
+    const app = boot({ mock, autoPublishDelayMs: 10000 });
 
     await app.settle();
+
+    // Кнопки обновления у зрителей нет — ручное обновление только в админке
+    assert.equal(app.$('[data-action="refresh-data"]'), null, 'в подвале нет кнопки обновления');
+
+    app.login();
+    assert.ok(app.actionButton('github-pull'), 'в админке есть кнопка «Забрать из репозитория»');
 
     const updated = remoteData();
     updated.updatedAt = new Date(Date.now() + 30000).toISOString();
     updated.matches.push({ id: 99, teamA: 1, teamB: 2, scoreA: 3, scoreB: 3, date: '2026-09-25', finished: true });
     mock.changeExternally(updated);
 
-    app.click(app.actionButton('refresh-data'));
+    app.click(app.actionButton('github-pull'));
     await app.settle();
 
     assert.equal(app.id('stat-matches').textContent, '5');
