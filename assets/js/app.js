@@ -86,7 +86,11 @@
         lastPullError: '',
         lastCommitUrl: '',
         timer: null,
-        refreshTimer: null
+        refreshTimer: null,
+        /** Идёт запрос данных из репозитория (второй одновременно не нужен). */
+        pulling: false,
+        /** Когда последний раз обновлялись автоматически (защита от частых запросов). */
+        lastAutoPullAt: 0
     };
 
     /* ================================================================== */
@@ -803,8 +807,13 @@
         var updatedLabel = state.data.updatedAt ? L.formatDateTime(state.data.updatedAt) : '';
 
         if (freshness) {
+            var autoHint = Number(SETTINGS.refreshIntervalMs) > 0
+                ? ' · обновляется автоматически'
+                : '';
+
             freshness.textContent = updatedLabel
-                ? 'Данные обновлены: ' + updatedLabel + (sync.lastPullError ? ' (нет связи с репозиторием)' : '')
+                ? 'Данные обновлены: ' + updatedLabel + autoHint +
+                    (sync.lastPullError ? ' (нет связи с репозиторием)' : '')
                 : '';
         }
 
@@ -922,6 +931,24 @@
             return Promise.resolve({ ok: false, error: 'Синхронизация недоступна' });
         }
 
+        // Запрос уже идёт (например, совпали таймер автообновления и возврат во вкладку):
+        // второй параллельный запрос ничего не даст
+        if (sync.pulling) {
+            return Promise.resolve({ ok: false, skipped: true, error: '' });
+        }
+
+        sync.pulling = true;
+
+        var done = function (result) {
+            sync.pulling = false;
+            return result;
+        };
+
+        var failed = function (error) {
+            sync.pulling = false;
+            throw error;
+        };
+
         return sync.client.pull(Date.now()).then(function (result) {
             if (!result.ok) {
                 sync.lastPullError = result.error;
@@ -996,13 +1023,16 @@
             writeStoredValue(KEYS.publishedAt, sync.publishedAt);
             saveData('', { publish: false });
 
-            if (opts.verbose) {
+            if (opts.auto) {
+                // Тихая фоновая подмена данных: посетителю достаточно короткой подсказки
+                toast('Результаты обновлены автоматически', 'info');
+            } else if (opts.verbose) {
                 toast('Данные загружены из репозитория (версия от ' + L.formatDateTime(result.data.updatedAt) + ')' +
                     (backupSaved ? '. Копия прежних данных сохранена' : ''), 'success');
             }
 
             return result;
-        });
+        }).then(done, failed);
     }
 
     /** Публикация данных в репозиторий. */
@@ -1122,7 +1152,17 @@
             });
     }
 
-    /** Автообновление данных у зрителей (и у админа, если нет неопубликованных правок). */
+    /** Минимальный зазор между фоновыми обновлениями при возвращении во вкладку. */
+    var AUTO_REFRESH_MIN_GAP = 15000;
+
+    /**
+     * Автообновление данных у зрителей (и у админа, если нет неопубликованных правок).
+     *
+     * Пока вкладка открыта, приложение само подтягивает свежую версию из репозитория
+     * (интервал — SETTINGS.refreshIntervalMs), а кроме этого обновляется сразу, когда
+     * посетитель возвращается во вкладку или появляется связь. Нажимать «Обновить данные»
+     * не нужно — кнопка остаётся для тех, кто хочет обновить прямо сейчас.
+     */
     function startRefreshTimer() {
         var interval = Number(SETTINGS.refreshIntervalMs);
 
@@ -1130,17 +1170,46 @@
             return;
         }
 
-        sync.refreshTimer = window.setInterval(function () {
-            if (document.visibilityState === 'hidden') {
-                return; // не тратим запросы, пока вкладка не видна
+        /** Фоновое обновление: не тратим запросы, пока вкладка скрыта, и не дублируем запросы. */
+        function autoPull(immediate) {
+            if (document.visibilityState === 'hidden' || sync.pulling) {
+                return;
             }
 
-            pullFromRepository();
+            var now = Date.now();
+
+            // Частое переключение вкладок не должно превращаться в поток запросов
+            if (immediate && now - sync.lastAutoPullAt < AUTO_REFRESH_MIN_GAP) {
+                return;
+            }
+
+            sync.lastAutoPullAt = now;
+            pullFromRepository({ auto: true });
+        }
+
+        sync.refreshTimer = window.setInterval(function () {
+            autoPull(false);
         }, interval);
 
+        // Возвращение во вкладку: данные могли устареть — проверяем сразу
         document.addEventListener('visibilitychange', function () {
-            if (document.visibilityState === 'visible' && !sync.timer) {
-                pullFromRepository();
+            if (document.visibilityState === 'visible') {
+                autoPull(true);
+            }
+        });
+
+        window.addEventListener('focus', function () {
+            autoPull(true);
+        });
+
+        // Появилась связь или страница вернулась из кэша браузера (кнопка «назад»)
+        window.addEventListener('online', function () {
+            autoPull(true);
+        });
+
+        window.addEventListener('pageshow', function (event) {
+            if (event.persisted) {
+                autoPull(true);
             }
         });
     }
@@ -3874,6 +3943,8 @@
             updateHash: false,
             matchId: route.matchId,
             teamId: route.teamId,
+            playerTeamId: route.playerTeamId,
+            playerIndex: route.playerIndex,
             replace: true
         });
         fillSyncInputs();

@@ -35,7 +35,7 @@ function boot(options) {
     const html = readSource('index.html');
 
     const dom = new JSDOM(html, {
-        url: 'https://tournament.test/',
+        url: settings.url || 'https://tournament.test/',
         runScripts: 'outside-only',
         pretendToBeVisual: true,
         beforeParse(window) {
@@ -52,7 +52,8 @@ function boot(options) {
                     apiBase: '/mock-api',
                     rawBase: '/mock-raw'
                 },
-                refreshIntervalMs: 0, // в тестах фоновые таймеры не нужны
+                // В тестах фоновые таймеры обычно не нужны (0 — автообновление выключено)
+                refreshIntervalMs: settings.refreshIntervalMs === undefined ? 0 : settings.refreshIntervalMs,
                 autoPublishDelayMs: settings.autoPublishDelayMs === undefined ? 10 : settings.autoPublishDelayMs
             };
 
@@ -151,7 +152,17 @@ function boot(options) {
             fire('click', document.querySelector('[data-action="github-save-token"]'));
         },
         syncStatus: () => (document.getElementById('sync-status') || { textContent: '' }).textContent,
-        freshness: () => (document.getElementById('data-freshness') || { textContent: '' }).textContent
+        freshness: () => (document.getElementById('data-freshness') || { textContent: '' }).textContent,
+        /** Останавливает автообновление: иначе таймер jsdom держит процесс теста */
+        stopAutoRefresh: () => {
+            const timer = window.FTApp && window.FTApp.sync && window.FTApp.sync.state
+                ? window.FTApp.sync.state.refreshTimer
+                : null;
+
+            if (timer !== null && timer !== undefined) {
+                window.clearInterval(timer);
+            }
+        }
     };
 }
 
@@ -1978,5 +1989,75 @@ test('админка: удаление команды убирает данны�
 
     assert.deepEqual(app.storedData().playerInfo, { '2|кузнецов к.': { birthDate: '2010-02-02', note: 'Клуб' } },
         'данные игроков удалённой команды убраны, чужие не задеты');
+});
+
+
+test('автообновление: зритель видит новые данные без нажатия «Обновить данные»', async () => {
+    const mock = createMockRepository({ data: remoteData() });
+    const app = boot({ mock, refreshIntervalMs: 40, autoPublishDelayMs: 10000 });
+
+    await app.settle();
+
+    assert.match(app.id('teams-grid').textContent, /Спартак/);
+
+    // Администратор с другого устройства опубликовал новую команду
+    const updated = remoteData('Клуб из автообновления');
+
+    updated.revision = 99;
+    updated.updatedAt = '2026-09-20T12:00:00.000Z';
+    mock.changeExternally(updated);
+
+    // Ничего не нажимаем: страница сама подтягивает свежую версию по таймеру
+    await app.wait(140);
+
+    assert.match(app.id('teams-grid').textContent, /Клуб из автообновления/, 'данные обновились сами');
+    assert.equal(app.id('stat-teams').textContent, String(updated.teams.length));
+    assert.match(app.id('toast-container').textContent, /Результаты обновлены автоматически/);
+    assert.match(app.freshness(), /обновляется автоматически/);
+
+    app.stopAutoRefresh();
+});
+
+test('автообновление: скрытая вкладка запросов не делает, а возвращение во вкладку обновляет сразу', async () => {
+    const mock = createMockRepository({ data: remoteData() });
+    const app = boot({ mock, refreshIntervalMs: 40, autoPublishDelayMs: 10000 });
+
+    await app.settle();
+
+    const pulls = () => mock.state.requests.filter((request) => request.url.includes('/mock-raw/')).length;
+    const before = pulls();
+
+    // Вкладка скрыта: таймер срабатывает, но в репозиторий не ходим
+    Object.defineProperty(app.document, 'visibilityState', { value: 'hidden', configurable: true });
+    await app.wait(140);
+
+    assert.equal(pulls(), before, 'скрытая вкладка не тратит запросы');
+
+    // Возвращаемся во вкладку: данные проверяются сразу, не дожидаясь таймера
+    const updated = remoteData('Клуб после возврата');
+
+    updated.revision = 99;
+    updated.updatedAt = '2026-09-20T13:00:00.000Z';
+    mock.changeExternally(updated);
+
+    Object.defineProperty(app.document, 'visibilityState', { value: 'visible', configurable: true });
+    app.document.dispatchEvent(new app.window.Event('visibilitychange'));
+
+    await app.wait(30);
+
+    assert.match(app.id('teams-grid').textContent, /Клуб после возврата/, 'обновилось сразу после возврата');
+
+    app.stopAutoRefresh();
+});
+
+test('прямая ссылка на карточку игрока открывается при загрузке страницы', () => {
+    const seeded = remoteData();
+
+    // Так открывается ссылка, которой поделились: страница сразу показывает карточку
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) }, url: 'https://tournament.test/#/player/2/1' });
+
+    assert.equal(app.activeSection(), 'page-player', 'карточка игрока открыта сразу');
+    assert.equal(app.id('player-card').querySelector('h2').textContent, 'Попов П.');
+    assert.match(app.id('player-card').textContent, /Локомотив/);
 });
 

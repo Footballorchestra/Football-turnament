@@ -1194,3 +1194,58 @@ test('карточка игрока: имя ведёт на карточку, а
 });
 
 
+/**
+ * Посетителю не нужно нажимать «Обновить данные»: пока вкладка открыта, страница сама
+ * подтягивает свежую версию из репозитория. Здесь это проверяется «как в жизни»:
+ * другая вкладка (администратор) публикует новую команду, а эта страница ничего не нажимает.
+ */
+test('автообновление: страница зрителя сама подхватывает новые данные', { skip }, async () => {
+    const remote = JSON.parse(fs.readFileSync(path.join(ROOT, 'data.json'), 'utf8'));
+
+    remote.updatedAt = '2026-09-10T09:15:00.000Z';
+    remote.revision = 4;
+    mockRepository.changeExternally(remote);
+
+    const { page, problems } = await openPage({
+        url: mockBaseUrl + '/',
+        isolated: true,
+        // В жизни это минута; для теста — доли секунды
+        config: Object.assign({}, SITE_CONFIG, { refreshIntervalMs: 600 })
+    });
+
+    assert.equal(await page.evaluate(() => window.FTApp.getData().teams.some(
+        (team) => team.name === 'Клуб из автообновления')), false, 'пока новых данных нет');
+
+    // «Другой администратор» нажал «Опубликовать сейчас»
+    const updated = JSON.parse(JSON.stringify(remote));
+
+    updated.teams.push({ id: 77, name: 'Клуб из автообновления', players: [] });
+    updated.revision = remote.revision + 1;
+    updated.updatedAt = '2026-09-21T12:00:00.000Z';
+    mockRepository.changeExternally(updated);
+
+    // Ни одного нажатия: ждём, пока страница обновится сама
+    await page.waitForFunction(
+        () => document.getElementById('teams-grid').textContent.includes('Клуб из автообновления'),
+        { timeout: 20000 }
+    );
+    await page.waitForFunction(() => document.getElementById('toast-container').textContent.includes('автоматически'));
+
+    const view = await page.evaluate(() => ({
+        freshness: document.getElementById('data-freshness').textContent,
+        teams: document.getElementById('stat-teams').textContent
+    }));
+
+    assert.match(view.freshness, /Данные обновлены: 21 сентября 2026/);
+    assert.match(view.freshness, /обновляется автоматически/, 'в подвале видно, что обновление автоматическое');
+    assert.equal(view.teams, String(updated.teams.length), 'счётчики пересчитаны');
+
+    // Возвращаем данные макета для других тестов
+    mockRepository.changeExternally(remote);
+
+    const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
+
+    assert.deepEqual(meaningful, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+});
+
