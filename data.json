@@ -1,7 +1,7 @@
 {
   "version": 7,
-  "revision": 262,
-  "updatedAt": "2026-09-25T16:16:02.536Z",
+  "revision": 299,
+  "updatedAt": "2026-09-25T20:41:16.439Z",
   "teams": [
     {
       "id": 1,
@@ -213,6 +213,21 @@
           "team": 8,
           "player": "Иванов Святослав",
           "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Митинский Александр",
+          "type": "yellow"
+        },
+        {
+          "team": 8,
+          "player": "Деревенко Матвей",
+          "type": "yellow"
+        },
+        {
+          "team": 8,
+          "player": "Шварц Григорий",
+          "type": "yellow"
         }
       ]
     },
@@ -375,6 +390,169 @@
         {
           "team": 3,
           "player": "Рыбнов Игорь",
+          "type": "goal"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "teamA": 6,
+      "teamB": 5,
+      "date": "2026-09-18",
+      "scoreA": 3,
+      "scoreB": 8,
+      "finished": true,
+      "events": [
+        {
+          "team": 6,
+          "player": "Кубышкин Дмитрий",
+          "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Кубышкин Дмитрий",
+          "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Корнилов Глеб",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Носаков Василий",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Носаков Василий",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Носаков Василий",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Носаков Василий",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Штода Максим",
+          "type": "yellow"
+        },
+        {
+          "team": 5,
+          "player": "Тынянских Александр",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Железняков Лев",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Зимин Михаил",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Дмитров Артем",
+          "type": "goal"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "teamA": 3,
+      "teamB": 1,
+      "date": "2026-09-22",
+      "scoreA": 0,
+      "scoreB": 8,
+      "finished": true,
+      "events": [
+        {
+          "team": 1,
+          "player": "Желтов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Желтов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Желтов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Желтов Константин",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Данилец Василий",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Абдрахманов Олег",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Артемов Федор",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Грач Алексей",
+          "type": "goal"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "teamA": 7,
+      "teamB": 4,
+      "date": "2026-09-24",
+      "scoreA": 3,
+      "scoreB": 3,
+      "finished": true,
+      "events": [
+        {
+          "team": 7,
+          "player": "Малахов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Чекмарев Григорий",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Кулик Сергей",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Баймулдин Аким",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Абраров Артур",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Колясников Андрей",
           "type": "goal"
         }
       ]
