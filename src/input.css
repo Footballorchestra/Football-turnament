@@ -1142,6 +1142,124 @@
         outline-offset: 2px;
     }
 
+    /* --- Предстартовая заставка: фон с названием чемпионата, потом сайт --- */
+
+    .splash {
+        position: fixed;
+        inset: 0;
+        z-index: 80;                 /* выше шапки (50) и просмотра фотографии (60) */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        text-align: center;
+        color: #fff;
+        cursor: pointer;
+        background-image: linear-gradient(rgba(13, 20, 26, 0.6), rgba(13, 20, 26, 0.72)),
+            url('../../Problem/fon.jpg');
+        background-position: center center;
+        background-size: cover;
+        background-repeat: no-repeat;
+        transition: opacity 0.4s ease, visibility 0.4s ease;
+        /* Страховка: если скрипт не выполнился, заставка уходит сама через splashMs */
+        animation: splash-fallback 0.4s ease var(--splash-ms, 5000ms) forwards;
+    }
+
+    .splash.is-closing {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+    }
+
+    .splash.is-hidden {
+        display: none;
+    }
+
+    .splash-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.75rem;
+        max-width: 34rem;
+    }
+
+    .splash-badge {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 4.5rem;
+        height: 4.5rem;
+        border-radius: 12px;
+        background: #1b5e20;
+        font-size: 1.5rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+    }
+
+    .splash-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    .splash-subtitle {
+        font-size: 0.875rem;
+        color: rgba(255, 255, 255, 0.82);
+    }
+
+    .splash-timer {
+        font-size: 0.875rem;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .splash-skip {
+        margin-top: 0.25rem;
+        background: #fff;
+        color: #1b5e20;
+        font-weight: 600;
+    }
+
+    .splash-skip:hover {
+        background: #e8f5e9;
+    }
+
+    /* Полоска загрузки: заполняется ровно за время показа заставки */
+    .splash-progress {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.22);
+    }
+
+    .splash-progress::after {
+        content: '';
+        display: block;
+        height: 100%;
+        background: #66bb6a;
+        transform: scaleX(0);
+        transform-origin: left center;
+        animation: splash-progress var(--splash-ms, 5000ms) linear forwards;
+    }
+
+    @keyframes splash-progress {
+        to { transform: scaleX(1); }
+    }
+
+    @keyframes splash-fallback {
+        to {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+    }
+
+    /* Пока заставка видна, страница не прокручивается */
+    body.splash-open {
+        overflow: hidden;
+    }
+
     /* --- Статусы матча --- */
     .status-pill {
         display: inline-flex;
@@ -1556,6 +1674,15 @@
         color: #7a4d00;
     }
 
+    /**
+     * Скрытый баннер не показываем. У .banner есть свой display: flex, и без этого
+     * правила атрибут hidden проигрывал ему — на каждой странице висела пустая
+     * жёлтая полоса (#data-warning).
+     */
+    .banner[hidden] {
+        display: none;
+    }
+
     .banner-info {
         background: #e8f0fe;
         border-color: #b3c7f5;
@@ -1594,6 +1721,11 @@
     }
 
     .toast {
+        animation: none;
+    }
+
+    /* Полоска заставки без анимации, сама заставка уходит как обычно */
+    .splash-progress::after {
         animation: none;
     }
 }

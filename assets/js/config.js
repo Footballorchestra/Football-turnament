@@ -61,11 +61,21 @@ window.FT_CONFIG.photo = Object.assign({
     retryDelays: [4000, 15000, 45000]
 }, window.FT_CONFIG.photo || {});
 
+/* --- Предстартовая заставка, миллисекунды (0 — не показывать) ---
+   При первом открытии сайта в браузере показывается фон с названием чемпионата,
+   затем сайт открывается сам. Повторные открытия в той же сессии заставку не
+   показывают — посетитель сразу видит сайт. Заставку можно пропустить: нажатие,
+   клик по фону или Esc. */
+window.FT_CONFIG.splashMs = window.FT_CONFIG.splashMs === undefined
+    ? 5000
+    : window.FT_CONFIG.splashMs;
+
 /* --- Ключи в localStorage --- */
 window.FT_CONFIG.storageKeys = Object.assign({
     token: 'ft.githubToken',        // токен GitHub (только на устройстве администратора)
     autoPublish: 'ft.autoPublish',  // «публиковать автоматически»
     publishedAt: 'ft.publishedAt',  // метка последней успешной публикации
     localBackup: 'ft.localBackup',  // копия данных перед заменой версией из репозитория
-    localEdits: 'ft.localEdits'     // отметка «на устройстве есть неопубликованные правки»
+    localEdits: 'ft.localEdits',    // отметка «на устройстве есть неопубликованные правки»
+    splashSeen: 'ft.splashSeen'     // предстартовая заставка уже показана в этой сессии (sessionStorage)
 }, window.FT_CONFIG.storageKeys || {});

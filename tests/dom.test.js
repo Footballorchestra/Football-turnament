@@ -54,6 +54,8 @@ function boot(options) {
                 },
                 // В тестах фоновые таймеры обычно не нужны (0 — автообновление выключено)
                 refreshIntervalMs: settings.refreshIntervalMs === undefined ? 0 : settings.refreshIntervalMs,
+                // Заставка в тестах по умолчанию выключена; свой тест задаёт её время сам
+                splashMs: settings.splashMs === undefined ? 0 : settings.splashMs,
                 autoPublishDelayMs: settings.autoPublishDelayMs === undefined ? 10 : settings.autoPublishDelayMs
             };
 
@@ -66,6 +68,13 @@ function boot(options) {
                     window.localStorage.setItem(key, settings.seed[key]);
                 });
             }
+
+            // Отметки на время сессии (например, «заставка уже показана»)
+            if (settings.sessionSeed) {
+                Object.keys(settings.sessionSeed).forEach((key) => {
+                    window.sessionStorage.setItem(key, settings.sessionSeed[key]);
+                });
+            }
         }
     });
 
@@ -73,6 +82,7 @@ function boot(options) {
     const document = window.document;
 
     window.eval(readSource('assets/js/config.js'));
+    window.eval(readSource('assets/js/splash.js'));
     window.eval(readSource('assets/js/logic.js'));
     window.eval(readSource('assets/js/sync.js'));
     window.eval(readSource('assets/js/photo.js'));
@@ -2549,5 +2559,70 @@ test('состав команды и бомбардиры тоже сортир�
         ['2', '1', '1'],
         'голы по убыванию'
     );
+});
+
+test('заставка: при первом входе показан фон с названием, отсчёт идёт и сайт открывается сам', async () => {
+    const app = boot({ splashMs: 400 });
+
+    // Фон, логотип, название, отсчёт и кнопка «Войти на сайт»
+    assert.equal(app.$('#splash .splash-badge').textContent, 'FT');
+    assert.equal(app.$('.splash-title').textContent, 'Чемпионат среди Артистов по футболу');
+    assert.match(app.$('.splash-subtitle').textContent, /Сезон 2026–2027/);
+    assert.equal(app.id('splash-countdown').textContent, '1');
+    assert.equal(app.$('.splash-skip').textContent, 'Войти на сайт');
+    assert.equal(app.window.FTSplash.duration, 400);
+    assert.equal(app.window.FTSplash.isVisible(), true);
+
+    // Пока заставка видна, страница не прокручивается
+    assert.ok(app.document.body.classList.contains('splash-open'), 'прокрутка заблокирована');
+
+    // Заставка уходит сама: splashMs (400) + время плавного исчезновения (400)
+    await app.wait(900);
+
+    assert.equal(app.id('splash').hidden, true, 'заставка скрылась сама');
+    assert.equal(app.window.FTSplash.isVisible(), false);
+    assert.ok(!app.document.body.classList.contains('splash-open'), 'прокрутка вернулась');
+    assert.equal(app.window.FTSplash.isSeen(), true, 'отметка «заставка показана» сохранена');
+
+    // Сайт под заставкой продолжал работать как обычно
+    assert.equal(app.activeSection(), 'page-home');
+    assert.ok(Number(app.id('stat-teams').textContent) > 0, 'счётчики на главной видны');
+});
+
+test('заставка: клик открывает сайт сразу, повторный вход в сессии — без заставки', () => {
+    const app = boot({ splashMs: 6000 });
+
+    // Клик по фону открывает сайт, не дожидаясь конца отсчёта
+    app.click(app.id('splash'));
+
+    assert.equal(app.window.FTSplash.isVisible(), false, 'заставка закрывается сразу');
+    assert.ok(app.id('splash').classList.contains('is-closing'), 'закрывается плавно');
+    assert.equal(app.window.FTSplash.isSeen(), true);
+    assert.ok(!app.document.body.classList.contains('splash-open'), 'прокрутка вернулась');
+
+    // Второе открытие в той же сессии: отметка есть — заставки нет вовсе
+    const second = boot({ splashMs: 6000, sessionSeed: { 'ft.splashSeen': '1' } });
+
+    assert.equal(second.id('splash').hidden, true);
+    assert.equal(second.window.FTSplash.isVisible(), false);
+    assert.ok(!second.document.body.classList.contains('splash-open'));
+});
+
+test('заставка: Esc пропускает её, а splashMs = 0 выключает совсем', () => {
+    const app = boot({ splashMs: 6000 });
+
+    app.window.document.dispatchEvent(new app.window.KeyboardEvent('keydown', {
+        key: 'Escape',
+        bubbles: true
+    }));
+
+    assert.equal(app.window.FTSplash.isVisible(), false, 'Esc пропускает заставку');
+
+    // splashMs = 0 — заставка не показывается (так работают остальные тесты и отладка)
+    const off = boot({ splashMs: 0 });
+
+    assert.equal(off.id('splash').hidden, true);
+    assert.equal(off.window.FTSplash.duration, 0);
+    assert.equal(off.window.FTSplash.isSeen(), false, 'отметка не ставится');
 });
 

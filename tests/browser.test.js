@@ -59,7 +59,10 @@ const SITE_CONFIG = {
         rawBase: '/mock-raw'
     },
     refreshIntervalMs: 0,
-    autoPublishDelayMs: 50
+    autoPublishDelayMs: 50,
+    // Заставку в обычных тестах выключаем, чтобы она не перекрывала страницу;
+    // отдельный тест заставки задаёт своё время
+    splashMs: 0
 };
 
 let puppeteer = null;
@@ -1504,6 +1507,72 @@ test('счётчики на главной и сортировка таблиц 
     const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
 
     assert.deepEqual(meaningful, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+});
+
+test('заставка: при открытии виден фон с названием, затем сайт открывается сам', { skip }, async () => {
+    // Заставка длится 700 мс — тест не ждёт пять секунд
+    const config = Object.assign({}, SITE_CONFIG, { splashMs: 700 });
+    const { page, problems } = await openPage({ config });
+
+    // Заставка видна поверх страницы: логотип, название, отсчёт и кнопка
+    assert.equal(await textOf(page, '.splash-badge'), 'FT');
+    assert.equal(await textOf(page, '.splash-title'), 'Чемпионат среди Артистов по футболу');
+    assert.equal(await textOf(page, '#splash-countdown'), '1');
+    assert.equal(await page.$eval('#splash', (element) => getComputedStyle(element).visibility), 'visible');
+
+    // Фон заставки — та же картинка и затемнение поверх неё
+    const background = await page.$eval('#splash', (element) => getComputedStyle(element).backgroundImage);
+    assert.match(background, /Problem\/fon\.jpg/, 'фон заставки: ' + background);
+    assert.match(background, /linear-gradient/, 'поверх фона затемнение для читаемости текста');
+
+    // Пока заставка видна, страница не прокручивается
+    assert.equal(await page.evaluate(() => document.body.classList.contains('splash-open')), true);
+
+    // Полоска заполняется ровно за время показа заставки
+    const progress = await page.$eval('.splash-progress',
+        (element) => getComputedStyle(element, '::after').animationDuration);
+    assert.equal(progress, '0.7s', 'полоска загрузки идёт всё время показа');
+
+    // Через отведённое время заставка исчезает сама, страница снова прокручивается
+    await page.waitForFunction(() => document.getElementById('splash').hidden === true, { timeout: 5000 });
+
+    assert.equal(await page.evaluate(() => window.FTSplash.isVisible()), false);
+    assert.equal(await page.evaluate(() => document.body.classList.contains('splash-open')), false, 'прокрутка вернулась');
+    assert.equal(await page.evaluate(() => window.FTSplash.isSeen()), true, 'заставка отмечена показанной');
+
+    // Сайт под заставкой работал как обычно
+    await clickWhenReady(page, '[data-nav="teams"]');
+    await page.waitForFunction(() => document.querySelector('.page-section.active').id === 'page-teams');
+
+    assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), [], 'нет ошибок консоли');
+    await page.close();
+});
+
+test('заставка: кнопка «Войти на сайт» открывает сайт сразу, повторный вход — без заставки', { skip }, async () => {
+    // Долгий показ: закрыть заставку должен именно клик
+    const config = Object.assign({}, SITE_CONFIG, { splashMs: 60000 });
+    const { page, problems } = await openPage({ config });
+
+    assert.equal(await page.evaluate(() => window.FTSplash.isVisible()), true);
+
+    await clickWhenReady(page, '.splash-skip');
+    await page.waitForFunction(() => document.getElementById('splash').hidden === true, { timeout: 3000 });
+
+    assert.equal(await page.evaluate(() => window.FTSplash.isVisible()), false, 'клик открывает сайт сразу');
+    assert.equal(await page.evaluate(() => document.body.classList.contains('splash-open')), false, 'прокрутка вернулась');
+
+    // Второе открытие в той же вкладке: отметка есть — заставки нет вовсе
+    await reloadApp(page);
+
+    assert.equal(await page.$eval('#splash', (element) => element.hidden), true, 'заставки нет');
+    assert.equal(await page.evaluate(() => window.FTSplash.isSeen()), true);
+
+    // Заставка не мешает работать с сайтом
+    await clickWhenReady(page, '[data-nav="matches"]');
+    await page.waitForFunction(() => document.querySelector('.page-section.active').id === 'page-matches');
+
+    assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), [], 'нет ошибок консоли');
     await page.close();
 });
 
