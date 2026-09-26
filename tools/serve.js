@@ -24,6 +24,8 @@ const CONTENT_TYPES = {
     '.svg': 'image/svg+xml',
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
     '.ico': 'image/x-icon',
     '.woff2': 'font/woff2',
     '.toml': 'text/plain; charset=utf-8'

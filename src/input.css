@@ -59,6 +59,35 @@
         color: #202124;
     }
 
+    /**
+     * Фон сайта: картинка из папки Problem (по умолчанию Problem/fon.jpeg).
+     * Чтобы поставить другую картинку, положите файл рядом с сайтом и поменяйте
+     * путь в background-image ниже. Слой закреплён на экране (position: fixed),
+     * поэтому он не растягивается на всю высоту страницы и работает на телефонах.
+     *
+     * Поверх картинки лежит мягкая светлая подложка: содержимое сайта живёт
+     * в непрозрачных карточках, а подписи прямо на фоне остаются читаемыми.
+     */
+    body::before {
+        content: '';
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background-image: linear-gradient(rgba(248, 249, 250, 0.42), rgba(248, 249, 250, 0.42)),
+            url('../../Problem/fon.jpeg');
+        background-position: center center;
+        background-size: cover;
+        background-repeat: no-repeat;
+    }
+
+    /* Кнопка «Назад» лежит прямо на фоне — подпись держим на светлой подложке */
+    #back-row:not([hidden]) {
+        display: inline-block;
+        padding: 0.375rem 0.75rem;
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.88);
+    }
+
     /* Видимый фокус для навигации с клавиатуры */
     :focus-visible {
         outline: 2px solid #1b5e20;
