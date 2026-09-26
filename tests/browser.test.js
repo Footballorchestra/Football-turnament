@@ -1549,14 +1549,15 @@ test('заставка: при открытии виден фон с назва�
     await page.close();
 });
 
-test('заставка: кнопка «Войти на сайт» открывает сайт сразу, повторный вход — без заставки', { skip }, async () => {
+test('заставка: клик по экрану открывает сайт сразу, повторный вход — без заставки', { skip }, async () => {
     // Долгий показ: закрыть заставку должен именно клик
     const config = Object.assign({}, SITE_CONFIG, { splashMs: 60000 });
     const { page, problems } = await openPage({ config });
 
     assert.equal(await page.evaluate(() => window.FTSplash.isVisible()), true);
+    assert.equal(await page.$('#splash button'), null, 'на заставке нет кнопок');
 
-    await clickWhenReady(page, '.splash-skip');
+    await clickWhenReady(page, '#splash');
     await page.waitForFunction(() => document.getElementById('splash').hidden === true, { timeout: 3000 });
 
     assert.equal(await page.evaluate(() => window.FTSplash.isVisible()), false, 'клик открывает сайт сразу');

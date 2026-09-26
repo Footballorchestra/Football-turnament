@@ -1212,17 +1212,6 @@
         color: rgba(255, 255, 255, 0.9);
     }
 
-    .splash-skip {
-        margin-top: 0.25rem;
-        background: #fff;
-        color: #1b5e20;
-        font-weight: 600;
-    }
-
-    .splash-skip:hover {
-        background: #e8f5e9;
-    }
-
     /* Полоска загрузки: заполняется ровно за время показа заставки */
     .splash-progress {
         position: absolute;

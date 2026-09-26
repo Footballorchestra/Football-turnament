@@ -2564,12 +2564,13 @@ test('состав команды и бомбардиры тоже сортир�
 test('заставка: при первом входе показан фон с названием, отсчёт идёт и сайт открывается сам', async () => {
     const app = boot({ splashMs: 400 });
 
-    // Фон, логотип, название, отсчёт и кнопка «Войти на сайт»
+    // Фон, логотип, название и отсчёт; кнопок нет — сайт открывается сам
     assert.equal(app.$('#splash .splash-badge').textContent, 'FT');
     assert.equal(app.$('.splash-title').textContent, 'Чемпионат среди Артистов по футболу');
     assert.match(app.$('.splash-subtitle').textContent, /Сезон 2026–2027/);
     assert.equal(app.id('splash-countdown').textContent, '1');
-    assert.equal(app.$('.splash-skip').textContent, 'Войти на сайт');
+    assert.equal(app.$('#splash button'), null, 'на заставке нет кнопок');
+    assert.equal(app.$('.splash-skip'), null, 'кнопки «Войти на сайт» больше нет');
     assert.equal(app.window.FTSplash.duration, 400);
     assert.equal(app.window.FTSplash.isVisible(), true);
 

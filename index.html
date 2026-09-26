@@ -42,7 +42,7 @@
 
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=34">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=35">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -50,7 +50,7 @@
 
     <!-- Предстартовая заставка: видна сразу при открытии сайта и скрывается через несколько
          секунд (время — FT_CONFIG.splashMs, 0 — не показывать). Повторные открытия в той же
-         сессии заставку пропускают, а пропустить её можно кнопкой, кликом или Esc.
+         сессии заставку пропускают, а пропустить её можно кликом по экрану или клавишей Esc.
          Логика — assets/js/splash.js, стили — в src/input.css. -->
     <div id="splash" class="splash">
         <div class="splash-inner">
@@ -58,7 +58,6 @@
             <p class="splash-title">Чемпионат среди Артистов по футболу</p>
             <p class="splash-subtitle">Сезон 2026–2027 · таблица, команды, матчи, игроки и фотографии</p>
             <p class="splash-timer">Открываем сайт через <span id="splash-countdown">5</span> с</p>
-            <button type="button" class="btn splash-skip">Войти на сайт</button>
         </div>
         <span class="splash-progress" aria-hidden="true"></span>
     </div>
@@ -801,11 +800,11 @@
 
     <!-- Логика: настройки → чистая логика → синхронизация с репозиторием → слой DOM.
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
-    <script src="assets/js/config.js?v=34" defer></script>
-    <script src="assets/js/splash.js?v=34" defer></script>
-    <script src="assets/js/logic.js?v=34" defer></script>
-    <script src="assets/js/sync.js?v=34" defer></script>
-    <script src="assets/js/photo.js?v=34" defer></script>
-    <script src="assets/js/app.js?v=34" defer></script>
+    <script src="assets/js/config.js?v=35" defer></script>
+    <script src="assets/js/splash.js?v=35" defer></script>
+    <script src="assets/js/logic.js?v=35" defer></script>
+    <script src="assets/js/sync.js?v=35" defer></script>
+    <script src="assets/js/photo.js?v=35" defer></script>
+    <script src="assets/js/app.js?v=35" defer></script>
 </body>
 </html>
