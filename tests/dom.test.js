@@ -2317,3 +2317,52 @@ test('состав команды: блок «Состав», по нажати�
     assert.equal(other.id('team-detail').querySelector('.squad-toggle'), null, 'для пустого состава кнопки нет');
 });
 
+
+test('карточка матча: голы и карточки показаны у той команды, которая их получила', () => {
+    const seeded = remoteData();
+
+    // «Спартак»: гол и жёлтая. «Локомотив»: гол, две жёлтые и красная
+    seeded.matches[0].events = [
+        { team: 1, player: 'Иванов А.', type: 'goal' },
+        { team: 1, player: 'Иванов А.', type: 'yellow' },
+        { team: 2, player: 'Кузнецов К.', type: 'goal' },
+        { team: 2, player: 'Кузнецов К.', type: 'yellow' },
+        { team: 2, player: 'Попов П.', type: 'yellow' },
+        { team: 2, player: 'Попов П.', type: 'red' }
+    ];
+
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+
+    app.navigate('matches');
+
+    const card = app.id('matches-list').querySelector('.match-card[data-id="1"]');
+    const sides = card.querySelectorAll('.match-side-marks');
+
+    assert.equal(sides.length, 2, 'у каждой команды свои отметки');
+    assert.equal(sides[0].classList.contains('match-side-marks-away'), false, 'у хозяев — слева');
+    assert.equal(sides[1].classList.contains('match-side-marks-away'), true, 'у гостей — справа');
+
+    const marks = (side) => Array.from(side.querySelectorAll('.match-mark'))
+        .map((mark) => mark.textContent.trim());
+
+    assert.deepEqual(marks(sides[0]), ['1', '1'], 'Спартак: 1 гол и 1 жёлтая');
+    assert.deepEqual(marks(sides[1]), ['1', '2', '1'], 'Локомотив: 1 гол, 2 жёлтые и красная');
+
+    // Отметки стоят в блоке своей команды, а не в общей строке слева
+    assert.match(sides[0].parentNode.textContent, /Спартак/);
+    assert.match(sides[1].parentNode.textContent, /Локомотив/);
+    assert.equal(card.querySelector('.mt-2 .match-mark'), null, 'в нижней строке карточки отметок больше нет');
+    assert.match(card.textContent, /2 : 1/, 'счёт на месте');
+
+    // Нижняя строка карточки: дата и статус матча
+    assert.match(card.querySelector('.mt-2').textContent, /сентября/);
+    assert.ok(card.querySelector('.status-pill'), 'статус матча виден');
+
+    // На главной странице карточки матчей устроены так же
+    app.navigate('home');
+
+    const homeCard = app.id('latest-results').querySelector('.match-card[data-id="1"]');
+
+    assert.equal(homeCard.querySelectorAll('.match-side-marks').length, 2, 'и на главной — по командам');
+});
+

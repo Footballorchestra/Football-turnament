@@ -432,6 +432,22 @@
     .match-mark-yellow { color: #f9a825; }
     .match-mark-red { color: #e53935; }
 
+    /* Голы и карточки — под названием той команды, которая их получила:
+       у хозяев слева, у гостей справа */
+    .match-side-marks {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 0.25rem;
+        font-size: 0.75rem;
+        color: #5f6368;
+    }
+
+    .match-side-marks-away {
+        justify-content: flex-end;
+    }
+
     /* --- Детальный результат матча: счёт, составы, голы и карточки --- */
     .match-detail-score {
         display: flex;

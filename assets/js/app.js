@@ -1503,10 +1503,22 @@
         '</a>';
     }
 
+    /** Отметки событий одной команды: голы, жёлтые и красные карточки этой команды. */
+    function teamMarks(match, teamId) {
+        var events = (Array.isArray(match.events) ? match.events : []).filter(function (event) {
+            return L.toInt(event.team) === L.toInt(teamId);
+        });
+
+        return summaryMarks(events, 'match-mark');
+    }
+
     /**
      * Карточка матча для публичных списков. Названия команд ведут на их страницы,
      * счёт — в детальный результат матча; клик по остальной части карточки тоже
      * открывает матч (data-action стоит и на самой карточке).
+     *
+     * Голы и карточки показываются под названием той команды, которая их получила:
+     * у хозяев — слева, у гостей — справа. Так сразу видно, чей это гол или карточка.
      */
     function matchCard(match) {
         var teamA = L.findTeam(state.data.teams, match.teamA);
@@ -1514,24 +1526,27 @@
         var score = match.finished
             ? '<span class="score-display">' + match.scoreA + ' : ' + match.scoreB + '</span>'
             : '<span class="text-dark-500 text-sm">против</span>';
+        var marksA = teamMarks(match, match.teamA);
+        var marksB = teamMarks(match, match.teamB);
 
         return '' +
             '<article class="match-card ' + (match.finished ? 'finished' : 'upcoming') + '"' +
                 ' data-action="match-public-open" data-id="' + match.id + '" title="Подробности матча">' +
                 '<div class="flex items-center gap-2 sm:gap-3">' +
-                    '<div class="flex items-center gap-2 flex-1 min-w-0">' +
+                    '<div class="flex-1 min-w-0">' +
                         teamLink(teamA, teamA ? teamA.name : 'Команда удалена', false, true) +
+                        (marksA ? '<div class="match-side-marks">' + marksA + '</div>' : '') +
                     '</div>' +
                     '<a class="match-card-score" href="' + matchHash(match.id) + '"' +
                         ' data-action="match-public-open" data-id="' + match.id + '" title="Открыть матч">' + score + '</a>' +
-                    '<div class="flex items-center gap-2 flex-1 min-w-0 justify-end">' +
+                    '<div class="flex-1 min-w-0">' +
                         teamLink(teamB, teamB ? teamB.name : 'Команда удалена', true, true) +
+                        (marksB ? '<div class="match-side-marks match-side-marks-away">' + marksB + '</div>' : '') +
                     '</div>' +
                 '</div>' +
                 '<div class="mt-2 text-xs text-dark-600 flex flex-wrap items-center gap-3">' +
                     '<span class="inline-flex items-center gap-1">' + icon('calendar') + esc(L.formatDate(match.date, 'long')) + '</span>' +
                     statusPill(match) +
-                    matchSummary(match) +
                 '</div>' +
             '</article>';
     }

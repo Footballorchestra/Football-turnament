@@ -1271,6 +1271,9 @@ test('автообновление: страница зрителя сама п�
  * тот же файл целиком).
  */
 test('фотографии команды: загрузка из админки, блок на странице и просмотр на весь экран', { skip }, async () => {
+    // Данные макета сохраняем: тест добавляет фотографию и публикует её (макет общий для всех тестов)
+    const before = JSON.parse(JSON.stringify(mockRepository.state.data));
+
     const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
 
     // 1. Вход и токен публикации
@@ -1311,29 +1314,31 @@ test('фотографии команды: загрузка из админки,
     }));
 
     await page.waitForFunction(() => document.getElementById('toast-container').textContent.includes('Добавлено фотографий'));
-    await page.waitForFunction(() => {
-        const image = document.querySelector('#admin-team-images .admin-gallery-item img');
-
-        return !!image && image.getAttribute('src').indexOf('data:image/jpeg;base64,') === 0 &&
-            image.complete && image.naturalWidth > 0;
-    });
+    // Ждём предпросмотр из памяти именно загруженной фотографии: у команды могли быть фото и раньше
+    await page.waitForFunction(() => Array.from(document.querySelectorAll('#admin-team-images .admin-gallery-item img'))
+        .some((image) => image.getAttribute('src').indexOf('data:image/jpeg;base64,') === 0 &&
+            image.complete && image.naturalWidth > 0));
 
     const uploaded = await page.evaluate(() => {
         const data = window.FTApp.getData();
         const team = data.teams[0];
         const paths = (data.teamImages || {})[String(team.id)] || [];
-        const image = document.querySelector('#admin-team-images .admin-gallery-item img');
+        const previews = Object.keys(window.FTApp.getState().photoPreviews);
+        const path = previews[previews.length - 1] || '';
+        const image = Array.from(document.querySelectorAll('#admin-team-images .admin-gallery-item img'))
+            .find((item) => item.getAttribute('data-photo-path') === path);
 
         return {
             teamId: String(team.id),
             count: paths.length,
-            path: paths[0] || '',
+            path: path,
+            saved: paths.indexOf(path) !== -1,
             width: image ? image.naturalWidth : 0,
             height: image ? image.naturalHeight : 0
         };
     });
 
-    assert.equal(uploaded.count, 1, 'фотография записана в данные команды');
+    assert.equal(uploaded.saved, true, 'путь новой фотографии записан в данные команды');
     assert.match(uploaded.path, /^assets\/photos\/team-photo-[a-z0-9-]+-[0-9a-f]{6}\.jpg$/, 'имя файла фотографии');
     assert.ok(mockRepository.state.files[uploaded.path], 'файл фотографии ушёл в репозиторий');
     assert.equal(uploaded.height, 900, 'пропорции сохранены (высота не сломана)');
@@ -1344,16 +1349,29 @@ test('фотографии команды: загрузка из админки,
     await clickInView(page, '#teams-grid [data-action="team-public-open"][data-id="' + uploaded.teamId + '"] .team-name');
     await page.waitForFunction(() => !!document.querySelector('#team-detail .team-gallery-item'));
 
-    const block = await page.evaluate(() => ({
-        count: document.querySelectorAll('#team-detail .team-gallery-item').length,
-        hasHeading: document.getElementById('team-detail').textContent.includes('Фотографии')
-    }));
+    const block = await page.evaluate((path) => {
+        const items = Array.from(document.querySelectorAll('#team-detail .team-gallery-item'));
+        // Только что загруженное фото показывается предпросмотром из памяти (файл на сайте появится позже)
+        const preview = window.FTApp.getState().photoPreviews[path] || path;
+        const sources = items.map((item) => {
+            const image = item.querySelector('img');
 
-    assert.equal(block.count, 1, 'фотография видна в блоке на странице команды');
+            return image ? image.getAttribute('src') : 'нет картинки';
+        });
+
+        return {
+            count: items.length,
+            hasUploaded: sources.indexOf(preview) !== -1,
+            index: sources.indexOf(preview),
+            hasHeading: document.getElementById('team-detail').textContent.includes('Фотографии')
+        };
+    }, uploaded.path);
+
+    assert.equal(block.hasUploaded, true, 'загруженная фотография видна в блоке на странице команды');
     assert.equal(block.hasHeading, true, 'у блока есть заголовок');
 
     // 4. Нажатие на фото — просмотр на весь экран
-    await clickInView(page, '#team-detail .team-gallery-item');
+    await clickInView(page, '#team-detail .team-gallery-item:nth-child(' + (block.index + 1) + ')');
     await page.waitForFunction(() => {
         const viewer = document.getElementById('image-viewer');
         const image = document.getElementById('image-viewer-photo');
@@ -1385,6 +1403,9 @@ test('фотографии команды: загрузка из админки,
 
     assert.equal(await page.evaluate(() => document.body.classList.contains('viewer-open')), false,
         'прокрутка страницы вернулась');
+
+    // Возвращаем данные макета: фотографии из этого теста в них оставаться не должны
+    mockRepository.changeExternally(before);
 
     const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
 
