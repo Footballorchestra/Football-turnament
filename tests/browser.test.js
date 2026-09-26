@@ -582,6 +582,7 @@ test('статические файлы отдаются с нужными ти�
         ['/assets/apple-touch-icon.png', 'image/png'],
         ['/assets/og-image.png', 'image/png'],
         ['/Problem/fon.jpg', 'image/jpeg'],
+        ['/Problem/fontel.jpg', 'image/jpeg'],
         ['/robots.txt', 'text/plain']
     ];
 
@@ -1572,6 +1573,68 @@ test('заставка: клик по экрану открывает сайт �
     // Заставка не мешает работать с сайтом
     await clickWhenReady(page, '[data-nav="matches"]');
     await page.waitForFunction(() => document.querySelector('.page-section.active').id === 'page-matches');
+
+    assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), [], 'нет ошибок консоли');
+    await page.close();
+});
+
+/**
+ * Заставка на смартфоне: узкий вертикальный экран получает вертикальный снимок
+ * fontel.jpg — его кадр снят под форму телефона и виден почти целиком. На широких
+ * экранах (компьютер, планшет, телефон «лёжа») остаётся широкий fon.jpg: вертикальный
+ * кадр там пришлось бы обрезать почти вдвое по высоте.
+ */
+test('заставка: на смартфоне фоном служит вертикальный снимок fontel.jpg', { skip }, async () => {
+    // Долгий показ: проверяем саму заставку, а не её исчезновение
+    const config = Object.assign({}, SITE_CONFIG, { splashMs: 60000 });
+    const { page, problems } = await openPage({ mobile: true, config });
+
+    /** Фон и размеры экрана заставки: важно и что нарисовано, и как оно уложено. */
+    const splashView = () => page.$eval('#splash', (element) => {
+        const style = getComputedStyle(element);
+        const box = element.getBoundingClientRect();
+
+        return {
+            background: style.backgroundImage,
+            size: style.backgroundSize,
+            position: style.backgroundPosition,
+            width: Math.round(box.width),
+            height: Math.round(box.height)
+        };
+    });
+
+    // Телефон 390×844: вертикальный снимок и затемнение поверх него
+    const phone = await splashView();
+
+    assert.match(phone.background, /Problem\/fontel\.jpg/, 'фон заставки на телефоне: ' + phone.background);
+    assert.doesNotMatch(phone.background, /fon\.jpg/, 'широкий fon.jpg на телефоне не подключается');
+    assert.match(phone.background, /linear-gradient/, 'поверх снимка затемнение для читаемости текста');
+    assert.match(phone.size, /^cover(, cover)*$/, 'снимок закрывает экран целиком: ' + phone.size);
+    assert.match(phone.position, /^50% 50%(, 50% 50%)*$/, 'кадр центрируется — обрезаются только полосы по бокам: ' + phone.position);
+    assert.equal(phone.width, 390, 'заставка занимает экран по ширине');
+    assert.equal(phone.height, 844, 'заставка занимает экран по высоте');
+
+    // Текст заставки остался на месте: снимок служит фоном, а не заменяет название и отсчёт
+    assert.equal(await textOf(page, '.splash-badge'), 'FT');
+    assert.equal(await textOf(page, '.splash-title'), 'Чемпионат среди Артистов по футболу');
+    assert.match(await textOf(page, '.splash-timer'), /Открываем сайт через/);
+
+    // Браузер действительно скачал снимок телефона (предзагрузка в <head> + правило в стилях)
+    await page.waitForFunction(() => performance.getEntriesByType('resource')
+        .some((entry) => entry.name.indexOf('fontel.jpg') !== -1 && entry.responseEnd > 0), { timeout: 10000 });
+
+    // Компьютер, планшет и телефон «лёжа»: там по-прежнему широкий фон
+    const wideScreens = [[1280, 900], [820, 1180], [844, 390]];
+
+    for (const [width, height] of wideScreens) {
+        await page.setViewport({ width, height });
+
+        const view = await splashView();
+
+        assert.match(view.background, /Problem\/fon\.jpg/, width + '×' + height + ': ' + view.background);
+        assert.doesNotMatch(view.background, /fontel\.jpg/, width + '×' + height + ': вертикальный снимок здесь не нужен');
+        assert.equal(view.width, width, 'заставка всё ещё на весь экран');
+    }
 
     assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), [], 'нет ошибок консоли');
     await page.close();

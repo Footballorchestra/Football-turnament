@@ -40,9 +40,14 @@
     <link rel="icon" href="assets/favicon.ico" sizes="32x32">
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 
+    <!-- Заставка на смартфонах — вертикальный снимок Problem/fontel.jpg (см. правило
+         .splash в src/input.css). Предзагрузка с тем же условием, что и в стилях:
+         на широких экранах она не срабатывает, и лишнего файла никто не скачивает. -->
+    <link rel="preload" as="image" href="Problem/fontel.jpg" media="(max-width: 767px) and (orientation: portrait)">
+
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=35">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=36">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -51,7 +56,8 @@
     <!-- Предстартовая заставка: видна сразу при открытии сайта и скрывается через несколько
          секунд (время — FT_CONFIG.splashMs, 0 — не показывать). Повторные открытия в той же
          сессии заставку пропускают, а пропустить её можно кликом по экрану или клавишей Esc.
-         Логика — assets/js/splash.js, стили — в src/input.css. -->
+         Фон: на смартфонах (узкий вертикальный экран) — снимок Problem/fontel.jpg, на
+         широких экранах — Problem/fon.jpg. Логика — assets/js/splash.js, стили — в src/input.css. -->
     <div id="splash" class="splash">
         <div class="splash-inner">
             <span class="splash-badge" aria-hidden="true">FT</span>
@@ -800,11 +806,11 @@
 
     <!-- Логика: настройки → чистая логика → синхронизация с репозиторием → слой DOM.
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
-    <script src="assets/js/config.js?v=35" defer></script>
-    <script src="assets/js/splash.js?v=35" defer></script>
-    <script src="assets/js/logic.js?v=35" defer></script>
-    <script src="assets/js/sync.js?v=35" defer></script>
-    <script src="assets/js/photo.js?v=35" defer></script>
-    <script src="assets/js/app.js?v=35" defer></script>
+    <script src="assets/js/config.js?v=36" defer></script>
+    <script src="assets/js/splash.js?v=36" defer></script>
+    <script src="assets/js/logic.js?v=36" defer></script>
+    <script src="assets/js/sync.js?v=36" defer></script>
+    <script src="assets/js/photo.js?v=36" defer></script>
+    <script src="assets/js/app.js?v=36" defer></script>
 </body>
 </html>

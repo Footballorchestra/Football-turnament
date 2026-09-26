@@ -1165,6 +1165,20 @@
         animation: splash-fallback 0.4s ease var(--splash-ms, 5000ms) forwards;
     }
 
+    /**
+     * Смартфоны: заставка — вертикальный снимок Problem/fontel.png (для сайта он сжат
+     * в Problem/fontel.jpg). Кадр снят под форму телефона, поэтому на узком вертикальном
+     * экране он виден целиком: обрезаются только узкие полосы по бокам. На планшетах,
+     * телефонах «лёжа» и компьютерах остаётся широкий fon.jpg — там вертикальный кадр
+     * пришлось бы обрезать почти вдвое по высоте.
+     */
+    @media (max-width: 767px) and (orientation: portrait) {
+        .splash {
+            background-image: linear-gradient(rgba(13, 20, 26, 0.6), rgba(13, 20, 26, 0.72)),
+                url('../../Problem/fontel.jpg');
+        }
+    }
+
     .splash.is-closing {
         opacity: 0;
         visibility: hidden;
