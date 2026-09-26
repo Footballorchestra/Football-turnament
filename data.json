@@ -1,7 +1,7 @@
 {
-  "version": 7,
-  "revision": 299,
-  "updatedAt": "2026-09-25T20:41:16.439Z",
+  "version": 8,
+  "revision": 300,
+  "updatedAt": "2026-09-26T08:03:43.212Z",
   "teams": [
     {
       "id": 1,
@@ -398,9 +398,9 @@
       "id": 7,
       "teamA": 6,
       "teamB": 5,
-      "date": "2026-09-18",
       "scoreA": 3,
       "scoreB": 8,
+      "date": "2026-09-18",
       "finished": true,
       "events": [
         {
@@ -469,9 +469,9 @@
       "id": 8,
       "teamA": 3,
       "teamB": 1,
-      "date": "2026-09-22",
       "scoreA": 0,
       "scoreB": 8,
+      "date": "2026-09-22",
       "finished": true,
       "events": [
         {
@@ -520,9 +520,9 @@
       "id": 9,
       "teamA": 7,
       "teamB": 4,
-      "date": "2026-09-24",
       "scoreA": 3,
       "scoreB": 3,
+      "date": "2026-09-24",
       "finished": true,
       "events": [
         {
@@ -562,5 +562,10 @@
     "1|доброрадных сергей": "assets/photos/dobroradnykh-sergei-dcc974.jpg"
   },
   "teamPhotos": {},
+  "teamImages": {
+    "1": [
+      "assets/photos/team-photo-veterany-mgk-f1c0b2.jpg"
+    ]
+  },
   "playerInfo": {}
 }
