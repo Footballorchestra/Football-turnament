@@ -1249,49 +1249,6 @@
         overflow: hidden;
     }
 
-    /**
-     * Узкие и вертикальные экраны (телефоны, планшеты «стоя»): здесь cover
-     * показывает только часть фотографии — на телефоне 390×844 видно лишь
-     * четверть её ширины, и надпись на кадре обрезается по краям.
-     *
-     * Поэтому фон собирается из двух слоёв: размытая копия закрывает весь
-     * экран (нет пустых полос), а сама фотография лежит поверх неё целиком —
-     * contain — и не теряет ни одного края.
-     */
-    @media (max-width: 767px), (orientation: portrait) and (max-width: 1024px) {
-        .splash {
-            background-color: #0d141a;
-            background-image: none;      /* вместо фоновой картинки — два слоя ниже */
-        }
-
-        .splash::before,
-        .splash::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            z-index: -1;                 /* под текстом, но поверх цвета заставки */
-            pointer-events: none;
-            background-position: center center;
-            background-repeat: no-repeat;
-        }
-
-        /* Размытая копия на весь экран: заполняет то, что осталось от фотографии */
-        .splash::before {
-            background-image: linear-gradient(rgba(13, 20, 26, 0.72), rgba(13, 20, 26, 0.82)),
-                url('../../Problem/fon.jpg');
-            background-size: cover;
-            filter: blur(14px);
-            transform: scale(1.1);       /* прячет размытую кромку по краям экрана */
-        }
-
-        /* Фотография целиком, как на компьютере: затемнение держит текст читаемым */
-        .splash::after {
-            background-image: linear-gradient(rgba(13, 20, 26, 0.55), rgba(13, 20, 26, 0.7)),
-                url('../../Problem/fon.jpg');
-            background-size: contain;
-        }
-    }
-
     /* --- Статусы матча --- */
     .status-pill {
         display: inline-flex;

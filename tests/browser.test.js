@@ -1549,69 +1549,6 @@ test('заставка: при открытии виден фон с назва�
     await page.close();
 });
 
-test('заставка: на телефоне фоновая фотография видна целиком, без обрезки', { skip }, async () => {
-    // Заставка висит всё время теста: смотрим только фон
-    const config = Object.assign({}, SITE_CONFIG, { splashMs: 60000 });
-    const { page, problems } = await openPage({ config, mobile: true });
-
-    // Заставка занимает весь экран телефона целиком
-    const box = await page.$eval('#splash', (element) => {
-        const rect = element.getBoundingClientRect();
-
-        return { width: Math.round(rect.width), height: Math.round(rect.height) };
-    });
-
-    assert.deepEqual(box, { width: 390, height: 844 }, 'заставка занимает весь экран телефона');
-
-    // Обычный cover на 390×844 оставил бы от фотографии только 26 % ширины,
-    // поэтому фон собран из двух слоёв: размытая копия на весь экран и фото целиком поверх неё
-    const backdrop = await page.$eval('#splash', (element) => {
-        const style = getComputedStyle(element, '::before');
-
-        return {
-            image: style.backgroundImage,
-            size: style.backgroundSize.split(',')[0].trim(),
-            filter: style.filter,
-            position: style.position
-        };
-    });
-
-    assert.match(backdrop.image, /Problem\/fon\.jpg/, 'первый слой — та же фотография: ' + backdrop.image);
-    assert.equal(backdrop.size, 'cover', 'размытая копия заполняет весь экран');
-    assert.match(backdrop.filter, /blur/, 'копия размыта, чтобы не отвлекать от текста');
-    assert.equal(backdrop.position, 'absolute', 'слои растянуты по заставке');
-
-    const photo = await page.$eval('#splash', (element) => {
-        const style = getComputedStyle(element, '::after');
-
-        return {
-            image: style.backgroundImage,
-            size: style.backgroundSize.split(',')[0].trim(),
-            zIndex: style.zIndex
-        };
-    });
-
-    assert.match(photo.image, /Problem\/fon\.jpg/, 'поверх копии — сама фотография: ' + photo.image);
-    assert.equal(photo.size, 'contain', 'фотография вписана целиком — ни один край кадра не обрезан');
-    assert.match(photo.image, /linear-gradient/, 'затемнение поверх фото держит текст читаемым');
-    assert.equal(photo.zIndex, '-1', 'слои лежат под текстом заставки');
-
-    assert.equal(await page.evaluate(() => window.FTSplash.isVisible()), true, 'заставка видна');
-    assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), [], 'нет ошибок консоли');
-    await page.close();
-
-    // На широком экране всё как раньше: одно фото на весь экран
-    const desktop = await openPage({ config });
-
-    const desktopBackground = await desktop.page.$eval('#splash',
-        (element) => getComputedStyle(element).backgroundSize.split(',')[0].trim());
-
-    assert.equal(desktopBackground, 'cover', 'на широком экране фото по-прежнему на весь экран');
-    assert.deepEqual(desktop.problems.filter((item) => !item.includes('Failed to load resource')), [],
-        'нет ошибок консоли');
-    await desktop.page.close();
-});
-
 test('заставка: клик по экрану открывает сайт сразу, повторный вход — без заставки', { skip }, async () => {
     // Долгий показ: закрыть заставку должен именно клик
     const config = Object.assign({}, SITE_CONFIG, { splashMs: 60000 });
