@@ -44,6 +44,10 @@
         /** Открытый игрок: команда и номер в заявке (null — карточка игрока не открыта). */
         publicPlayerTeamId: null,
         publicPlayerIndex: null,
+        /** Просмотр фотографии на весь экран: { teamId, index } (null — просмотр закрыт). */
+        imageViewer: null,
+        /** Элемент, на который вернём фокус после закрытия просмотра. */
+        imageViewerFocus: null,
         /** Стек посещённых страниц для кнопки «Назад» (в памяти, до перезагрузки). */
         history: [],
         /** Предпросмотр только что загруженных фото: путь → data-URL (до появления файла на сайте). */
@@ -235,6 +239,25 @@
     }
 
     /**
+     * Настройки сжатия фотографий команды: пропорции сохраняются, длинная сторона —
+     * до galleryMaxSize (по умолчанию 1920 px), поэтому в полноэкранном просмотре
+     * картинка остаётся чёткой. Имя файла считается по содержимому, чтобы разные
+     * снимки одной команды не перезаписывали друг друга.
+     */
+    function photoGallerySettings() {
+        return {
+            folder: PHOTO.folder,
+            prefix: 'team-photo-',
+            byContent: true,
+            fit: 'inside',
+            maxSize: Number(PHOTO.galleryMaxSize) || 1920,
+            quality: PHOTO.galleryQuality === undefined ? 0.86 : PHOTO.galleryQuality,
+            maxSourceBytes: PHOTO.maxSourceBytes,
+            maxResultBytes: Number(PHOTO.galleryMaxResultBytes) || 1200 * 1024
+        };
+    }
+
+    /**
      * Адрес фото игрока для <img>. Только что загруженное фото появляется на сайте
      * не сразу (публикация занимает около минуты), поэтому до перезагрузки страницы
      * показываем локальный предпросмотр из памяти.
@@ -268,6 +291,16 @@
     /** Есть ли у команды эмблема. */
     function hasTeamPhoto(teamId) {
         return teamPhotoUrl(teamId) !== '';
+    }
+
+    /**
+     * Фотографии команды для страницы: пути из данных, а для только что загруженных —
+     * предпросмотр из памяти (файл появится на сайте через минуту, см. photoPreviews).
+     */
+    function teamImageUrls(teamId) {
+        return L.getTeamImages(state.data, teamId).map(function (path) {
+            return state.photoPreviews[path] || path;
+        });
     }
 
     /**
@@ -316,7 +349,8 @@
      */
     function photoImage(url, options) {
         var opts = options || {};
-        var size = ' alt="" loading="lazy" width="' + opts.side + '" height="' + opts.side + '"';
+        var size = ' alt=""' + (opts.side ? ' width="' + opts.side + '" height="' + opts.side + '"' : '') +
+            ' loading="lazy"';
         var local = String(url).indexOf('data:') === 0;
 
         // Предпросмотр из памяти (data:…) всегда на месте — повторять нечего
@@ -479,11 +513,21 @@
 
         var settings = photoSettings();
 
+        // Дополнительные настройки сжатия (галерея команды: пропорции и более крупный размер)
+        Object.keys(opts.settings || {}).forEach(function (key) {
+            settings[key] = opts.settings[key];
+        });
+
         settings.teamId = L.toInt(team.id);
         settings.player = opts.name || team.name;
-        settings.prefix = opts.prefix || '';
 
-        P.prepare(file, settings)
+        // Префикс из opts важнее общего: у эмблемы он 'team-', у фото игрока — пустой,
+        // а у галереи команды приходит в opts.settings ('team-photo-')
+        if (opts.prefix !== undefined) {
+            settings.prefix = opts.prefix;
+        }
+
+        return P.prepare(file, settings)
             .then(function (prepared) {
                 if (!prepared.ok) {
                     return { ok: false, error: prepared.error };
@@ -505,7 +549,7 @@
                 if (!result || !result.ok) {
                     renderAdmin();
                     toast((result && result.error) || 'Не удалось загрузить фото', 'error');
-                    return;
+                    return { ok: false, error: (result && result.error) || '' };
                 }
 
                 // Файл на сайте появится через минуту: до перезагрузки показываем его из памяти
@@ -517,8 +561,13 @@
                     sync.lastCommitUrl = result.htmlUrl;
                 }
 
-                saveData(opts.done + ' (' + P.formatBytes(result.bytes) +
-                    ') — файл появится на сайте через ~минуту');
+                // Сообщение можно отключить (opts.done пустое): тогда вызывает сам админ, например
+                // при загрузке нескольких фотографий — там показывается одна общая подсказка
+                saveData(opts.done
+                    ? opts.done + ' (' + P.formatBytes(result.bytes) + ') — файл появится на сайте через ~минуту'
+                    : '');
+
+                return { ok: true, path: result.path, bytes: result.bytes };
             });
     }
 
@@ -620,6 +669,108 @@
         L.removeTeamPhoto(state.data, team.id);
 
         saveData('Эмблема команды «' + team.name + '» убрана');
+    }
+
+    /* --- Фотографии команды (галерея): загрузка, удаление и блок в админке --- */
+
+    /**
+     * Загрузка фотографий команды. Файлов можно выбрать сразу несколько —
+     * они уходят в репозиторий по очереди (каждая фотография отдельным коммитом),
+     * лимит — CONFIG.maxTeamImages на команду.
+     */
+    function uploadTeamImages(teamId, files) {
+        var team = L.findTeam(state.data.teams, teamId);
+        var list = Array.prototype.slice.call(files || []);
+
+        if (!team || !list.length) {
+            return;
+        }
+
+        var left = L.teamImagesLeft(state.data, team.id);
+
+        if (left <= 0) {
+            toast('У команды «' + team.name + '» уже ' + CONFIG.maxTeamImages +
+                ' фотографии — сначала уберите лишние', 'error');
+            return;
+        }
+
+        var queue = list.slice(0, left);
+        var skipped = list.length - queue.length;
+        var settings = photoGallerySettings();
+        var added = 0;
+        var position = 0;
+
+        var next = function () {
+            if (position >= queue.length) {
+                toast('Добавлено фотографий: ' + added +
+                    (skipped ? '. Не поместилось (предел ' + CONFIG.maxTeamImages + '): ' + skipped : ''),
+                    added ? 'success' : 'error');
+
+                return Promise.resolve();
+            }
+
+            var file = queue[position];
+
+            position += 1;
+
+            return uploadPhoto(file, {
+                kind: 'team-image',
+                teamId: team.id,
+                index: null,
+                name: team.name,
+                settings: settings,
+                done: '',
+                action: 'Фотография команды «' + team.name + '»',
+                apply: function (path) {
+                    var result = L.addTeamImage(state.data, team.id, path);
+
+                    if (result.ok) {
+                        added += 1;
+                    } else {
+                        toast(result.error, 'error');
+                    }
+                }
+            }).then(function (result) {
+                if (!result || !result.ok) {
+                    // Про ошибку уже сказали: остальные файлы не грузим, но добавленное сохраняем
+                    if (added) {
+                        toast('Добавлено фотографий: ' + added, 'info');
+                    }
+
+                    return undefined;
+                }
+
+                return next();
+            });
+        };
+
+        return next();
+    }
+
+    /** Убирает фотографию команды из галереи (сам файл остаётся в истории репозитория). */
+    function removeTeamGalleryImage(teamId, index) {
+        var team = L.findTeam(state.data.teams, teamId);
+        var paths = L.getTeamImages(state.data, team ? team.id : null);
+        var path = index === null ? '' : paths[index];
+
+        if (!team || !path) {
+            return;
+        }
+
+        if (!askConfirm('Убрать эту фотографию команды «' + team.name + '»?\n\n' +
+            'Сам файл останется в истории репозитория — при необходимости его можно вернуть.')) {
+            return;
+        }
+
+        delete state.photoPreviews[path];
+        L.removeTeamImage(state.data, team.id, path);
+
+        // Если эта фотография была открыта на весь экран — закрываем просмотр
+        if (state.imageViewer && state.imageViewer.teamId === L.toInt(team.id)) {
+            state.imageViewer = null;
+        }
+
+        saveData('Фотография убрана');
     }
 
     /* ================================================================== */
@@ -1698,6 +1849,34 @@
         '</div>';
     }
 
+    /**
+     * Блок фотографий команды: миниатюры. Нажатие открывает снимок на весь экран,
+     * там же можно листать остальные. Если фотографий нет, блок не выводится.
+     */
+    function teamImagesBlock(team) {
+        var paths = L.getTeamImages(state.data, team.id);
+        var urls = teamImageUrls(team.id);
+
+        if (!paths.length) {
+            return '';
+        }
+
+        return '<h3 class="text-xs font-bold uppercase tracking-wide text-dark-600 mb-2">Фотографии' +
+                (paths.length > 1 ? ' (' + paths.length + ')' : '') + '</h3>' +
+            '<div class="team-gallery mb-6">' + urls.map(function (url, index) {
+                return '<button type="button" class="team-gallery-item" data-action="image-open"' +
+                        ' data-team="' + L.toInt(team.id) + '" data-index="' + index + '"' +
+                        ' title="Открыть фотографию на весь экран">' +
+                    photoImage(url, {
+                        className: 'team-gallery-photo',
+                        path: paths[index],
+                        fallbackClass: 'team-gallery-photo team-gallery-broken',
+                        fallbackText: 'Фото ещё не появилось на сайте'
+                    }) +
+                '</button>';
+            }).join('') + '</div>';
+    }
+
     /** Страница команды: статистика в турнире, состав и все её матчи. */
     function renderPublicTeam(team) {
         var box = $('team-detail');
@@ -1747,6 +1926,7 @@
                         ' · Разница мячей: ' + diff
                     : 'Команда ещё не играла') +
             '</p>' +
+            teamImagesBlock(team) +
             '<h3 class="text-xs font-bold uppercase tracking-wide text-dark-600 mb-2">Состав</h3>' +
             '<div class="flex flex-wrap gap-2 mb-6">' + players + '</div>' +
             '<h3 class="text-xs font-bold uppercase tracking-wide text-dark-600 mb-2">Матчи команды</h3>' +
@@ -1849,6 +2029,114 @@
                 '<p class="player-note-text">' +
                     (info.note ? esc(info.note) : '<span class="text-dark-500">не указана</span>') + '</p>' +
             '</div>';
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Просмотр фотографии на весь экран                                   */
+    /* ------------------------------------------------------------------ */
+
+    /** Список фотографий открытого просмотра (пустой — просмотр закрыт). */
+    function viewerImages() {
+        return state.imageViewer ? teamImageUrls(state.imageViewer.teamId) : [];
+    }
+
+    /**
+     * Рисует полноэкранный просмотр: фото, подпись и стрелки (если фотографий несколько).
+     * В просмотре используется тот же файл, что и в миниатюре, — то есть полный размер
+     * (до galleryMaxSize по длинной стороне), без повторного сжатия и потери чёткости.
+     */
+    function renderImageViewer() {
+        var box = $('image-viewer');
+
+        if (!box) {
+            return;
+        }
+
+        var images = viewerImages();
+        var index = state.imageViewer ? state.imageViewer.index : 0;
+        var url = images[index] || '';
+
+        if (!url) {
+            state.imageViewer = null;
+            box.hidden = true;
+            document.body.classList.remove('viewer-open');
+            return;
+        }
+
+        var team = L.findTeam(state.data.teams, state.imageViewer.teamId);
+        var paths = L.getTeamImages(state.data, state.imageViewer.teamId);
+        var photo = $('image-viewer-photo');
+        var caption = $('image-viewer-caption');
+        var multiple = images.length > 1;
+
+        box.hidden = false;
+        document.body.classList.add('viewer-open');
+
+        if (photo) {
+            photo.classList.add('photo-retry');
+            photo.setAttribute('data-photo-path', paths[index] || '');
+            photo.setAttribute('data-fallback-class', 'image-viewer-photo image-viewer-broken');
+            photo.setAttribute('data-fallback-text', 'Фото ещё не появилось на сайте');
+            photo.setAttribute('src', url);
+            photo.setAttribute('alt', 'Фотография команды ' + (team ? team.name : ''));
+        }
+
+        if (caption) {
+            caption.textContent = (team ? team.name : '') +
+                (multiple ? ' · ' + (index + 1) + ' из ' + images.length : '');
+        }
+
+        qsa('#image-viewer .image-viewer-nav').forEach(function (button) {
+            button.hidden = !multiple;
+        });
+    }
+
+    /** Открывает фотографию команды на весь экран. */
+    function openTeamImageViewer(teamId, index) {
+        var images = teamImageUrls(teamId);
+        var number = L.toInt(index);
+
+        if (!images.length || number === null || !images[number]) {
+            return;
+        }
+
+        state.imageViewer = { teamId: L.toInt(teamId), index: number };
+        state.imageViewerFocus = document.activeElement;
+
+        renderImageViewer();
+
+        var close = document.querySelector('#image-viewer [data-action="image-close"]');
+
+        if (close && typeof close.focus === 'function') {
+            close.focus();
+        }
+    }
+
+    /** Закрывает просмотр фотографии и возвращает фокус на страницу. */
+    function closeTeamImageViewer() {
+        var previous = state.imageViewerFocus;
+
+        state.imageViewer = null;
+        state.imageViewerFocus = null;
+        renderImageViewer();
+
+        if (previous && typeof previous.focus === 'function' && document.contains(previous)) {
+            previous.focus();
+        }
+    }
+
+    /** Листает фотографии по кругу (если их несколько). */
+    function stepTeamImageViewer(delta) {
+        var images = viewerImages();
+
+        if (!state.imageViewer || images.length < 2) {
+            return;
+        }
+
+        var count = images.length;
+
+        state.imageViewer.index = ((state.imageViewer.index + delta) % count + count) % count;
+        renderImageViewer();
     }
 
     /** Строка игрока в публичном составе: голы, жёлтая и красная карточки. */
@@ -1963,6 +2251,7 @@
         renderMatches();
         renderPlayers();
         renderPlayerCard();
+        renderImageViewer();
         renderAdmin();
     }
 
@@ -2140,6 +2429,63 @@
             '<span class="admin-hint">Эмблема видна в таблице, в списках и на странице команды</span>';
     }
 
+    /**
+     * Фотографии команды в админке: миниатюры с кнопкой «убрать» и загрузка
+     * (можно выбрать сразу несколько файлов). Показывается в карточке команды.
+     */
+    function renderAdminTeamImages(team) {
+        var box = $('admin-team-images');
+
+        if (!box || !team) {
+            return;
+        }
+
+        var paths = L.getTeamImages(state.data, team.id);
+        var left = L.teamImagesLeft(state.data, team.id);
+        var busy = !!state.photoBusy && state.photoBusy.kind === 'team-image' &&
+            state.photoBusy.teamId === L.toInt(team.id);
+        var limit = Number(PHOTO.galleryMaxSize) || 1920;
+
+        var thumbs = paths.map(function (path, index) {
+            var url = state.photoPreviews[path] || path;
+
+            return '<figure class="admin-gallery-item">' +
+                '<img class="admin-gallery-photo photo-retry" src="' + esc(url) + '" alt="" loading="lazy"' +
+                    ' data-photo-path="' + esc(path) + '"' +
+                    ' data-fallback-class="admin-gallery-photo admin-gallery-broken"' +
+                    ' data-fallback-text="Фото ещё не на сайте">' +
+                '<button type="button" class="admin-gallery-remove" data-action="team-image-remove"' +
+                    ' data-team="' + L.toInt(team.id) + '" data-index="' + index + '"' +
+                    ' title="Убрать фотографию">' + icon('photo-off') + '</button>' +
+            '</figure>';
+        }).join('');
+
+        var controls = '';
+
+        if (busy) {
+            controls = '<p class="admin-hint">Загружаю фотографии…</p>';
+        } else if (left > 0) {
+            controls = '<label class="btn btn-sm btn-ghost" title="Добавить фотографии команды">' + icon('photo') +
+                'Добавить фотографии' +
+                '<input type="file" class="sr-only" accept="image/*" multiple data-photo-kind="team-image"' +
+                    ' data-photo-team="' + L.toInt(team.id) + '"' +
+                    ' aria-label="Добавить фотографии команды ' + esc(team.name) + '">' +
+            '</label>';
+        } else {
+            controls = '<p class="admin-hint">Достигнут предел: ' + CONFIG.maxTeamImages +
+                ' фотографий — уберите лишние, чтобы добавить другие</p>';
+        }
+
+        box.innerHTML =
+            '<h3 class="admin-title">' + icon('photo') + 'Фотографии команды' +
+                (paths.length ? ' (' + paths.length + ' из ' + CONFIG.maxTeamImages + ')' : '') + '</h3>' +
+            '<p class="admin-hint mb-3">До ' + CONFIG.maxTeamImages + ' фотографий: они видны на странице команды, ' +
+                'а нажатие открывает снимок на весь экран. Фото сжимается в браузере — пропорции сохраняются, ' +
+                'длинная сторона до ' + limit + ' px, поэтому картинка остаётся чёткой.</p>' +
+            (thumbs ? '<div class="admin-gallery mb-3">' + thumbs + '</div>' : '') +
+            controls;
+    }
+
     /** Шапка карточки команды: название и действия «переименовать» / «удалить». */
     function renderAdminTeamCard(team) {
         var title = $('admin-team-title');
@@ -2154,6 +2500,7 @@
         }
 
         renderAdminTeamPhoto(team);
+        renderAdminTeamImages(team);
 
         if (!actions) {
             return;
@@ -2924,6 +3271,11 @@
         var sectionId = sectionForRoute(target);
         var previous = currentPage();
 
+        // Переход на другую страницу закрывает полноэкранный просмотр фотографии
+        if (state.imageViewer) {
+            closeTeamImageViewer();
+        }
+
         /* Какая страница открыта: список или детальная страница (матч, команда, игрок).
            opts.matchId / opts.teamId / opts.playerTeamId === null — показать список,
            число — открыть детальную страницу, undefined — оставить как есть
@@ -3295,9 +3647,20 @@
             state.selectedTeamId = null;
         }
 
+        var removedImages = L.getTeamImages(state.data, team.id);
+
+        removedImages.forEach(function (path) {
+            delete state.photoPreviews[path];
+        });
+
         // Фото игроков и эмблема удалённой команды больше не нужны (файлы остаются в истории)
         L.removeTeamPhotos(state.data, team.id);
         L.removeTeamPhoto(state.data, team.id);
+        L.removeTeamImages(state.data, team.id);
+
+        if (state.imageViewer && state.imageViewer.teamId === team.id) {
+            state.imageViewer = null;
+        }
 
         // Дата рождения и принадлежность игроков удалённой команды — тоже
         L.removeTeamPlayerInfo(state.data, team.id);
@@ -3714,6 +4077,16 @@
             cancelPlayerInfoEdit();
         } else if (action === 'player-info-clear') {
             clearPlayerInfo(teamId, index);
+        } else if (action === 'image-open') {
+            openTeamImageViewer(teamId, index);
+        } else if (action === 'image-close') {
+            closeTeamImageViewer();
+        } else if (action === 'image-prev') {
+            stepTeamImageViewer(-1);
+        } else if (action === 'image-next') {
+            stepTeamImageViewer(1);
+        } else if (action === 'team-image-remove') {
+            removeTeamGalleryImage(teamId, index);
         } else if (action === 'match-event') {
             recordMatchEvent(id, teamId, element.getAttribute('data-player'), element.getAttribute('data-type'));
         } else if (action === 'match-event-undo') {
@@ -3791,15 +4164,19 @@
 
         // Выбор файла с фото игрока: <input type="file" data-photo-team data-photo-index>
         // или эмблемы команды: <input type="file" data-photo-kind="team" data-photo-team>
+        // или фотографий команды (можно несколько сразу): data-photo-kind="team-image"
         if (typeof target.hasAttribute === 'function' && target.hasAttribute('data-photo-team')) {
             var files = target.files || [];
             var photoTeam = L.toInt(target.getAttribute('data-photo-team'));
-            var photoFile = files.length ? files[0] : null;
+            var kind = target.getAttribute('data-photo-kind');
 
-            if (target.getAttribute('data-photo-kind') === 'team') {
-                uploadTeamPhoto(photoTeam, photoFile);
+            if (kind === 'team-image') {
+                uploadTeamImages(photoTeam, files);
+            } else if (kind === 'team') {
+                uploadTeamPhoto(photoTeam, files.length ? files[0] : null);
             } else {
-                uploadPlayerPhoto(photoTeam, L.toInt(target.getAttribute('data-photo-index')), photoFile);
+                uploadPlayerPhoto(photoTeam, L.toInt(target.getAttribute('data-photo-index')),
+                    files.length ? files[0] : null);
             }
 
             return;
@@ -3848,6 +4225,27 @@
      * находится на кнопке раздела, — привычное поведение списка вкладок.
      */
     function handleKeydown(event) {
+        // Полноэкранный просмотр фотографии: Esc закрывает, стрелки листают
+        if (state.imageViewer) {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                closeTeamImageViewer();
+                return;
+            }
+
+            if (event.key === 'ArrowLeft') {
+                event.preventDefault();
+                stepTeamImageViewer(-1);
+                return;
+            }
+
+            if (event.key === 'ArrowRight') {
+                event.preventDefault();
+                stepTeamImageViewer(1);
+                return;
+            }
+        }
+
         var target = event.target && event.target.closest ? event.target.closest('[data-admin-tab]') : null;
 
         if (!target || event.altKey || event.ctrlKey || event.metaKey) {

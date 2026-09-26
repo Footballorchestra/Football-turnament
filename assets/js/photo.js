@@ -1,9 +1,15 @@
 /**
- * Подготовка фото игрока к загрузке в репозиторий — целиком в браузере, без сервера.
+ * Подготовка фото к загрузке в репозиторий — целиком в браузере, без сервера.
  *
  * Задача модуля: превратить выбранный файл (с телефона или компьютера, часто
- * несколько мегабайт) в аккуратную квадратную картинку ~20–80 КБ, которую можно
- * навсегда положить в репозиторий сайта рядом с остальными файлами.
+ * несколько мегабайт) в аккуратную картинку, которую можно навсегда положить
+ * в репозиторий сайта рядом с остальными файлами.
+ *
+ * Два режима (настройка fit):
+ *   • 'cover'  — квадрат по центру (фото игроков и эмблемы команд, ~20–80 КБ);
+ *   • 'inside' — пропорции сохраняются, длинная сторона уменьшается до maxSize
+ *                (фотографии команд: их смотрят на весь экран, поэтому размер
+ *                и качество выше — до ~1 МБ).
  *
  * Модуль используется двумя потребителями:
  *   1) браузером (подключается обычным <script>, доступ через window.FTPhoto);
@@ -32,10 +38,12 @@
     var DEFAULTS = {
         folder: 'assets/photos/',          // папка с фото в репозитории
         prefix: '',                        // префикс имени файла: 'team-' для эмблем команд
-        maxSize: 512,                      // сторона квадрата, px
+        maxSize: 512,                      // сторона квадрата ('cover') или длинная сторона ('inside'), px
+        fit: 'cover',                      // 'cover' — квадрат по центру, 'inside' — пропорции сохраняются
         quality: 0.82,                     // качество JPEG
         maxSourceBytes: 15 * 1024 * 1024,  // исходник: до 15 МБ
-        maxResultBytes: 400 * 1024         // результат: до 400 КБ
+        maxResultBytes: 400 * 1024,        // результат: до 400 КБ
+        byContent: false                   // имя файла по содержимому (галереи: фото не перезаписывают друг друга)
     };
 
     /** Кириллица → латиница: имя файла должно быть безопасным в любой системе. */
@@ -99,13 +107,20 @@
         return ('0000000' + hash.toString(16)).slice(-8);
     }
 
-    /** Путь к фото в репозитории: фото игрока или эмблема команды (префикс). */
-    function buildPath(teamId, player, options) {
+    /**
+     * Путь к фото в репозитории: фото игрока, эмблема команды или фото галереи (префикс).
+     * Если включён byContent, в имя файла попадает хеш содержимого: разные фото команды
+     * не перезаписывают друг друга, а повторная загрузка того же фото использует тот же файл.
+     */
+    function buildPath(teamId, player, options, content) {
         var config = settings(options);
         var folder = String(config.folder).replace(/\/+$/, '') + '/';
         var prefix = String(config.prefix || '');
         var slug = slugify(player) || 'player';
-        var suffix = hashOf(String(teamId) + '|' + String(player)).slice(0, 6);
+        var source = (config.byContent && content)
+            ? ('content|' + String(content))
+            : (String(teamId) + '|' + String(player));
+        var suffix = hashOf(source).slice(0, 6);
 
         return folder + prefix + slug + '-' + suffix + '.jpg';
     }
@@ -174,16 +189,22 @@
         });
     }
 
-    /** Квадратная картинка по центру, белый фон (чтобы прозрачный PNG не стал чёрным). */
-    function drawSquare(image, config) {
+    /**
+     * Картинка нужного размера на белом фоне (прозрачный PNG иначе стал бы чёрным).
+     * fit: 'cover' — квадрат по центру, 'inside' — целиком, с сохранением пропорций.
+     */
+    function drawResized(image, config) {
         var width = image.naturalWidth || image.width || 0;
         var height = image.naturalHeight || image.height || 0;
-        var side = Math.min(width, height);
-        var size = Math.max(1, Math.round(config.maxSize));
+        var limit = Math.max(1, Math.round(config.maxSize));
+        var square = config.fit !== 'inside';
         var canvas = document.createElement('canvas');
         var context = canvas.getContext('2d');
+        var targetWidth;
+        var targetHeight;
+        var side;
 
-        if (!side) {
+        if (!width || !height) {
             throw new Error('Изображение пустое — попробуйте другое фото');
         }
 
@@ -191,23 +212,46 @@
             throw new Error('Браузер не поддерживает обработку изображений');
         }
 
-        canvas.width = size;
-        canvas.height = size;
+        if (square) {
+            side = Math.min(width, height);
+            targetWidth = limit;
+            targetHeight = limit;
+        } else {
+            // Пропорции сохраняются: маленькие фото не растягиваем, большие уменьшаем до лимита
+            var scale = Math.min(1, limit / Math.max(width, height));
+
+            targetWidth = Math.max(1, Math.round(width * scale));
+            targetHeight = Math.max(1, Math.round(height * scale));
+        }
+
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
         context.fillStyle = '#ffffff';
-        context.fillRect(0, 0, size, size);
-        context.drawImage(image, (width - side) / 2, (height - side) / 2, side, side, 0, 0, size, size);
+        context.fillRect(0, 0, targetWidth, targetHeight);
+
+        if (square) {
+            context.drawImage(image, (width - side) / 2, (height - side) / 2, side, side,
+                0, 0, targetWidth, targetHeight);
+        } else {
+            // Плавное уменьшение читается заметно лучше «резкого»
+            context.imageSmoothingEnabled = true;
+            context.imageSmoothingQuality = 'high';
+            context.drawImage(image, 0, 0, width, height, 0, 0, targetWidth, targetHeight);
+        }
 
         return canvas;
     }
 
     /** Canvas → Blob (с запасным вариантом через toDataURL для старых браузеров). */
     function toBlob(canvas, quality) {
+        var size = { width: canvas.width, height: canvas.height };
+
         return new Promise(function (resolve, reject) {
             if (typeof canvas.toBlob === 'function') {
                 canvas.toBlob(function (blob) {
                     if (blob) {
                         resolve({ blob: blob, size: blob.size, type: blob.type || 'image/jpeg',
-                            dataUrl: '' });
+                            dataUrl: '', width: size.width, height: size.height });
                     } else {
                         reject(new Error('Не удалось сжать изображение'));
                     }
@@ -224,7 +268,9 @@
                     blob: null,
                     size: Math.round(base64.length * 0.75),
                     type: 'image/jpeg',
-                    dataUrl: dataUrl
+                    dataUrl: dataUrl,
+                    width: size.width,
+                    height: size.height
                 });
             } catch (error) {
                 reject(new Error('Не удалось сжать изображение'));
@@ -233,8 +279,9 @@
     }
 
     /**
-     * Готовит фото к загрузке: квадрат по центру, JPEG заданного качества.
-     * Возвращает { ok: true, base64, path, bytes, mime, size } либо { ok: false, error }.
+     * Готовит фото к загрузке: сжатие в браузере (см. параметр fit).
+     * Возвращает { ok: true, base64, path, bytes, mime, size, width, height }
+     * либо { ok: false, error }.
      */
     function prepare(file, options) {
         var config = settings(options);
@@ -252,7 +299,7 @@
 
         return readAsDataUrl(file)
             .then(function (dataUrl) { return loadImage(dataUrl); })
-            .then(function (image) { return toBlob(drawSquare(image, config), config.quality); })
+            .then(function (image) { return toBlob(drawResized(image, config), config.quality); })
             .then(function (drawn) {
                 var readBase64 = drawn.dataUrl
                     ? function () { return Promise.resolve(drawn.dataUrl); }
@@ -269,7 +316,7 @@
                         return {
                             ok: false,
                             error: 'После сжатия фото всё ещё большое (' + formatBytes(drawn.size) +
-                                ') — выберите фото попроще или уменьшите сторону квадрата в настройках'
+                                ') — выберите фото попроще или уменьшите размер в настройках'
                         };
                     }
 
@@ -279,7 +326,9 @@
                         bytes: drawn.size,
                         mime: drawn.type,
                         size: config.maxSize,
-                        path: buildPath(options && options.teamId, options && options.player, config)
+                        width: drawn.width || 0,
+                        height: drawn.height || 0,
+                        path: buildPath(options && options.teamId, options && options.player, config, base64)
                     };
                 });
             })

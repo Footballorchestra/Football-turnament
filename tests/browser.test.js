@@ -1249,3 +1249,131 @@ test('автообновление: страница зрителя сама п�
     await page.close();
 });
 
+/**
+ * Фотографии команды: администратор загружает снимок в настройках команды, посетитель
+ * видит его в блоке на странице команды и может открыть на весь экран без потери качества
+ * (фото сохраняется с пропорциями и крупной длинной стороной, а в просмотре показывается
+ * тот же файл целиком).
+ */
+test('фотографии команды: загрузка из админки, блок на странице и просмотр на весь экран', { skip }, async () => {
+    const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
+
+    // 1. Вход и токен публикации
+    await clickWhenReady(page, '[data-nav="admin"]');
+    await page.type('#admin-password', 'admin');
+    await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
+    await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
+    await clickInView(page, '[data-action="toggle-settings"]');
+    await page.type('#github-token', 'test-token');
+    await clickInView(page, '[data-action="github-save-token"]');
+    await page.waitForFunction(() => document.getElementById('github-token').placeholder.includes('сохранён'));
+
+    // 2. Открываем команду и отдаём настоящее широкое фото (1600×900 рисуем в браузере)
+    await clickWhenReady(page, '#admin-teams-list [data-action="team-open"]');
+    await page.waitForFunction(() => !!document.querySelector('#admin-team-images input[data-photo-kind="team-image"]'));
+
+    await page.evaluate(() => new Promise((resolve) => {
+        const canvas = document.createElement('canvas');
+        const context = canvas.getContext('2d');
+
+        canvas.width = 1600;
+        canvas.height = 900;
+        context.fillStyle = '#1b5e20';
+        context.fillRect(0, 0, 1600, 900);
+        context.fillStyle = '#ffffff';
+        context.font = '140px sans-serif';
+        context.fillText('TEAM', 80, 520);
+
+        canvas.toBlob((blob) => {
+            const input = document.querySelector('#admin-team-images input[data-photo-kind="team-image"]');
+            const transfer = new DataTransfer();
+
+            transfer.items.add(new File([blob], 'team-photo.jpg', { type: 'image/jpeg' }));
+            input.files = transfer.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+            resolve(true);
+        }, 'image/jpeg', 0.95);
+    }));
+
+    await page.waitForFunction(() => document.getElementById('toast-container').textContent.includes('Добавлено фотографий'));
+    await page.waitForFunction(() => {
+        const image = document.querySelector('#admin-team-images .admin-gallery-item img');
+
+        return !!image && image.getAttribute('src').indexOf('data:image/jpeg;base64,') === 0 &&
+            image.complete && image.naturalWidth > 0;
+    });
+
+    const uploaded = await page.evaluate(() => {
+        const data = window.FTApp.getData();
+        const team = data.teams[0];
+        const paths = (data.teamImages || {})[String(team.id)] || [];
+        const image = document.querySelector('#admin-team-images .admin-gallery-item img');
+
+        return {
+            teamId: String(team.id),
+            count: paths.length,
+            path: paths[0] || '',
+            width: image ? image.naturalWidth : 0,
+            height: image ? image.naturalHeight : 0
+        };
+    });
+
+    assert.equal(uploaded.count, 1, 'фотография записана в данные команды');
+    assert.match(uploaded.path, /^assets\/photos\/team-photo-[a-z0-9-]+-[0-9a-f]{6}\.jpg$/, 'имя файла фотографии');
+    assert.ok(mockRepository.state.files[uploaded.path], 'файл фотографии ушёл в репозиторий');
+    assert.equal(uploaded.height, 900, 'пропорции сохранены (высота не сломана)');
+    assert.ok(uploaded.width >= 1600, 'ширина сохранена, фото остаётся чётким: ' + uploaded.width);
+
+    // 3. Публичная страница команды: фото в блоке «Фотографии»
+    await clickWhenReady(page, '[data-nav="teams"]');
+    await clickInView(page, '#teams-grid [data-action="team-public-open"][data-id="' + uploaded.teamId + '"] .team-name');
+    await page.waitForFunction(() => !!document.querySelector('#team-detail .team-gallery-item'));
+
+    const block = await page.evaluate(() => ({
+        count: document.querySelectorAll('#team-detail .team-gallery-item').length,
+        hasHeading: document.getElementById('team-detail').textContent.includes('Фотографии')
+    }));
+
+    assert.equal(block.count, 1, 'фотография видна в блоке на странице команды');
+    assert.equal(block.hasHeading, true, 'у блока есть заголовок');
+
+    // 4. Нажатие на фото — просмотр на весь экран
+    await clickInView(page, '#team-detail .team-gallery-item');
+    await page.waitForFunction(() => {
+        const viewer = document.getElementById('image-viewer');
+        const image = document.getElementById('image-viewer-photo');
+
+        return !viewer.hidden && !!image && image.complete && image.naturalWidth > 0;
+    });
+
+    const viewer = await page.evaluate(() => {
+        const image = document.getElementById('image-viewer-photo');
+        const rect = image.getBoundingClientRect();
+
+        return {
+            width: image.naturalWidth,
+            height: image.naturalHeight,
+            shown: Math.round(rect.width),
+            caption: document.getElementById('image-viewer-caption').textContent,
+            scrollLocked: document.body.classList.contains('viewer-open')
+        };
+    });
+
+    assert.ok(viewer.width >= 1600, 'в просмотре полный размер: ' + viewer.width + '×' + viewer.height);
+    assert.ok(viewer.shown > 600, 'фото занимает почти весь экран: ' + viewer.shown + 'px в ширину');
+    assert.match(viewer.caption, /\S/, 'видна подпись с командой');
+    assert.equal(viewer.scrollLocked, true, 'страница не прокручивается, пока фото открыто');
+
+    // 5. Esc закрывает просмотр
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.getElementById('image-viewer').hidden === true);
+
+    assert.equal(await page.evaluate(() => document.body.classList.contains('viewer-open')), false,
+        'прокрутка страницы вернулась');
+
+    const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
+
+    assert.deepEqual(meaningful, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+});
+

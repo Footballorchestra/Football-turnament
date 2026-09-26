@@ -32,7 +32,8 @@
         // 5 — у игроков появились фото (карта photos с путями к файлам репозитория)
         // 6 — у команд появились эмблемы (карта teamPhotos)
         // 7 — у игроков появились дата рождения и принадлежность (карта playerInfo)
-        dataVersion: 7,
+        // 8 — у команд появились фотографии: галерея на странице команды (карта teamImages)
+        dataVersion: 8,
         // Пароль администратора. Внимание: это демонстрационная защита,
         // на статическом хостинге реальную авторизацию без сервера сделать нельзя
         // (подробности — в README.md).
@@ -46,7 +47,9 @@
         recentMatches: 3,
         // Фото игроков лежат файлами в репозитории сайта, а в данных хранится путь
         photoPathPrefix: 'assets/photos/',
-        maxPhotoPathLength: 120
+        maxPhotoPathLength: 120,
+        // Сколько фотографий можно добавить одной команде (галерея на её странице)
+        maxTeamImages: 6
     };
 
     /** Палитра бейджей команд (классы описаны в src/input.css). */
@@ -63,6 +66,8 @@
             updatedAt: new Date().toISOString(),
             photos: {},
             teamPhotos: {},
+            // Фотографии команд (галереи): «id команды» → список путей к файлам
+            teamImages: {},
             // Дата рождения и принадлежность игроков: ключ «команда|имя в нижнем регистре»
             playerInfo: {
                 '1|иванов а.': {
@@ -1105,6 +1110,158 @@
         return { photos: photos, repaired: repaired };
     }
 
+    /* --- Фотографии команды (галерея): карта teamImages, ключ — id команды --- */
+
+    /**
+     * Значение — список путей внутрь папки фото: `["assets/photos/team-photo-…-1a2b3c.jpg"]`.
+     * Фотографии видны на странице команды; нажатие открывает фото на весь экран.
+     * Имя файла считается по содержимому, поэтому разные фото команды не перезаписывают
+     * друг друга, а повторная загрузка того же снимка использует тот же файл.
+     */
+
+    /** Список фотографий команды (только корректные пути, без пустых значений). */
+    function getTeamImages(data, teamId) {
+        var images = (data && isPlainObject(data.teamImages)) ? data.teamImages[teamPhotoKey(teamId)] : null;
+
+        if (!Array.isArray(images)) {
+            return [];
+        }
+
+        return images.filter(function (path) {
+            return isValidPhotoPath(path);
+        }).map(function (path) {
+            return path.trim();
+        });
+    }
+
+    /** Сколько фотографий ещё можно добавить команде. */
+    function teamImagesLeft(data, teamId) {
+        return Math.max(0, CONFIG.maxTeamImages - getTeamImages(data, teamId).length);
+    }
+
+    /** Добавляет фотографию команде: { ok: true } или { ok: false, error }. */
+    function addTeamImage(data, teamId, path) {
+        if (!isPlainObject(data)) {
+            return { ok: false, error: 'Данные недоступны' };
+        }
+
+        if (!isValidPhotoPath(path)) {
+            return { ok: false, error: 'Некорректный путь к фотографии' };
+        }
+
+        var key = teamPhotoKey(teamId);
+
+        if (!key) {
+            return { ok: false, error: 'Команда не найдена' };
+        }
+
+        if (!isPlainObject(data.teamImages)) {
+            data.teamImages = {};
+        }
+
+        var images = getTeamImages(data, teamId);
+        var value = path.trim();
+
+        if (images.indexOf(value) !== -1) {
+            return { ok: false, error: 'Такая фотография у команды уже есть' };
+        }
+
+        if (images.length >= CONFIG.maxTeamImages) {
+            return {
+                ok: false,
+                error: 'У команды уже ' + CONFIG.maxTeamImages + ' фотографий — сначала уберите лишние'
+            };
+        }
+
+        images.push(value);
+        data.teamImages[key] = images;
+
+        return { ok: true };
+    }
+
+    /** Убирает фотографию команды из данных (сам файл остаётся в истории репозитория). */
+    function removeTeamImage(data, teamId, path) {
+        if (!isPlainObject(data) || !isPlainObject(data.teamImages)) {
+            return data;
+        }
+
+        var key = teamPhotoKey(teamId);
+        var value = typeof path === 'string' ? path.trim() : '';
+        var images = getTeamImages(data, teamId).filter(function (item) {
+            return item !== value;
+        });
+
+        if (images.length) {
+            data.teamImages[key] = images;
+        } else {
+            delete data.teamImages[key];
+        }
+
+        return data;
+    }
+
+    /** Убирает все фотографии команды (при удалении команды). */
+    function removeTeamImages(data, teamId) {
+        if (isPlainObject(data) && isPlainObject(data.teamImages)) {
+            delete data.teamImages[teamPhotoKey(teamId)];
+        }
+
+        return data;
+    }
+
+    /**
+     * Приводит карту фотографий к корректному виду: остаются пути внутрь папки фото
+     * у команд, которые есть в турнире, без повторов и не больше CONFIG.maxTeamImages.
+     */
+    function normalizeTeamImages(rawImages, teams) {
+        var images = {};
+
+        if (rawImages === undefined || rawImages === null) {
+            return { images: images, repaired: false };
+        }
+
+        if (!isPlainObject(rawImages)) {
+            return { images: images, repaired: true };
+        }
+
+        var repaired = false;
+
+        Object.keys(rawImages).forEach(function (key) {
+            var value = rawImages[key];
+            var team = findTeam(teams, key);
+
+            if (!team || !Array.isArray(value)) {
+                repaired = true;
+                return;
+            }
+
+            var list = [];
+
+            value.forEach(function (path) {
+                if (!isValidPhotoPath(path)) {
+                    repaired = true;
+                    return;
+                }
+
+                var item = path.trim();
+
+                if (list.indexOf(item) === -1 && list.length < CONFIG.maxTeamImages) {
+                    list.push(item);
+                } else {
+                    repaired = true;
+                }
+            });
+
+            if (list.length) {
+                images[teamPhotoKey(team.id)] = list;
+            } else {
+                repaired = true;
+            }
+        });
+
+        return { images: images, repaired: repaired };
+    }
+
     /* ------------------------------------------------------------------ */
     /* Данные игрока: дата рождения и принадлежность                       */
     /* ------------------------------------------------------------------ */
@@ -1490,6 +1647,7 @@
                     matches: [],
                     photos: {},
                     teamPhotos: {},
+                    teamImages: {},
                     playerInfo: {}
                 },
                 repaired: repaired,
@@ -1565,8 +1723,10 @@
         var normalizedPhotos = normalizePhotos(raw.photos, teams);
         var normalizedTeamPhotos = normalizeTeamPhotos(raw.teamPhotos, teams);
         var normalizedPlayerInfo = normalizePlayerInfo(raw.playerInfo, teams);
+        var normalizedTeamImages = normalizeTeamImages(raw.teamImages, teams);
 
-        if (normalizedPhotos.repaired || normalizedTeamPhotos.repaired || normalizedPlayerInfo.repaired) {
+        if (normalizedPhotos.repaired || normalizedTeamPhotos.repaired ||
+            normalizedPlayerInfo.repaired || normalizedTeamImages.repaired) {
             repaired = true;
         }
 
@@ -1579,6 +1739,7 @@
                 matches: matches,
                 photos: normalizedPhotos.photos,
                 teamPhotos: normalizedTeamPhotos.photos,
+                teamImages: normalizedTeamImages.images,
                 playerInfo: normalizedPlayerInfo.info
             },
             repaired: repaired,
@@ -1689,6 +1850,7 @@
             matches: (data && data.matches) || [],
             photos: (data && data.photos) || {},
             teamPhotos: (data && data.teamPhotos) || {},
+            teamImages: (data && data.teamImages) || {},
             playerInfo: (data && data.playerInfo) || {}
         }, null, 2);
     }
@@ -1748,6 +1910,12 @@
         setTeamPhoto: setTeamPhoto,
         removeTeamPhoto: removeTeamPhoto,
         normalizeTeamPhotos: normalizeTeamPhotos,
+        getTeamImages: getTeamImages,
+        teamImagesLeft: teamImagesLeft,
+        addTeamImage: addTeamImage,
+        removeTeamImage: removeTeamImage,
+        removeTeamImages: removeTeamImages,
+        normalizeTeamImages: normalizeTeamImages,
         isValidBirthDate: isValidBirthDate,
         playerAge: playerAge,
         yearsWord: yearsWord,

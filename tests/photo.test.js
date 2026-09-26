@@ -94,3 +94,30 @@ test('prepare: без DOM честно сообщает, что браузер �
     assert.equal(result.ok, false);
     assert.match(result.error, /не поддерживает/);
 });
+
+test('buildPath: фотографии команды получают имя по содержимому', () => {
+    const options = { prefix: 'team-photo-', byContent: true };
+    const first = P.buildPath(1, 'Ветераны МГК', options, 'base64-AAA');
+    const second = P.buildPath(1, 'Ветераны МГК', options, 'base64-BBB');
+
+    assert.match(first, /^assets\/photos\/team-photo-veterany-mgk-[0-9a-f]{6}\.jpg$/);
+    assert.equal(L.isValidPhotoPath(first), true, 'путь принимается проверкой данных');
+    assert.notEqual(first, second, 'разные снимки — разные файлы, а не перезапись');
+    assert.equal(first, P.buildPath(1, 'Ветераны МГК', options, 'base64-AAA'),
+        'то же фото — тот же файл (без дублей)');
+
+    // Без byContent имя считается по команде и имени — как у фото игроков
+    assert.equal(P.buildPath(1, 'Ветераны МГК', { prefix: 'team-photo-' }, 'base64-AAA'),
+        P.buildPath(1, 'Ветераны МГК', { prefix: 'team-photo-' }, 'base64-BBB'));
+});
+
+test('settings: режим «inside» (пропорции) и флаг «по содержимому»', () => {
+    const config = P.settings({ fit: 'inside', byContent: true, maxSize: 1920 });
+
+    assert.equal(config.fit, 'inside');
+    assert.equal(config.byContent, true);
+    assert.equal(config.maxSize, 1920);
+    assert.equal(P.settings({}).fit, 'cover', 'по умолчанию — квадрат по центру');
+    assert.equal(P.settings({}).byContent, false);
+});
+

@@ -334,7 +334,7 @@ test('нормализация фото: валидные пути остают�
     assert.deepEqual(Object.keys(result.data.photos), ['1|иванов а.'], 'осталось только фото игрока из заявки');
     assert.equal(result.data.photos['1|иванов а.'], 'assets/photos/ivanov-a-1a2b3c.jpg');
     assert.equal(result.repaired, true, 'отброшенные записи — это исправление данных');
-    assert.equal(result.data.version, 7);
+    assert.equal(result.data.version, 8);
 
     // Старый файл без карты фото грузится без предупреждений
     const legacy = L.normalizeData({ teams: [{ id: 1, name: 'A', players: ['X'] }], matches: [] });
@@ -389,7 +389,7 @@ test('эмблема команды: запись, чтение, удалени�
 
     assert.deepEqual(result.data.teamPhotos, { '1': 'assets/photos/team-spartak-33abcd.jpg' });
     assert.equal(result.repaired, true, 'отброшенные эмблемы — исправление данных');
-    assert.equal(result.data.version, 7);
+    assert.equal(result.data.version, 8);
 
     // Удаление и данные без карты эмблем загружаются без предупреждений
     L.removeTeamPhoto(data, 1);
@@ -491,7 +491,7 @@ test('данные игрока: проверка формы и нормализ
 
     assert.deepEqual(result.data.playerInfo, { '1|иванов а.': { birthDate: '2011-04-18', note: 'школа' } });
     assert.equal(result.repaired, true, 'отброшенные записи — исправление данных');
-    assert.equal(result.data.version, 7);
+    assert.equal(result.data.version, 8);
 
     // Длинную принадлежность нормализация подрезает до лимита
     const clipped = L.normalizePlayerInfo(
@@ -784,7 +784,7 @@ test('normalizeData: события матчей сохраняются, «му�
 
     assert.equal(result.repaired, true, 'событие чужой команды — это исправление данных');
     assert.deepEqual(result.data.matches[0].events, [{ team: 1, player: 'Иванов А.', type: 'goal' }]);
-    assert.equal(result.data.version, 7, 'в данных отмечена новая версия формата');
+    assert.equal(result.data.version, 8, 'в данных отмечена новая версия формата');
 });
 
 test('лучшие бомбардиры: сортировка по голам, при равенстве — по имени', () => {
@@ -931,3 +931,81 @@ test('serializeData и parseImport: экспорт, импорт и провер
     assert.equal(withRepair.ok, true);
     assert.equal(withRepair.repaired, true, 'импорт сообщает, что данные были исправлены');
 });
+
+test('фотографии команды: добавление, лимит, удаление и повтор', () => {
+    const data = L.createDefaultData();
+    const first = 'assets/photos/team-photo-a-1a2b3c.jpg';
+
+    assert.deepEqual(L.getTeamImages(data, 1), [], 'фотографий ещё нет');
+    assert.equal(L.teamImagesLeft(data, 1), L.CONFIG.maxTeamImages);
+
+    assert.deepEqual(L.addTeamImage(data, 1, first), { ok: true });
+    assert.deepEqual(L.getTeamImages(data, 1), [first]);
+    assert.equal(L.teamImagesLeft(data, 1), L.CONFIG.maxTeamImages - 1);
+
+    // Повтор и мусор не принимаются
+    assert.match(L.addTeamImage(data, 1, first).error, /уже есть/);
+    assert.match(L.addTeamImage(data, 1, 'http://чужой-сайт/x.jpg').error, /Некорректный/);
+
+    // Лимит: больше CONFIG.maxTeamImages фотографий не добавить
+    for (let i = 2; i <= L.CONFIG.maxTeamImages; i += 1) {
+        assert.deepEqual(L.addTeamImage(data, 1, 'assets/photos/team-photo-' + i + '-abcdef.jpg'), { ok: true });
+    }
+
+    assert.equal(L.getTeamImages(data, 1).length, L.CONFIG.maxTeamImages);
+    assert.equal(L.teamImagesLeft(data, 1), 0);
+    assert.match(L.addTeamImage(data, 1, 'assets/photos/team-photo-x-999999.jpg').error, /уже 6/);
+
+    // У другой команды свой список фотографий
+    assert.deepEqual(L.getTeamImages(data, 2), []);
+
+    // Удаление одной фотографии и всех сразу
+    L.removeTeamImage(data, 1, first);
+    assert.equal(L.getTeamImages(data, 1).length, L.CONFIG.maxTeamImages - 1);
+    assert.equal(L.getTeamImages(data, 1).includes(first), false);
+
+    L.removeTeamImages(data, 1);
+    assert.deepEqual(L.getTeamImages(data, 1), []);
+});
+
+test('фотографии команды: нормализация отбрасывает мусор, повторы и лишнее', () => {
+    const extra = [];
+
+    for (let i = 1; i <= L.CONFIG.maxTeamImages + 2; i += 1) {
+        extra.push('assets/photos/team-photo-' + i + '-abcdef.jpg');
+    }
+
+    const result = L.normalizeData({
+        teams: [{ id: 1, name: 'Спартак', players: [] }],
+        matches: [],
+        teamImages: {
+            '1': [
+                'assets/photos/team-photo-a-111111.jpg',
+                'assets/photos/team-photo-a-111111.jpg',
+                '../evil.jpg',
+                'assets/photos/team-photo-b-222222.jpg'
+            ].concat(extra),
+            '9': ['assets/photos/team-photo-c-333333.jpg'],
+            '2': 'не список'
+        }
+    });
+
+    assert.deepEqual(result.data.teamImages['1'].slice(0, 2),
+        ['assets/photos/team-photo-a-111111.jpg', 'assets/photos/team-photo-b-222222.jpg']);
+    assert.equal(result.data.teamImages['1'].length, L.CONFIG.maxTeamImages, 'лишние фотографии отброшены');
+    assert.equal('9' in result.data.teamImages, false, 'фотографии удалённой команды отброшены');
+    assert.equal(result.repaired, true, 'отброшенное — исправление данных');
+    assert.equal(result.data.version, 8);
+
+    // Данные без карты фотографий загружаются без предупреждений
+    assert.equal(L.normalizeTeamImages(undefined, []).repaired, false);
+    assert.equal(L.normalizeTeamImages(null, []).repaired, false);
+    assert.equal(L.normalizeTeamImages({}, []).repaired, false);
+    assert.equal(L.normalizeTeamImages([], []).repaired, true, 'не объект — исправление');
+
+    // Экспорт/импорт переносит фотографии на другое устройство
+    const exported = L.serializeData(L.createDefaultData());
+
+    assert.ok(exported.includes('teamImages'), 'карта фотографий есть в экспорте');
+});
+

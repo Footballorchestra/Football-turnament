@@ -2067,3 +2067,166 @@ test('прямая ссылка на карточку игрока открыв�
     assert.match(app.id('player-card').textContent, /Локомотив/);
 });
 
+
+test('страница команды: фотографии в блоке, нажатие открывает фото на весь экран', () => {
+    const seeded = remoteData();
+
+    seeded.teamImages = {
+        '1': ['assets/photos/team-photo-a-111111.jpg', 'assets/photos/team-photo-b-222222.jpg']
+    };
+
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+
+    app.navigate('teams');
+
+    // В списке команд блока фотографий нет — он только на странице команды
+    assert.equal(app.id('teams-grid').querySelector('.team-gallery'), null, 'в списке команд фотографий нет');
+
+    app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="1"]'));
+
+    const items = () => app.id('team-detail').querySelectorAll('.team-gallery-item');
+
+    assert.match(app.id('team-detail').textContent, /Фотографии \(2\)/, 'заголовок блока с числом фото');
+    assert.equal(items().length, 2, 'обе фотографии видны');
+    assert.equal(items()[0].getAttribute('data-action'), 'image-open', 'миниатюра кликабельна');
+    assert.equal(items()[0].querySelector('img').getAttribute('src'), 'assets/photos/team-photo-a-111111.jpg');
+
+    // Команда без фотографий: блока нет
+    app.click(app.button('team-public-back'));
+    app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="2"]'));
+
+    assert.equal(app.id('team-detail').querySelector('.team-gallery'), null, 'у команды без фото блока нет');
+
+    // Возвращаемся к команде с фотографиями и открываем снимок
+    app.click(app.button('team-public-back'));
+    app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="1"]'));
+
+    const viewer = app.id('image-viewer');
+    const photo = app.id('image-viewer-photo');
+
+    assert.equal(viewer.hidden, true, 'просмотр закрыт');
+
+    app.click(items()[1]);
+
+    assert.equal(viewer.hidden, false, 'фотография открылась на весь экран');
+    assert.equal(photo.getAttribute('src'), 'assets/photos/team-photo-b-222222.jpg', 'открылся выбранный снимок');
+    assert.equal(photo.getAttribute('data-photo-path'), 'assets/photos/team-photo-b-222222.jpg');
+    assert.equal(photo.classList.contains('photo-retry'), true, 'картинка умеет догрузиться');
+    assert.equal(app.id('image-viewer-caption').textContent, 'Спартак · 2 из 2', 'подпись: команда и номер фото');
+    assert.equal(app.document.body.classList.contains('viewer-open'), true, 'страница не прокручивается');
+
+    // Стрелки листают по кругу
+    app.click(app.button('image-next'));
+    assert.equal(photo.getAttribute('src'), 'assets/photos/team-photo-a-111111.jpg');
+    assert.equal(app.id('image-viewer-caption').textContent, 'Спартак · 1 из 2');
+
+    app.click(app.button('image-prev'));
+    assert.equal(photo.getAttribute('src'), 'assets/photos/team-photo-b-222222.jpg');
+
+    // Esc закрывает просмотр
+    app.document.dispatchEvent(new app.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    assert.equal(viewer.hidden, true, 'закрылось по Esc');
+    assert.equal(app.document.body.classList.contains('viewer-open'), false, 'прокрутка страницы вернулась');
+
+    // Кнопка-крестик и клик по затемнению тоже закрывают
+    app.click(items()[0]);
+    assert.equal(viewer.hidden, false);
+
+    app.click(app.id('image-viewer').querySelector('.image-viewer-close'));
+    assert.equal(viewer.hidden, true, 'закрылось крестиком');
+
+    app.click(items()[0]);
+    app.click(app.id('image-viewer').querySelector('.image-viewer-backdrop'));
+    assert.equal(viewer.hidden, true, 'закрылось нажатием по затемнению');
+});
+
+
+test('админка: фотографии команды загружаются пачкой, видны на странице и убираются', async () => {
+    const mock = createMockRepository({ data: remoteData() });
+    const app = boot({ mock, autoPublishDelayMs: 10000 });
+
+    await app.settle();
+
+    app.login();
+    app.saveToken('test-token');
+    app.openTeam('Спартак');
+
+    const box = () => app.id('admin-team-images');
+    const input = box().querySelector('input[data-photo-kind="team-image"]');
+
+    assert.ok(input, 'есть кнопка «Добавить фотографии»');
+    assert.equal(input.multiple, true, 'можно выбрать сразу несколько файлов');
+    assert.equal(box().querySelectorAll('.admin-gallery-item').length, 0, 'пока фотографий нет');
+
+    // Сжатие в браузере подменяем: canvas в jsdom нет
+    const prepared = [
+        { ok: true, base64: 'QUJD', bytes: 1024, mime: 'image/jpeg', size: 1920, width: 1920, height: 1280,
+            path: 'assets/photos/team-photo-a-111111.jpg' },
+        { ok: true, base64: 'REVG', bytes: 2048, mime: 'image/jpeg', size: 1920, width: 1600, height: 1200,
+            path: 'assets/photos/team-photo-b-222222.jpg' }
+    ];
+    const seen = [];
+    let call = 0;
+
+    app.window.FTPhoto.prepare = (file, settings) => {
+        seen.push(settings);
+
+        return Promise.resolve(prepared[call++] || { ok: false, error: 'файл не подготовлен' });
+    };
+
+    Object.defineProperty(input, 'files', { value: [
+        { size: 2048, type: 'image/jpeg', name: 'one.jpg' },
+        { size: 2048, type: 'image/jpeg', name: 'two.jpg' }
+    ] });
+
+    app.change(input);
+    await app.wait(120);
+
+    // Файлы ушли в репозиторий, пути записаны в данные
+    assert.deepEqual(app.storedData().teamImages['1'],
+        ['assets/photos/team-photo-a-111111.jpg', 'assets/photos/team-photo-b-222222.jpg']);
+    assert.equal(mock.state.commits.filter((commit) => /Фотография команды/.test(commit.message || '')).length, 2,
+        'каждая фотография — отдельный коммит');
+    assert.match(app.id('toast-container').textContent, /Добавлено фотографий: 2/);
+    assert.equal(box().querySelectorAll('.admin-gallery-item').length, 2, 'миниатюры видны в админке');
+
+    // Настройки галереи: пропорции сохраняются, размер крупный, имя файла — по содержимому
+    assert.equal(seen[0].fit, 'inside', 'пропорции фотографии сохраняются');
+    assert.equal(seen[0].byContent, true, 'разные фото не перезаписывают друг друга');
+    assert.equal(seen[0].prefix, 'team-photo-');
+    assert.ok(seen[0].maxSize >= 1600, 'длинная сторона крупная: ' + seen[0].maxSize);
+    assert.ok(seen[0].maxResultBytes > 400 * 1024, 'для фото команды допустим размер больше, чем у аватарки');
+
+    // Публичная страница команды показывает те же фотографии
+    app.navigate('teams');
+    app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="1"]'));
+
+    assert.equal(app.id('team-detail').querySelectorAll('.team-gallery-item').length, 2);
+
+    // Убираем одну фотографию
+    app.click(box().querySelector('[data-action="team-image-remove"]'));
+
+    assert.deepEqual(app.storedData().teamImages['1'], ['assets/photos/team-photo-b-222222.jpg']);
+    assert.match(app.id('toast-container').textContent, /Фотография убрана/);
+    assert.equal(box().querySelectorAll('.admin-gallery-item').length, 1, 'миниатюра исчезла');
+
+    // Дошли до предела: загрузка пропадает, появляется подсказка
+    for (let i = 3; i <= L.CONFIG.maxTeamImages + 1; i += 1) {
+        L.addTeamImage(app.window.FTApp.getData(), 1, 'assets/photos/team-photo-' + i + '-abcdef.jpg');
+    }
+
+    app.window.FTApp.render();
+
+    const full = box();
+
+    assert.equal(full.querySelectorAll('.admin-gallery-item').length, L.CONFIG.maxTeamImages);
+    assert.equal(full.querySelector('input[data-photo-kind="team-image"]'), null, 'загрузка скрыта при пределе');
+    assert.match(full.textContent, /Достигнут предел/);
+
+    // Удаление команды убирает и её фотографии
+    app.click(app.button('team-delete'));
+
+    assert.deepEqual(app.storedData().teamImages, {}, 'фотографии удалённой команды убраны');
+});
+
