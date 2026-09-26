@@ -829,7 +829,22 @@ test('страница команды: из турнирной таблицы в
         ['Место', 'Очки', 'Игры', 'ГЗ', 'ГП'],
         'забитые и пропущенные мячи — отдельными плитками'
     );
-    assert.ok(await page.$$eval('#team-detail .chip-player', (chips) => chips.length) > 0, 'состав показан');
+    assert.ok(await page.$$eval('#team-detail .squad-toggle', (buttons) => buttons.length) > 0, 'состав свёрнут в кнопку');
+
+    // Кнопка «Состав» раскрывает список игроков столбиком: имя, дата рождения, голы, карточки
+    assert.equal(await page.$eval('#team-squad', (block) => block.hidden), true, 'список состава скрыт');
+
+    await clickInView(page, '#team-detail [data-action="squad-toggle"]');
+
+    assert.equal(await page.$eval('#team-squad', (block) => block.hidden), false, 'состав раскрылся по нажатию');
+    assert.deepEqual(
+        await page.$$eval('#team-squad thead th', (cells) => cells.map((cell) => cell.textContent.trim())),
+        ['Игрок', 'Дата рождения', 'Г', 'Ж', 'К'],
+        'столбцы состава'
+    );
+    assert.ok(await page.$$eval('#team-squad tbody tr', (rows) => rows.length) > 0, 'игроки видны столбиком');
+    assert.equal(await page.$eval('#team-detail [data-action="squad-toggle"]', (button) => button.getAttribute('aria-expanded')),
+        'true', 'кнопка сообщает, что список открыт');
     assert.equal(await page.$$eval('#team-detail .match-card', (cards) => cards.length), target.matches, 'только её матчи');
     assert.equal(
         await page.$$eval('#team-detail .match-card .team-link', (links) => links.length),

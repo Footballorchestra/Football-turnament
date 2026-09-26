@@ -41,6 +41,8 @@
         publicMatchId: null,
         /** Открытая команда на публичной странице команд (null — показывается список). */
         publicTeamId: null,
+        /** Команда, у которой на странице раскрыт состав (null — состав свёрнут). */
+        squadTeamId: null,
         /** Открытый игрок: команда и номер в заявке (null — карточка игрока не открыта). */
         publicPlayerTeamId: null,
         publicPlayerIndex: null,
@@ -1830,7 +1832,22 @@
             return;
         }
 
+        // У каждой команды состав открывается заново — свёрнутым
+        state.squadTeamId = null;
+
         applyRoute('teams', { teamId: L.toInt(team.id), hash: teamHash(team.id) });
+    }
+
+    /** Раскрывает или сворачивает состав на странице команды. */
+    function toggleTeamSquad(teamId) {
+        var id = L.toInt(teamId);
+
+        if (id === null) {
+            return;
+        }
+
+        state.squadTeamId = state.squadTeamId === id ? null : id;
+        renderTeams();
     }
 
     /** Возвращает список команд (закрывает страницу команды). */
@@ -1877,6 +1894,71 @@
             }).join('') + '</div>';
     }
 
+    /** Строка состава: игрок (ссылка на карточку), дата рождения и статистика. */
+    function squadListRow(team, player) {
+        var info = L.getPlayerInfo(state.data, team.id, player);
+        var stats = L.playerStats(state.data, team.id, player);
+        var birth = info.birthDate ? L.formatDate(info.birthDate, 'numeric') : '—';
+
+        return '<tr>' +
+            '<td class="cell-player">' +
+                playerLink(team, player, {
+                    innerHTML: '<span class="player-line">' + playerAvatar(team.id, player, { small: true }) +
+                        '<span class="player-name">' + esc(player) + '</span></span>'
+                }) +
+                // На телефоне столбец с датой рождения скрыт — дата видна под именем
+                '<span class="row-detail">Дата рождения: ' + esc(birth) + '</span>' +
+            '</td>' +
+            '<td class="col-optional">' + esc(birth) + '</td>' +
+            '<td class="num squad-goals" title="Забитые голы">' + stats.goals + '</td>' +
+            '<td class="num" title="Жёлтые карточки">' + stats.yellow + '</td>' +
+            '<td class="num" title="Красные карточки">' + stats.red + '</td>' +
+        '</tr>';
+    }
+
+    /**
+     * Состав команды: свёрнутый блок-кнопка «Состав», по нажатию раскрывается список
+     * столбиком — имя, дата рождения, забитые голы, жёлтые и красные карточки.
+     * Имя игрока — ссылка на его карточку.
+     */
+    function teamSquadBlock(team) {
+        var players = team.players || [];
+        var open = state.squadTeamId === L.toInt(team.id);
+
+        if (!players.length) {
+            return '<h3 class="text-xs font-bold uppercase tracking-wide text-dark-600 mb-2">Состав</h3>' +
+                '<p class="text-dark-500 text-sm mb-6">Состав не заполнен</p>';
+        }
+
+        var rows = players.map(function (player) {
+            return squadListRow(team, player);
+        }).join('');
+
+        return '<button type="button" class="squad-toggle" data-action="squad-toggle" data-team="' + L.toInt(team.id) +
+                '" aria-expanded="' + (open ? 'true' : 'false') + '" aria-controls="team-squad">' +
+                icon('users') +
+                '<span class="squad-toggle-title">Состав</span>' +
+                '<span class="squad-toggle-count">' + players.length + '</span>' +
+                '<span class="squad-toggle-action">' + (open ? 'Скрыть' : 'Показать') + '</span>' +
+                '<span class="squad-toggle-arrow' + (open ? ' is-open' : '') + '" aria-hidden="true">' +
+                    icon('back') + '</span>' +
+            '</button>' +
+            '<div id="team-squad" class="squad-block mb-6"' + (open ? '' : ' hidden') + '>' +
+                '<table class="data-table squad-table">' +
+                    '<thead>' +
+                        '<tr>' +
+                            '<th scope="col">Игрок</th>' +
+                            '<th scope="col" class="col-optional">Дата рождения</th>' +
+                            '<th scope="col" class="num" title="Забитые голы">Г</th>' +
+                            '<th scope="col" class="num" title="Жёлтые карточки">Ж</th>' +
+                            '<th scope="col" class="num" title="Красные карточки">К</th>' +
+                        '</tr>' +
+                    '</thead>' +
+                    '<tbody>' + rows + '</tbody>' +
+                '</table>' +
+            '</div>';
+    }
+
     /** Страница команды: статистика в турнире, состав и все её матчи. */
     function renderPublicTeam(team) {
         var box = $('team-detail');
@@ -1892,15 +1974,6 @@
                 row = item;
             }
         });
-
-        var players = (team.players || []).length
-            ? team.players.map(function (player) {
-                return playerLink(team, player, {
-                    className: 'chip chip-player',
-                    innerHTML: playerAvatar(team.id, player, { small: true }) + esc(player)
-                });
-            }).join('')
-            : '<p class="text-dark-500 text-sm">Состав не заполнен</p>';
 
         var matches = L.teamMatches(state.data.matches, team.id);
         var diff = row ? (row.goalDiff > 0 ? '+' : '') + row.goalDiff : '0';
@@ -1927,8 +2000,7 @@
                     : 'Команда ещё не играла') +
             '</p>' +
             teamImagesBlock(team) +
-            '<h3 class="text-xs font-bold uppercase tracking-wide text-dark-600 mb-2">Состав</h3>' +
-            '<div class="flex flex-wrap gap-2 mb-6">' + players + '</div>' +
+            teamSquadBlock(team) +
             '<h3 class="text-xs font-bold uppercase tracking-wide text-dark-600 mb-2">Матчи команды</h3>' +
             '<div class="space-y-3">' + (matches.length
                 ? matches.map(matchCard).join('')
@@ -4077,6 +4149,8 @@
             cancelPlayerInfoEdit();
         } else if (action === 'player-info-clear') {
             clearPlayerInfo(teamId, index);
+        } else if (action === 'squad-toggle') {
+            toggleTeamSquad(teamId);
         } else if (action === 'image-open') {
             openTeamImageViewer(teamId, index);
         } else if (action === 'image-close') {

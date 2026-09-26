@@ -297,7 +297,15 @@ test('страница команды: открывается из турнир�
     assert.equal(detail.textContent.includes('Мячи'), false, 'плитки «Мячи» со счётом больше нет');
 
     assert.match(detail.textContent, /Победы: 1 · Ничьи: 0 · Поражения: 0/);
-    assert.equal(detail.querySelectorAll('.chip-player').length, 3, 'состав с аватарами');
+
+    // Состав — один кликабельный блок «Состав»: список скрыт, пока его не открыли
+    const squadToggle = detail.querySelector('.squad-toggle');
+
+    assert.ok(squadToggle, 'состав свёрнут в кнопку «Состав»');
+    assert.equal(squadToggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(detail.querySelectorAll('.chip-player').length, 0, 'чипов игроков на странице больше нет');
+    assert.equal(detail.querySelector('#team-squad').hidden, true, 'список состава скрыт');
+    assert.equal(detail.querySelectorAll('.squad-table tbody tr').length, 3, 'все игроки в списке состава');
     assert.equal(detail.querySelectorAll('.match-card').length, 2, 'только матчи этой команды');
 
     // Возврат к списку команд
@@ -1765,15 +1773,18 @@ test('карточка игрока: имя кликабельно, видны �
     assert.match(card().textContent, /Дата рождения: не указана/);
     assert.equal((card().textContent.match(/не указана/g) || []).length, 2, 'и принадлежность тоже не указана');
 
-    // Состав на странице команды тоже кликабелен
+    // Состав на странице команды тоже кликабелен: раскрываем блок «Состав»
     app.navigate('teams');
     app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="1"]'));
+    app.click(app.id('team-detail').querySelector('[data-action="squad-toggle"]'));
 
-    const squadChip = app.id('team-detail').querySelector('.chip-player');
+    const squadPlayer = app.id('team-squad').querySelector('a.player-link');
 
-    assert.equal(squadChip.tagName, 'A');
-    assert.equal(squadChip.getAttribute('data-action'), 'player-public-open');
-    assert.match(app.id('team-detail').textContent, /Иванов А\./);
+    assert.equal(squadPlayer.getAttribute('data-action'), 'player-public-open', 'имя в составе — ссылка');
+    assert.match(app.id('team-squad').textContent, /Иванов А\./);
+
+    app.click(squadPlayer);
+    assert.match(card().textContent, /Иванов А\./, 'из состава открылась карточка игрока');
 });
 
 test('карточка игрока: открывается из бомбардиров и из составов матча, несуществующий не ломает сайт', () => {
@@ -1880,10 +1891,11 @@ test('админка: дата рождения и принадлежность 
     assert.match(app.id('toast-container').textContent, /Данные игрока «Иванов А\.» сохранены/);
     assert.equal(app.id('admin-player-info').hidden, true, 'после сохранения форма закрывается');
 
-    // Данные видны на публичной карточке игрока
+    // Данные видны на публичной карточке игрока (открываем из состава команды)
     app.navigate('teams');
     app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="1"]'));
-    app.click(app.id('team-detail').querySelector('.chip-player'));
+    app.click(app.id('team-detail').querySelector('[data-action="squad-toggle"]'));
+    app.click(app.id('team-squad').querySelector('a.player-link'));
 
     assert.match(app.id('player-card').textContent, /3 мая 2011/);
     assert.match(app.id('player-card').textContent, /Школа №5, первый тренер/);
@@ -2228,5 +2240,80 @@ test('админка: фотографии команды загружаются
     app.click(app.button('team-delete'));
 
     assert.deepEqual(app.storedData().teamImages, {}, 'фотографии удалённой команды убраны');
+});
+
+
+test('состав команды: блок «Состав», по нажатию — список с датой рождения и статистикой', () => {
+    const seeded = remoteData();
+
+    // Иванов А. забил дважды и получил жёлтую, Петров П. — красную
+    seeded.matches[0].events = [
+        { team: 1, player: 'Иванов А.', type: 'goal' },
+        { team: 1, player: 'Иванов А.', type: 'goal' },
+        { team: 1, player: 'Иванов А.', type: 'yellow' },
+        { team: 1, player: 'Петров П.', type: 'red' }
+    ];
+    seeded.playerInfo = { '1|иванов а.': { birthDate: '2011-05-03', note: '' } };
+
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+
+    app.navigate('teams');
+    app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="1"]'));
+
+    const detail = () => app.id('team-detail');
+    const block = () => app.id('team-squad');
+
+    assert.match(detail().querySelector('.squad-toggle').textContent, /Состав/, 'кнопка «Состав»');
+    assert.match(detail().querySelector('.squad-toggle-action').textContent, /Показать/);
+    assert.equal(block().hidden, true, 'список скрыт до нажатия');
+
+    app.click(detail().querySelector('[data-action="squad-toggle"]'));
+
+    assert.equal(block().hidden, false, 'список открылся');
+    assert.equal(detail().querySelector('[data-action="squad-toggle"]').getAttribute('aria-expanded'), 'true');
+    assert.match(detail().querySelector('.squad-toggle-action').textContent, /Скрыть/);
+
+    const columns = Array.from(block().querySelectorAll('thead th')).map((cell) => cell.textContent.trim());
+
+    assert.deepEqual(columns, ['Игрок', 'Дата рождения', 'Г', 'Ж', 'К'], 'имя, дата рождения, голы, Ж и К');
+
+    const rows = Array.from(block().querySelectorAll('tbody tr')).map((row) => ({
+        name: row.querySelector('.player-name').textContent,
+        birth: row.children[1].textContent,
+        goals: row.children[2].textContent,
+        yellow: row.children[3].textContent,
+        red: row.children[4].textContent,
+        link: row.querySelector('a.player-link').getAttribute('href')
+    }));
+
+    assert.equal(rows.length, 3, 'все игроки команды — столбиком');
+    assert.deepEqual(rows[0], {
+        name: 'Иванов А.', birth: '03.05.2011', goals: '2', yellow: '1', red: '0', link: '#/player/1/0'
+    });
+    assert.deepEqual(rows[1], {
+        name: 'Петров П.', birth: '—', goals: '0', yellow: '0', red: '1', link: '#/player/1/1'
+    });
+
+    // Для телефона дата рождения продублирована под именем игрока
+    assert.match(block().querySelector('tbody tr .row-detail').textContent, /Дата рождения: 03\.05\.2011/);
+
+    // Повторное нажатие сворачивает список
+    app.click(detail().querySelector('[data-action="squad-toggle"]'));
+
+    assert.equal(block().hidden, true, 'список снова скрыт');
+    assert.match(detail().querySelector('.squad-toggle-action').textContent, /Показать/);
+
+    // У команды без игроков — понятная подпись вместо кнопки
+    const empty = remoteData();
+
+    empty.teams.push({ id: 50, name: 'Пустая команда', players: [] });
+
+    const other = boot({ seed: { [DATA_KEY]: JSON.stringify(empty) } });
+
+    other.navigate('teams');
+    other.click(other.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="50"]'));
+
+    assert.match(other.id('team-detail').textContent, /Состав не заполнен/);
+    assert.equal(other.id('team-detail').querySelector('.squad-toggle'), null, 'для пустого состава кнопки нет');
 });
 
