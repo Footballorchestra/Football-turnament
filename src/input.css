@@ -1089,6 +1089,59 @@
         color: #1b5e20;
     }
 
+    /* --- Кнопки сортировки в заголовках таблиц --- */
+
+    .sort-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0;
+        border: 0;
+        background: none;
+        font: inherit;
+        color: inherit;
+        text-align: inherit;
+        cursor: pointer;
+    }
+
+    .sort-button:hover .sort-label {
+        text-decoration: underline;
+    }
+
+    .sort-button.is-active {
+        color: #1b5e20;
+        font-weight: 700;
+    }
+
+    .sort-arrow {
+        font-size: 0.75em;
+        line-height: 1;
+        opacity: 0.45;
+    }
+
+    .sort-button.is-active .sort-arrow {
+        opacity: 1;
+    }
+
+    /* --- Плитки-счётчики на главной: кликабельны --- */
+
+    .stat-box-link {
+        width: 100%;
+        font: inherit;
+        color: inherit;
+        text-align: center;
+        cursor: pointer;
+    }
+
+    .stat-box-link:hover {
+        border-color: #1b5e20;
+    }
+
+    .stat-box-link:focus-visible {
+        outline: 2px solid #1b5e20;
+        outline-offset: 2px;
+    }
+
     /* --- Статусы матча --- */
     .status-pill {
         display: inline-flex;

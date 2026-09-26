@@ -1009,3 +1009,82 @@ test('фотографии команды: нормализация отбрас
     assert.ok(exported.includes('teamImages'), 'карта фотографий есть в экспорте');
 });
 
+
+test('все игроки турнира: команда, имя, дата рождения и статистика', () => {
+    const data = L.createDefaultData();
+
+    data.matches[0].events = [
+        { team: 1, player: 'Иванов А.', type: 'goal' },
+        { team: 1, player: 'Иванов А.', type: 'yellow' },
+        { team: 2, player: 'Попов П.', type: 'red' }
+    ];
+    data.playerInfo = { '1|иванов а.': { birthDate: '2011-05-03', note: '' } };
+
+    const rows = L.computeAllPlayers(data);
+
+    assert.equal(rows.length, 9, 'все игроки из заявок всех команд');
+    assert.deepEqual(rows[0], {
+        teamId: 1,
+        teamName: 'Спартак',
+        index: 0,
+        player: 'Иванов А.',
+        birthDate: '2011-05-03',
+        goals: 1,
+        yellow: 1,
+        red: 0
+    });
+    assert.equal(rows[1].player, 'Петров П.');
+    assert.deepEqual([rows[1].goals, rows[1].yellow, rows[1].red], [0, 0, 0], 'игроки без событий тоже в списке');
+    assert.equal(rows[1].birthDate, '', 'без даты рождения — пустая строка');
+
+    const popov = rows.find((row) => row.player === 'Попов П.');
+
+    assert.deepEqual([popov.teamName, popov.goals, popov.red], ['Локомотив', 0, 1]);
+
+    // Пустые данные не ломают список
+    assert.deepEqual(L.computeAllPlayers(null), []);
+    assert.deepEqual(L.computeAllPlayers({ teams: [] }), []);
+});
+
+test('сортировка строк: текст, числа и даты; пустые значения — в конце', () => {
+    const rows = [
+        { player: 'Иванов А.', teamName: 'Спартак', birthDate: '2011-05-03', goals: 2, yellow: 0 },
+        { player: 'Петров П.', teamName: 'Спартак', birthDate: '', goals: 0, yellow: 1 },
+        { player: 'Кузнецов К.', teamName: 'Локомотив', birthDate: '2010-01-02', goals: 5, yellow: 0 }
+    ];
+
+    assert.deepEqual(L.sortRows(rows, { key: 'player', dir: 'asc' }).map((row) => row.player),
+        ['Иванов А.', 'Кузнецов К.', 'Петров П.'], 'по имени — по алфавиту');
+    assert.deepEqual(L.sortRows(rows, { key: 'player', dir: 'desc' }).map((row) => row.player),
+        ['Петров П.', 'Кузнецов К.', 'Иванов А.'], 'по имени в обратном порядке');
+    assert.deepEqual(L.sortRows(rows, { key: 'goals', dir: 'desc' }).map((row) => row.goals), [5, 2, 0], 'по голам');
+    assert.deepEqual(L.sortRows(rows, { key: 'goals', dir: 'asc' }).map((row) => row.goals), [0, 2, 5]);
+    assert.deepEqual(L.sortRows(rows, { key: 'yellow', dir: 'desc' }).map((row) => row.yellow), [1, 0, 0],
+        'по карточкам');
+
+    // Даты сравниваются как даты, строки без даты всегда в конце
+    assert.deepEqual(L.sortRows(rows, { key: 'birthDate', dir: 'asc' }).map((row) => row.player),
+        ['Кузнецов К.', 'Иванов А.', 'Петров П.']);
+    assert.deepEqual(L.sortRows(rows, { key: 'birthDate', dir: 'desc' }).map((row) => row.player),
+        ['Иванов А.', 'Кузнецов К.', 'Петров П.'], 'без даты — в конце при любом направлении');
+
+    // При равенстве значения порядок определяют команда и имя
+    assert.deepEqual(L.sortRows(rows, { key: 'goals', dir: 'asc' }).map((row) => row.player),
+        ['Петров П.', 'Иванов А.', 'Кузнецов К.']);
+
+    // Без ключа порядок не меняется, исходный список не портится
+    const original = rows.map((row) => row.player);
+
+    assert.deepEqual(L.sortRows(rows, {}).map((row) => row.player), original);
+    assert.deepEqual(L.sortRows(rows, { key: 'goals', dir: 'desc' }), rows.slice().sort((a, b) => b.goals - a.goals));
+    assert.deepEqual(rows.map((row) => row.player), original, 'исходный массив не изменяется');
+    assert.deepEqual(L.sortRows(null, { key: 'goals' }), []);
+
+    // Направление по умолчанию: числа — от большего, текст и даты — по возрастанию
+    assert.equal(L.defaultSortDirection('goals'), 'desc');
+    assert.equal(L.defaultSortDirection('yellow'), 'desc');
+    assert.equal(L.defaultSortDirection('player'), 'asc');
+    assert.equal(L.defaultSortDirection('teamName'), 'asc');
+    assert.equal(L.defaultSortDirection('birthDate'), 'asc');
+});
+

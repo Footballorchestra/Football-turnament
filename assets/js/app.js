@@ -43,6 +43,15 @@
         publicTeamId: null,
         /** Команда, у которой на странице раскрыт состав (null — состав свёрнут). */
         squadTeamId: null,
+        /**
+         * Сортировка таблиц: имя таблицы → { key, dir }. Пустой key — исходный порядок.
+         * scorers — «Лучшие бомбардиры», allPlayers — страница «Все игроки», squad — состав команды.
+         */
+        sorting: {
+            scorers: { key: '', dir: 'asc' },
+            allPlayers: { key: '', dir: 'asc' },
+            squad: { key: '', dir: 'asc' }
+        },
         /** Открытый игрок: команда и номер в заявке (null — карточка игрока не открыта). */
         publicPlayerTeamId: null,
         publicPlayerIndex: null,
@@ -1597,6 +1606,72 @@
         }).join('');
     }
 
+    /* ================================================================== */
+    /* Сортировка таблиц (кнопки в заголовках столбцов)                    */
+    /* ================================================================== */
+
+    /**
+     * Заголовок столбца с кнопкой сортировки: нажатие упорядочивает таблицу,
+     * повторное нажатие меняет направление. Активный столбец помечен стрелкой.
+     */
+    function sortHeader(table, key, label, options) {
+        var opts = options || {};
+        var sorting = state.sorting[table] || { key: '', dir: '' };
+        var active = sorting.key === key;
+        var dir = active ? sorting.dir : L.defaultSortDirection(key);
+        var aria = active ? (sorting.dir === 'asc' ? 'ascending' : 'descending') : 'none';
+        var what = opts.title || label;
+        var hint = active
+            ? 'Сейчас: ' + (sorting.dir === 'asc' ? 'по возрастанию' : 'по убыванию') +
+                '. Нажмите, чтобы изменить порядок'
+            : 'Сортировать по столбцу «' + what + '»';
+        var arrow = active ? (sorting.dir === 'asc' ? '↑' : '↓') : '↕';
+
+        return '<th scope="col" class="' + (opts.className || '') + '" aria-sort="' + aria + '">' +
+            '<button type="button" class="sort-button' + (active ? ' is-active' : '') + '"' +
+                ' data-action="sort" data-table="' + esc(table) + '" data-key="' + esc(key) + '"' +
+                ' title="' + esc(hint) + '" aria-label="' + esc(what + ': ' + hint) + '">' +
+                '<span class="sort-label">' + esc(label) + '</span>' +
+                '<span class="sort-arrow" aria-hidden="true">' + arrow + '</span>' +
+            '</button>' +
+        '</th>';
+    }
+
+    /** Строки таблицы в выбранном порядке (столбец не выбран — исходный порядок). */
+    function sortedRows(rows, table) {
+        var sorting = state.sorting[table];
+
+        if (!sorting || !sorting.key) {
+            return rows;
+        }
+
+        return L.sortRows(rows, { key: sorting.key, dir: sorting.dir });
+    }
+
+    /** Переключает сортировку таблицы: тот же столбец — меняем направление. */
+    function applySort(table, key) {
+        var sorting = state.sorting[table];
+
+        if (!sorting || !key) {
+            return;
+        }
+
+        if (sorting.key === key) {
+            sorting.dir = sorting.dir === 'asc' ? 'desc' : 'asc';
+        } else {
+            sorting.key = key;
+            sorting.dir = L.defaultSortDirection(key);
+        }
+
+        if (table === 'scorers') {
+            renderPlayers();
+        } else if (table === 'allPlayers') {
+            renderAllPlayers();
+        } else if (table === 'squad') {
+            renderTeams();
+        }
+    }
+
     function renderStandings() {
         var standings = L.computeStandings(state.data.teams, state.data.matches);
         var table = $('standings-table');
@@ -1718,11 +1793,25 @@
      * Лучшие бомбардиры: голы и карточки по всем матчам турнира.
      * Сортировка — по голам, затем по карточкам (см. computePlayerStats).
      */
+    /**
+     * Лучшие бомбардиры: голы по всем матчам турнира.
+     * Заголовки столбцов — кнопки сортировки, место считается по текущему порядку.
+     */
     function renderPlayers() {
+        var head = $('players-head');
         var body = $('players-body');
 
         if (!body) {
             return;
+        }
+
+        if (head) {
+            head.innerHTML = '<tr>' +
+                '<th class="num" scope="col" title="Место">#</th>' +
+                sortHeader('scorers', 'player', 'Игрок') +
+                sortHeader('scorers', 'teamName', 'Команда', { className: 'col-optional' }) +
+                sortHeader('scorers', 'goals', 'Голы', { className: 'num', title: 'Забитые мячи' }) +
+            '</tr>';
         }
 
         var rows = L.computePlayerStats(state.data);
@@ -1736,9 +1825,9 @@
             return;
         }
 
-        body.innerHTML = rows.map(function (row) {
+        body.innerHTML = sortedRows(rows, 'scorers').map(function (row, index) {
             return '<tr>' +
-                '<td class="num font-medium text-dark-600">' + row.place + '</td>' +
+                '<td class="num font-medium text-dark-600">' + (index + 1) + '</td>' +
                 '<td class="cell-player">' +
                     playerLink(L.findTeam(state.data.teams, row.teamId), row.player, {
                         innerHTML: '<span class="player-line">' + playerAvatar(row.teamId, row.player, { small: true }) +
@@ -1753,6 +1842,60 @@
                     teamLink(L.findTeam(state.data.teams, row.teamId), row.teamName, false, true) +
                 '</td>' +
                 '<td class="num player-goals">' + row.goals + '</td>' +
+            '</tr>';
+        }).join('');
+    }
+
+    /**
+     * Страница «Все игроки»: имя, команда, дата рождения, голы и карточки по всем матчам.
+     * Столбцы сортируются нажатием на заголовок.
+     */
+    function renderAllPlayers() {
+        var head = $('all-players-head');
+        var body = $('all-players-body');
+
+        if (!body) {
+            return;
+        }
+
+        if (head) {
+            head.innerHTML = '<tr>' +
+                sortHeader('allPlayers', 'player', 'Игрок') +
+                sortHeader('allPlayers', 'teamName', 'Команда') +
+                sortHeader('allPlayers', 'birthDate', 'Дата рождения', { className: 'col-optional' }) +
+                sortHeader('allPlayers', 'goals', 'Г', { className: 'num', title: 'Забитые голы' }) +
+                sortHeader('allPlayers', 'yellow', 'Ж', { className: 'num', title: 'Жёлтые карточки' }) +
+                sortHeader('allPlayers', 'red', 'К', { className: 'num', title: 'Красные карточки' }) +
+            '</tr>';
+        }
+
+        var rows = L.computeAllPlayers(state.data);
+
+        if (!rows.length) {
+            body.innerHTML = '<tr><td colspan="6" class="empty-state">Игроки ещё не добавлены — их вносит ' +
+                'администратор в карточках команд</td></tr>';
+            return;
+        }
+
+        body.innerHTML = sortedRows(rows, 'allPlayers').map(function (row) {
+            var team = L.findTeam(state.data.teams, row.teamId);
+            var birth = row.birthDate ? L.formatDate(row.birthDate, 'numeric') : '—';
+
+            return '<tr>' +
+                '<td class="cell-player">' +
+                    playerLink(team, row.player, {
+                        innerHTML: '<span class="player-line">' + playerAvatar(row.teamId, row.player, { small: true }) +
+                            '<span class="player-name">' + esc(row.player) + '</span></span>'
+                    }) +
+                    // На телефоне команда и дата рождения выводятся под именем
+                    '<span class="row-detail">' + teamLink(team, row.teamName, false, false) +
+                        ' · Дата рождения: ' + esc(birth) + '</span>' +
+                '</td>' +
+                '<td class="col-optional">' + teamLink(team, row.teamName, false, true) + '</td>' +
+                '<td class="col-optional">' + esc(birth) + '</td>' +
+                '<td class="num squad-goals">' + row.goals + '</td>' +
+                '<td class="num">' + row.yellow + '</td>' +
+                '<td class="num">' + row.red + '</td>' +
             '</tr>';
         }).join('');
     }
@@ -1909,11 +2052,24 @@
             }).join('') + '</div>';
     }
 
-    /** Строка состава: игрок (ссылка на карточку), дата рождения и статистика. */
-    function squadListRow(team, player) {
+    /** Данные одного игрока заявки: имя, дата рождения и статистика по матчам. */
+    function squadRowData(team, player) {
         var info = L.getPlayerInfo(state.data, team.id, player);
         var stats = L.playerStats(state.data, team.id, player);
-        var birth = info.birthDate ? L.formatDate(info.birthDate, 'numeric') : '—';
+
+        return {
+            player: player,
+            birthDate: info.birthDate,
+            goals: stats.goals,
+            yellow: stats.yellow,
+            red: stats.red
+        };
+    }
+
+    /** Строка состава: игрок (ссылка на карточку), дата рождения и статистика. */
+    function squadListRow(team, row) {
+        var player = row.player;
+        var birth = row.birthDate ? L.formatDate(row.birthDate, 'numeric') : '—';
 
         return '<tr>' +
             '<td class="cell-player">' +
@@ -1925,16 +2081,16 @@
                 '<span class="row-detail">Дата рождения: ' + esc(birth) + '</span>' +
             '</td>' +
             '<td class="col-optional">' + esc(birth) + '</td>' +
-            '<td class="num squad-goals" title="Забитые голы">' + stats.goals + '</td>' +
-            '<td class="num" title="Жёлтые карточки">' + stats.yellow + '</td>' +
-            '<td class="num" title="Красные карточки">' + stats.red + '</td>' +
+            '<td class="num squad-goals" title="Забитые голы">' + row.goals + '</td>' +
+            '<td class="num" title="Жёлтые карточки">' + row.yellow + '</td>' +
+            '<td class="num" title="Красные карточки">' + row.red + '</td>' +
         '</tr>';
     }
 
     /**
      * Состав команды: свёрнутый блок-кнопка «Состав», по нажатию раскрывается список
      * столбиком — имя, дата рождения, забитые голы, жёлтые и красные карточки.
-     * Имя игрока — ссылка на его карточку.
+     * Имя игрока — ссылка на его карточку, заголовки столбцов сортируют список.
      */
     function teamSquadBlock(team) {
         var players = team.players || [];
@@ -1945,8 +2101,12 @@
                 '<p class="text-dark-500 text-sm mb-6">Состав не заполнен</p>';
         }
 
-        var rows = players.map(function (player) {
-            return squadListRow(team, player);
+        var rows = sortedRows(players.map(function (player) {
+            return squadRowData(team, player);
+        }), 'squad');
+
+        var table = rows.map(function (row) {
+            return squadListRow(team, row);
         }).join('');
 
         return '<button type="button" class="squad-toggle" data-action="squad-toggle" data-team="' + L.toInt(team.id) +
@@ -1959,17 +2119,17 @@
                     icon('back') + '</span>' +
             '</button>' +
             '<div id="team-squad" class="squad-block mb-6"' + (open ? '' : ' hidden') + '>' +
-                '<table class="data-table squad-table">' +
+                '<table class="data-table squad-table players-table">' +
                     '<thead>' +
                         '<tr>' +
-                            '<th scope="col">Игрок</th>' +
-                            '<th scope="col" class="col-optional">Дата рождения</th>' +
-                            '<th scope="col" class="num" title="Забитые голы">Г</th>' +
-                            '<th scope="col" class="num" title="Жёлтые карточки">Ж</th>' +
-                            '<th scope="col" class="num" title="Красные карточки">К</th>' +
+                            sortHeader('squad', 'player', 'Игрок') +
+                            sortHeader('squad', 'birthDate', 'Дата рождения', { className: 'col-optional' }) +
+                            sortHeader('squad', 'goals', 'Г', { className: 'num', title: 'Забитые голы' }) +
+                            sortHeader('squad', 'yellow', 'Ж', { className: 'num', title: 'Жёлтые карточки' }) +
+                            sortHeader('squad', 'red', 'К', { className: 'num', title: 'Красные карточки' }) +
                         '</tr>' +
                     '</thead>' +
-                    '<tbody>' + rows + '</tbody>' +
+                    '<tbody>' + table + '</tbody>' +
                 '</table>' +
             '</div>';
     }
@@ -2337,6 +2497,7 @@
         renderTeams();
         renderMatches();
         renderPlayers();
+        renderAllPlayers();
         renderPlayerCard();
         renderImageViewer();
         renderAdmin();
@@ -3127,7 +3288,10 @@
     /* Роутинг и сессия администратора (хэш-адреса: #/standings и т.п.)   */
     /* ================================================================== */
 
-    var ROUTES = { home: true, standings: true, teams: true, matches: true, players: true, admin: true, player: true };
+    var ROUTES = {
+        home: true, standings: true, teams: true, matches: true, players: true,
+        allplayers: true, admin: true, player: true
+    };
 
     /**
      * Какой пункт меню подсвечивать на странице. Карточка игрока — часть раздела
@@ -3242,6 +3406,7 @@
         teams: 'Команды',
         matches: 'Матчи',
         players: 'Лучшие бомбардиры',
+        allplayers: 'Все игроки',
         player: 'Игрок',
         admin: 'Админ-панель'
     };
@@ -3445,6 +3610,8 @@
             renderMatches();
         } else if (target === 'players') {
             renderPlayers();
+        } else if (target === 'allplayers') {
+            renderAllPlayers();
         } else if (target === 'player') {
             renderPlayerCard();
         }
@@ -4164,6 +4331,12 @@
             cancelPlayerInfoEdit();
         } else if (action === 'player-info-clear') {
             clearPlayerInfo(teamId, index);
+        } else if (action === 'sort') {
+            applySort(element.getAttribute('data-table'), element.getAttribute('data-key'));
+        } else if (action === 'open-matches') {
+            // Переход к матчам с нужным фильтром (например, «Завершено» с главной)
+            state.matchesFilter = element.getAttribute('data-filter') || 'all';
+            applyRoute('matches', { matchId: null, teamId: null });
         } else if (action === 'squad-toggle') {
             toggleTeamSquad(teamId);
         } else if (action === 'image-open') {

@@ -359,8 +359,9 @@ test('лучшие бомбардиры: таблица показывает т�
     assert.deepEqual(numbers(rows[1]), ['2', '1']);
 
     // Колонок жёлтых и красных карточек в таблице больше нет
+    // Стрелку сортировки (↕) в подписях столбцов не учитываем
     const headers = Array.from(app.id('players-body').closest('table').querySelectorAll('thead th'))
-        .map((cell) => cell.textContent.trim());
+        .map((cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim());
 
     assert.deepEqual(headers, ['#', 'Игрок', 'Команда', 'Голы']);
     assert.equal(rows[0].querySelectorAll('td').length, 4, 'место, игрок, команда, голы');
@@ -376,17 +377,17 @@ test('матчи: фильтры «все», «завершённые», «пр�
     app.navigate('matches');
     assert.equal(app.$$('#matches-list .match-card').length, 4);
 
-    const finishedButton = app.$('[data-filter="finished"]');
+    const finishedButton = app.$('[data-action="filter"][data-filter="finished"]');
     app.click(finishedButton);
     assert.equal(app.$$('#matches-list .match-card').length, 2);
     assert.ok(finishedButton.classList.contains('is-active'));
     assert.equal(app.id('matches-list').querySelectorAll('.status-pill.finished').length, 2);
 
-    app.click(app.$('[data-filter="upcoming"]'));
+    app.click(app.$('[data-action="filter"][data-filter="upcoming"]'));
     assert.equal(app.$$('#matches-list .match-card').length, 2);
     assert.equal(app.id('matches-list').querySelectorAll('.status-pill.upcoming').length, 2);
 
-    app.click(app.$('[data-filter="all"]'));
+    app.click(app.$('[data-action="filter"][data-filter="all"]'));
     assert.equal(app.$$('#matches-list .match-card').length, 4);
 });
 
@@ -405,10 +406,10 @@ test('матчи для посетителей: поиск по команде �
     assert.match(app.id('matches-found').textContent, /Найдено матчей: 2 из 4/);
 
     // Поиск работает вместе с фильтром «завершённые / предстоящие»
-    app.click(app.$('[data-filter="finished"]'));
+    app.click(app.$('[data-action="filter"][data-filter="finished"]'));
     assert.equal(app.$$('#matches-list .match-card').length, 1, 'из матчей Спартака остался завершённый');
 
-    app.click(app.$('[data-filter="all"]'));
+    app.click(app.$('[data-action="filter"][data-filter="all"]'));
     app.type(search, 'динамо');
     assert.equal(app.$$('#matches-list .match-card').length, 2, 'найдены матчи Динамо');
 
@@ -2273,7 +2274,8 @@ test('состав команды: блок «Состав», по нажати�
     assert.equal(detail().querySelector('[data-action="squad-toggle"]').getAttribute('aria-expanded'), 'true');
     assert.match(detail().querySelector('.squad-toggle-action').textContent, /Скрыть/);
 
-    const columns = Array.from(block().querySelectorAll('thead th')).map((cell) => cell.textContent.trim());
+    const columns = Array.from(block().querySelectorAll('thead th'))
+        .map((cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim());
 
     assert.deepEqual(columns, ['Игрок', 'Дата рождения', 'Г', 'Ж', 'К'], 'имя, дата рождения, голы, Ж и К');
 
@@ -2364,5 +2366,188 @@ test('карточка матча: голы и карточки показаны
     const homeCard = app.id('latest-results').querySelector('.match-card[data-id="1"]');
 
     assert.equal(homeCard.querySelectorAll('.match-side-marks').length, 2, 'и на главной — по командам');
+});
+
+
+test('счётчики на главной кликабельны и открывают нужные страницы', () => {
+    const seeded = remoteData();
+
+    // Ещё один завершённый матч — чтобы отличить «все матчи» от «завершённые»
+    seeded.matches.push({ id: 99, teamA: 1, teamB: 2, scoreA: 1, scoreB: 0, date: '2026-09-01', finished: true });
+
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+    const tile = (id) => app.id(id).closest('.stat-box-link');
+
+    assert.equal(tile('stat-teams').tagName, 'BUTTON', 'плитки — кнопки, работают и с клавиатуры');
+    assert.equal(tile('stat-players').getAttribute('data-page'), 'allplayers');
+
+    // «Команд» → список команд
+    app.click(tile('stat-teams'));
+
+    assert.equal(app.activeSection(), 'page-teams');
+    assert.equal(app.window.location.hash, '#/teams');
+
+    // «Матчей» → все матчи
+    app.navigate('home');
+    app.click(tile('stat-matches'));
+
+    assert.equal(app.activeSection(), 'page-matches');
+    assert.equal(app.id('matches-list').querySelectorAll('.match-card').length, 5, 'показаны все матчи');
+
+    // «Завершено» → матчи с фильтром «завершённые»
+    app.navigate('home');
+    app.click(tile('stat-finished'));
+
+    assert.equal(app.activeSection(), 'page-matches');
+    assert.equal(app.id('matches-list').querySelectorAll('.match-card').length, 3, 'только завершённые матчи');
+    assert.equal(app.id('matches-list').querySelectorAll('.match-card.upcoming').length, 0, 'предстоящих нет');
+
+    // «Игроков» → страница со всеми игроками
+    app.navigate('home');
+    app.click(tile('stat-players'));
+
+    assert.equal(app.activeSection(), 'page-allplayers');
+    assert.equal(app.window.location.hash, '#/allplayers');
+    assert.match(app.id('all-players-body').textContent, /Иванов А\./);
+});
+
+
+test('страница «Все игроки»: краткая информация и сортировка по столбцам', () => {
+    const seeded = remoteData();
+
+    // Иванов А.: два гола и жёлтая. Кузнецов К.: гол. Остальные без событий
+    seeded.matches[0].events = [
+        { team: 1, player: 'Иванов А.', type: 'goal' },
+        { team: 1, player: 'Иванов А.', type: 'goal' },
+        { team: 1, player: 'Иванов А.', type: 'yellow' },
+        { team: 2, player: 'Кузнецов К.', type: 'goal' }
+    ];
+    seeded.playerInfo = {
+        '1|иванов а.': { birthDate: '2011-05-03', note: '' },
+        '2|кузнецов к.': { birthDate: '2009-12-01', note: '' }
+    };
+
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+
+    app.navigate('allplayers');
+
+    const body = () => app.id('all-players-body');
+    const head = () => app.id('all-players-head');
+    const names = () => Array.from(body().querySelectorAll('tr'))
+        .map((row) => row.querySelector('.player-name').textContent);
+    const column = (key) => head().querySelector('[data-key="' + key + '"]').closest('th');
+
+    assert.equal(app.activeSection(), 'page-allplayers');
+    assert.equal(body().querySelectorAll('tr').length, 9, 'все игроки турнира, а не только забивавшие');
+
+    // Столбцы и кнопки сортировки
+    assert.deepEqual(
+        Array.from(head().querySelectorAll('th')).map((cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim()),
+        ['Игрок', 'Команда', 'Дата рождения', 'Г', 'Ж', 'К']
+    );
+    assert.equal(head().querySelectorAll('[data-action="sort"]').length, 6, 'сортировать можно по каждому столбцу');
+    assert.equal(column('goals').getAttribute('aria-sort'), 'none', 'пока порядок исходный');
+
+    // Краткая информация в строке
+    const first = body().querySelector('tr');
+
+    assert.equal(first.querySelector('.player-name').textContent, 'Иванов А.');
+    assert.match(first.children[1].textContent, /Спартак/);
+    assert.equal(first.children[2].textContent, '03.05.2011', 'дата рождения в формате ДД.ММ.ГГГГ');
+    assert.deepEqual(Array.from(first.children).slice(3).map((cell) => cell.textContent), ['2', '1', '0'],
+        'голы, жёлтые и красные карточки');
+
+    // Сортировка по голам: сначала от большего, повторное нажатие — от меньшего
+    app.click(head().querySelector('[data-key="goals"]'));
+
+    assert.equal(names()[0], 'Иванов А.', 'самый результативный — первым');
+    assert.equal(column('goals').getAttribute('aria-sort'), 'descending');
+    assert.match(column('goals').textContent, /↓/, 'в заголовке видно направление');
+
+    app.click(head().querySelector('[data-key="goals"]'));
+
+    assert.equal(names()[8], 'Иванов А.', 'при обратном порядке он последний');
+    assert.equal(column('goals').getAttribute('aria-sort'), 'ascending');
+    assert.match(column('goals').textContent, /↑/);
+
+    // Сортировка по имени
+    app.click(head().querySelector('[data-key="player"]'));
+
+    assert.equal(names()[0], 'Волков В.', 'по имени — по алфавиту');
+    assert.equal(names()[8], 'Смирнов Д.');
+    assert.equal(column('player').getAttribute('aria-sort'), 'ascending');
+
+    // Сортировка по дате рождения: с датой — сначала, без даты — в конце
+    app.click(head().querySelector('[data-key="birthDate"]'));
+
+    assert.deepEqual(names().slice(0, 2), ['Кузнецов К.', 'Иванов А.'], 'даты по возрастанию');
+    assert.equal(body().querySelectorAll('tr')[8].children[2].textContent, '—', 'без даты — в конце списка');
+
+    // Сортировка по карточкам
+    app.click(head().querySelector('[data-key="yellow"]'));
+
+    assert.equal(names()[0], 'Иванов А.', 'у него одна жёлтая карточка');
+});
+
+
+test('состав команды и бомбардиры тоже сортируются по столбцам', () => {
+    const seeded = remoteData();
+
+    seeded.matches[0].events = [
+        { team: 1, player: 'Иванов А.', type: 'goal' },
+        { team: 1, player: 'Иванов А.', type: 'goal' },
+        { team: 1, player: 'Сидоров С.', type: 'goal' },
+        { team: 2, player: 'Кузнецов К.', type: 'goal' }
+    ];
+
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+
+    // Состав команды: пока сортировка не выбрана — порядок заявки
+    app.navigate('teams');
+    app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="1"]'));
+    app.click(app.id('team-detail').querySelector('[data-action="squad-toggle"]'));
+
+    const squadNames = () => Array.from(app.id('team-squad').querySelectorAll('tbody tr .player-name'))
+        .map((cell) => cell.textContent);
+
+    assert.deepEqual(squadNames(), ['Иванов А.', 'Петров П.', 'Сидоров С.']);
+
+    app.click(app.id('team-squad').querySelector('[data-key="goals"]'));
+
+    assert.deepEqual(squadNames(), ['Иванов А.', 'Сидоров С.', 'Петров П.'], 'по голам: 2, 1 и 0');
+    assert.deepEqual(
+        Array.from(app.id('team-squad').querySelectorAll('tbody tr td:nth-child(3)')).map((cell) => cell.textContent),
+        ['2', '1', '0'],
+        'столбец голов'
+    );
+
+    // Лучшие бомбардиры: по умолчанию по голам, по нажатию на имя — по алфавиту
+    app.navigate('players');
+
+    const scorers = () => Array.from(app.id('players-body').querySelectorAll('tr .player-name'))
+        .map((cell) => cell.textContent);
+
+    assert.equal(app.id('players-head').querySelectorAll('[data-action="sort"]').length, 3, 'три сортируемых столбца');
+    assert.deepEqual(scorers(), ['Иванов А.', 'Кузнецов К.', 'Сидоров С.'], 'по умолчанию — по голам');
+    assert.deepEqual(
+        Array.from(app.id('players-body').querySelectorAll('tr td:first-child')).map((cell) => cell.textContent),
+        ['1', '2', '3'],
+        'место считается по текущему порядку'
+    );
+
+    app.click(app.id('players-head').querySelector('[data-key="player"]'));
+    assert.equal(app.id('players-head').querySelector('[data-key="player"]').closest('th').getAttribute('aria-sort'),
+        'ascending');
+    assert.deepEqual(scorers(), ['Иванов А.', 'Кузнецов К.', 'Сидоров С.'], 'по имени — тот же порядок');
+
+    app.click(app.id('players-head').querySelector('[data-key="goals"]'));
+
+    assert.equal(app.id('players-head').querySelector('[data-key="goals"]').closest('th').getAttribute('aria-sort'),
+        'descending');
+    assert.deepEqual(
+        Array.from(app.id('players-body').querySelectorAll('tr td:last-child')).map((cell) => cell.textContent),
+        ['2', '1', '1'],
+        'голы по убыванию'
+    );
 });
 

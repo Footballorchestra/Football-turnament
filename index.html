@@ -29,7 +29,7 @@
 
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=31">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=32">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -142,6 +142,11 @@
         <symbol id="i-close" viewBox="0 0 24 24">
             <path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </symbol>
+        <!-- Игрок: силуэт человека -->
+        <symbol id="i-person" viewBox="0 0 24 24">
+            <circle cx="12" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+            <path d="M4.8 19.6c0-3.4 3.2-5.7 7.2-5.7s7.2 2.3 7.2 5.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+        </symbol>
     </svg>
 
     <!-- Шапка -->
@@ -168,11 +173,14 @@
                     <button type="button" class="nav-link" data-nav="teams" data-action="navigate" data-page="teams">
                         <svg class="icon" aria-hidden="true"><use href="#i-users"></use></svg>Команды
                     </button>
+                    <button type="button" class="nav-link" data-nav="allplayers" data-action="navigate" data-page="allplayers">
+                        <svg class="icon" aria-hidden="true"><use href="#i-person"></use></svg>Игроки
+                    </button>
                     <button type="button" class="nav-link" data-nav="matches" data-action="navigate" data-page="matches">
                         <svg class="icon" aria-hidden="true"><use href="#i-calendar"></use></svg>Матчи
                     </button>
                     <button type="button" class="nav-link" data-nav="players" data-action="navigate" data-page="players">
-                        <svg class="icon" aria-hidden="true"><use href="#i-ball"></use></svg>Лучшие бомбардиры
+                        <svg class="icon" aria-hidden="true"><use href="#i-ball"></use></svg>Бомбардиры
                     </button>
                     <button type="button" class="nav-link" data-nav="admin" data-action="navigate" data-page="admin">
                         <svg class="icon" aria-hidden="true"><use href="#i-cog"></use></svg>Админ
@@ -190,8 +198,9 @@
             <button type="button" class="nav-link w-full" data-nav="home" data-action="navigate" data-page="home">Главная</button>
             <button type="button" class="nav-link w-full" data-nav="standings" data-action="navigate" data-page="standings">Таблица</button>
             <button type="button" class="nav-link w-full" data-nav="teams" data-action="navigate" data-page="teams">Команды</button>
+            <button type="button" class="nav-link w-full" data-nav="allplayers" data-action="navigate" data-page="allplayers">Игроки</button>
             <button type="button" class="nav-link w-full" data-nav="matches" data-action="navigate" data-page="matches">Матчи</button>
-            <button type="button" class="nav-link w-full" data-nav="players" data-action="navigate" data-page="players">Лучшие бомбардиры</button>
+            <button type="button" class="nav-link w-full" data-nav="players" data-action="navigate" data-page="players">Бомбардиры</button>
             <button type="button" class="nav-link w-full" data-nav="admin" data-action="navigate" data-page="admin">Админ-панель</button>
         </nav>
     </header>
@@ -233,22 +242,26 @@
             </div>
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div class="stat-box">
+                <button type="button" class="stat-box stat-box-link" data-action="navigate" data-page="teams"
+                        title="Команды турнира: составы, статистика и матчи">
                     <div class="stat-value" id="stat-teams">0</div>
                     <div class="stat-label">Команд</div>
-                </div>
-                <div class="stat-box">
+                </button>
+                <button type="button" class="stat-box stat-box-link" data-action="open-matches" data-filter="all"
+                        title="Все матчи турнира">
                     <div class="stat-value" id="stat-matches">0</div>
                     <div class="stat-label">Матчей</div>
-                </div>
-                <div class="stat-box">
+                </button>
+                <button type="button" class="stat-box stat-box-link" data-action="navigate" data-page="allplayers"
+                        title="Все игроки турнира: команда, дата рождения, голы и карточки">
                     <div class="stat-value" id="stat-players">0</div>
                     <div class="stat-label">Игроков</div>
-                </div>
-                <div class="stat-box">
+                </button>
+                <button type="button" class="stat-box stat-box-link" data-action="open-matches" data-filter="finished"
+                        title="Завершённые матчи с результатами">
                     <div class="stat-value" id="stat-finished">0</div>
                     <div class="stat-label">Завершено</div>
-                </div>
+                </button>
             </div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -404,15 +417,31 @@
                 <div class="table-wrap">
                     <table class="data-table players-table">
                         <caption class="sr-only">Лучшие бомбардиры чемпионата: забитые мячи</caption>
-                        <thead>
-                            <tr>
-                                <th class="num" scope="col" title="Место">#</th>
-                                <th scope="col">Игрок</th>
-                                <th class="col-optional" scope="col">Команда</th>
-                                <th class="num" scope="col" title="Забитые мячи">Голы</th>
-                            </tr>
-                        </thead>
+                        <thead id="players-head"></thead>
                         <tbody id="players-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ======================= ВСЕ ИГРОКИ ======================= -->
+        <section id="page-allplayers" class="page-section">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h2 class="section-title flex items-center gap-2">
+                        <svg class="icon text-primary-700" aria-hidden="true"><use href="#i-person"></use></svg>Все игроки
+                    </h2>
+                    <p class="text-xs text-dark-600 sm:max-w-lg">
+                        Все игроки из заявок команд: команда, дата рождения, забитые голы и карточки за турнир.
+                        Нажмите на заголовок столбца, чтобы отсортировать список; повторное нажатие меняет порядок.
+                        Нажатие на имя открывает карточку игрока.
+                    </p>
+                </div>
+                <div class="table-wrap">
+                    <table class="data-table players-table">
+                        <caption class="sr-only">Все игроки турнира: команда, дата рождения, голы и карточки</caption>
+                        <thead id="all-players-head"></thead>
+                        <tbody id="all-players-body"></tbody>
                     </table>
                 </div>
             </div>
@@ -744,10 +773,10 @@
 
     <!-- Логика: настройки → чистая логика → синхронизация с репозиторием → слой DOM.
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
-    <script src="assets/js/config.js?v=31" defer></script>
-    <script src="assets/js/logic.js?v=31" defer></script>
-    <script src="assets/js/sync.js?v=31" defer></script>
-    <script src="assets/js/photo.js?v=31" defer></script>
-    <script src="assets/js/app.js?v=31" defer></script>
+    <script src="assets/js/config.js?v=32" defer></script>
+    <script src="assets/js/logic.js?v=32" defer></script>
+    <script src="assets/js/sync.js?v=32" defer></script>
+    <script src="assets/js/photo.js?v=32" defer></script>
+    <script src="assets/js/app.js?v=32" defer></script>
 </body>
 </html>

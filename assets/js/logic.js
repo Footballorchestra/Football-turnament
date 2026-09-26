@@ -737,6 +737,154 @@
         return result;
     }
 
+    /** Голы и карточки всех игроков одним проходом: ключ — «команда|имя в нижнем регистре». */
+    function collectPlayerStats(data) {
+        var events = {};
+        var matches = (data && Array.isArray(data.matches)) ? data.matches : [];
+
+        matches.forEach(function (match) {
+            (Array.isArray(match.events) ? match.events : []).forEach(function (event) {
+                if (!isPlainObject(event) || !isEventType(event.type)) {
+                    return;
+                }
+
+                var key = photoKey(event.team, event.player);
+
+                if (!key || key.charAt(key.length - 1) === '|') {
+                    return;
+                }
+
+                if (!events[key]) {
+                    events[key] = { goals: 0, yellow: 0, red: 0 };
+                }
+
+                if (event.type === 'goal') {
+                    events[key].goals += 1;
+                } else if (event.type === 'yellow') {
+                    events[key].yellow += 1;
+                } else {
+                    events[key].red += 1;
+                }
+            });
+        });
+
+        return events;
+    }
+
+    /**
+     * Все игроки турнира (по всем командам): имя, команда, дата рождения и статистика.
+     * Порядок — как в заявках: команды по списку, внутри команды — как записаны игроки.
+     */
+    function computeAllPlayers(data) {
+        var teams = (Array.isArray(data && data.teams)) ? data.teams : [];
+        var stats = collectPlayerStats(data);
+        var rows = [];
+
+        teams.forEach(function (team) {
+            (team.players || []).forEach(function (player, index) {
+                var key = photoKey(team.id, player);
+                var info = getPlayerInfo(data, team.id, player);
+                var totals = stats[key] || { goals: 0, yellow: 0, red: 0 };
+
+                rows.push({
+                    teamId: toInt(team.id),
+                    teamName: team.name,
+                    index: index,
+                    player: cleanText(player, CONFIG.maxPlayerNameLength),
+                    birthDate: info.birthDate,
+                    goals: totals.goals,
+                    yellow: totals.yellow,
+                    red: totals.red
+                });
+            });
+        });
+
+        return rows;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Сортировка таблиц                                                   */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Тип значения для сортировки: «число» — голы и карточки, «дата» — дата рождения
+     * («ГГГГ-ММ-ДД»), «текст» — имена игроков и названия команд.
+     */
+    var SORT_TYPES = {
+        player: 'text',
+        teamName: 'text',
+        name: 'text',
+        birthDate: 'date',
+        goals: 'number',
+        yellow: 'number',
+        red: 'number',
+        place: 'number'
+    };
+
+    /** Направление сортировки по умолчанию: числа — от большего, остальное — по алфавиту. */
+    function defaultSortDirection(key) {
+        return (SORT_TYPES[key] === 'number') ? 'desc' : 'asc';
+    }
+
+    /** Пустое значение (нет даты, нет данных) — такие строки всегда идут в конец списка. */
+    function isEmptySortValue(value) {
+        return value === null || value === undefined || value === '';
+    }
+
+    /** Сравнение двух непустых значений по типу столбца. */
+    function compareSortValues(type, left, right) {
+        if (type === 'number') {
+            return (Number(left) || 0) - (Number(right) || 0);
+        }
+
+        return String(left).localeCompare(String(right), 'ru');
+    }
+
+    /**
+     * Сортирует строки таблицы по столбцу. rows — обычные объекты (player, teamName,
+     * birthDate, goals…), options — { key, dir, type }. Строки без значения всегда
+     * оказываются в конце (независимо от направления), а при равенстве порядок
+     * определяют команда и имя — так список выглядит предсказуемо.
+     */
+    function sortRows(rows, options) {
+        var opts = options || {};
+        var key = opts.key;
+        var type = opts.type || SORT_TYPES[key] || 'text';
+        var dir = opts.dir === 'asc' ? 'asc' : 'desc';
+        var sign = dir === 'asc' ? 1 : -1;
+        var list = (Array.isArray(rows) ? rows : []).slice();
+
+        if (!key) {
+            return list;
+        }
+
+        var teamOf = function (row) {
+            return row.teamName || row.name || '';
+        };
+        var playerOf = function (row) {
+            return row.player || row.name || '';
+        };
+        var byName = function (a, b) {
+            return String(teamOf(a)).localeCompare(String(teamOf(b)), 'ru') ||
+                String(playerOf(a)).localeCompare(String(playerOf(b)), 'ru');
+        };
+
+        list.sort(function (a, b) {
+            var left = a[key];
+            var right = b[key];
+            var emptyLeft = isEmptySortValue(left);
+            var emptyRight = isEmptySortValue(right);
+
+            if (emptyLeft || emptyRight) {
+                return emptyLeft === emptyRight ? byName(a, b) : (emptyLeft ? 1 : -1);
+            }
+
+            return sign * compareSortValues(type, left, right) || byName(a, b);
+        });
+
+        return list;
+    }
+
     /* ------------------------------------------------------------------ */
     /* События матча: голы и карточки                                      */
     /* ------------------------------------------------------------------ */
@@ -1922,6 +2070,9 @@
         formatAge: formatAge,
         playerIndex: playerIndex,
         playerStats: playerStats,
+        computeAllPlayers: computeAllPlayers,
+        sortRows: sortRows,
+        defaultSortDirection: defaultSortDirection,
         getPlayerInfo: getPlayerInfo,
         hasPlayerInfo: hasPlayerInfo,
         setPlayerInfo: setPlayerInfo,

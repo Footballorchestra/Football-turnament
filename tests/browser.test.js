@@ -334,7 +334,7 @@ test('все страницы открываются и по меню, и по �
 
     await gotoApp(page, baseUrl + '/#/matches');
     assert.equal(await page.$$eval('#matches-list .match-card', (cards) => cards.length), data.matches);
-    await page.click('[data-filter="finished"]');
+    await page.click('[data-action="filter"][data-filter="finished"]');
     assert.equal(await page.$$eval('#matches-list .match-card', (cards) => cards.length), data.finished);
 
     assert.deepEqual(problems, [], 'ошибок по пути не возникло');
@@ -854,7 +854,8 @@ test('страница команды: из турнирной таблицы в
 
     assert.equal(await page.$eval('#team-squad', (block) => block.hidden), false, 'состав раскрылся по нажатию');
     assert.deepEqual(
-        await page.$$eval('#team-squad thead th', (cells) => cells.map((cell) => cell.textContent.trim())),
+        await page.$$eval('#team-squad thead th', (cells) => cells.map(
+            (cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim())),
         ['Игрок', 'Дата рождения', 'Г', 'Ж', 'К'],
         'столбцы состава'
     );
@@ -1422,6 +1423,83 @@ test('фотографии команды: загрузка из админки,
 
     // Возвращаем данные макета: фотографии из этого теста в них оставаться не должны
     mockRepository.changeExternally(before);
+
+    const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
+
+    assert.deepEqual(meaningful, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+});
+
+
+/**
+ * Счётчики на главной — кнопки: нажатие открывает соответствующую страницу.
+ * На странице «Все игроки» столбцы сортируются нажатием на заголовок.
+ */
+test('счётчики на главной и сортировка таблиц работают в браузере', { skip }, async () => {
+    const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
+
+    // «Игроков» открывает страницу со всеми игроками
+    await clickInView(page, '#stat-players');
+    await page.waitForFunction(() => document.querySelector('.page-section.active').id === 'page-allplayers');
+
+    const view = await page.evaluate(() => ({
+        hash: window.location.hash,
+        title: document.querySelector('#page-allplayers .section-title').textContent.trim(),
+        rows: document.querySelectorAll('#all-players-body tr').length,
+        columns: Array.from(document.querySelectorAll('#all-players-head th'))
+            .map((cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim()),
+        sortButtons: document.querySelectorAll('#all-players-head [data-action="sort"]').length,
+        firstRow: Array.from(document.querySelectorAll('#all-players-body tr:first-child td'))
+            .map((cell) => cell.textContent.replace(/\s+/g, ' ').trim())
+    }));
+
+    assert.equal(view.hash, '#/allplayers', 'у страницы свой адрес');
+    assert.equal(view.title, 'Все игроки');
+    assert.ok(view.rows > 0, 'игроки показаны: ' + view.rows);
+    assert.deepEqual(view.columns, ['Игрок', 'Команда', 'Дата рождения', 'Г', 'Ж', 'К']);
+    assert.equal(view.sortButtons, 6, 'сортировка по каждому столбцу');
+    assert.ok(view.firstRow[0].length > 0, 'в строке видно имя игрока');
+
+    // Нажатие на «Г» сортирует по забитым голам (от большего), повторное — наоборот
+    await clickInView(page, '#all-players-head [data-key="goals"]');
+
+    const goals = () => page.$$eval('#all-players-body tr td:nth-child(4)', (cells) => cells.map((cell) => Number(cell.textContent)));
+
+    const descending = await goals();
+    const ariaDown = await page.$eval('#all-players-head [data-key="goals"]',
+        (button) => button.closest('th').getAttribute('aria-sort'));
+
+    assert.equal(ariaDown, 'descending');
+    assert.deepEqual(descending, descending.slice().sort((a, b) => b - a), 'голы по убыванию: ' + descending.join(','));
+
+    await clickInView(page, '#all-players-head [data-key="goals"]');
+
+    const ascending = await goals();
+    const ariaUp = await page.$eval('#all-players-head [data-key="goals"]',
+        (button) => button.closest('th').getAttribute('aria-sort'));
+
+    assert.equal(ariaUp, 'ascending');
+    assert.deepEqual(ascending, ascending.slice().sort((a, b) => a - b), 'голы по возрастанию');
+
+    // Счётчик «Завершено» открывает матчи с фильтром «завершённые»
+    await clickWhenReady(page, '[data-nav="home"]');
+    await clickInView(page, '#stat-finished');
+    await page.waitForFunction(() => document.querySelector('.page-section.active').id === 'page-matches');
+
+    const matches = await page.evaluate(() => ({
+        cards: document.querySelectorAll('#matches-list .match-card').length,
+        upcoming: document.querySelectorAll('#matches-list .match-card.upcoming').length
+    }));
+
+    assert.ok(matches.cards > 0, 'завершённые матчи показаны');
+    assert.equal(matches.upcoming, 0, 'предстоящие матчи в списке не показаны');
+
+    // Счётчик «Команд» открывает список команд
+    await clickWhenReady(page, '[data-nav="home"]');
+    await clickInView(page, '#stat-teams');
+    await page.waitForFunction(() => document.querySelector('.page-section.active').id === 'page-teams');
+
+    assert.equal(await page.evaluate(() => window.location.hash), '#/teams');
 
     const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
 
