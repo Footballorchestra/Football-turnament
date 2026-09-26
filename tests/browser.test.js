@@ -578,7 +578,7 @@ test('статические файлы отдаются с нужными ти�
         ['/assets/favicon.ico', 'image/x-icon'],
         ['/assets/apple-touch-icon.png', 'image/png'],
         ['/assets/og-image.png', 'image/png'],
-        ['/Problem/fon.jpeg', 'image/jpeg'],
+        ['/Problem/fon.jpg', 'image/jpeg'],
         ['/robots.txt', 'text/plain']
     ];
 
@@ -593,12 +593,12 @@ test('статические файлы отдаются с нужными ти�
     // Фон сайта подключён в стилях и виден как отдельный слой под содержимым
     const css = await (await fetch(baseUrl + '/assets/css/tailwind.css')).text();
 
-    assert.match(css, /url\([^)]*Problem\/fon\.jpeg\)/, 'в стилях есть картинка фона');
+    assert.match(css, /url\([^)]*Problem\/fon\.jpg\)/, 'в стилях есть картинка фона');
 
     const checker = await openPage({ url: baseUrl + '/' });
     const layer = await checker.page.evaluate(() => getComputedStyle(document.body, '::before').backgroundImage);
 
-    assert.match(layer, /Problem\/fon\.jpeg/, 'фон применяется к странице: ' + layer);
+    assert.match(layer, /Problem\/fon\.jpg/, 'фон применяется к странице: ' + layer);
 
     const backgroundProblems = checker.problems.filter((item) => !item.includes('Failed to load resource'));
 

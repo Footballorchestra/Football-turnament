@@ -60,7 +60,7 @@
     }
 
     /**
-     * Фон сайта: картинка из папки Problem (по умолчанию Problem/fon.jpeg).
+     * Фон сайта: картинка из папки Problem (по умолчанию Problem/fon.jpg).
      * Чтобы поставить другую картинку, положите файл рядом с сайтом и поменяйте
      * путь в background-image ниже. Слой закреплён на экране (position: fixed),
      * поэтому он не растягивается на всю высоту страницы и работает на телефонах.
@@ -74,7 +74,7 @@
         inset: 0;
         z-index: -1;
         background-image: linear-gradient(rgba(248, 249, 250, 0.42), rgba(248, 249, 250, 0.42)),
-            url('../../Problem/fon.jpeg');
+            url('../../Problem/fon.jpg');
         background-position: center center;
         background-size: cover;
         background-repeat: no-repeat;

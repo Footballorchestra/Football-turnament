@@ -23,3 +23,7 @@ build/
 Thumbs.db
 .idea/
 .vscode/
+
+# Тяжёлые исходники картинок: на сайт идёт сжатая версия (Problem/fon.jpg),
+# а сам PNG-исходник в репозиторий не публикуем
+Problem/fon1.png
