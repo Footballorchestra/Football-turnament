@@ -1,7 +1,7 @@
 {
   "version": 8,
-  "revision": 334,
-  "updatedAt": "2026-09-27T21:02:30.691Z",
+  "revision": 347,
+  "updatedAt": "2026-09-27T21:18:04.791Z",
   "teams": [
     {
       "id": 1,
@@ -593,7 +593,20 @@
     "2|корявичев сергей": "assets/photos/koryavichev-sergei-f2b536.jpg",
     "2|новосельцев евгений": "assets/photos/novoseltsev-evgenii-45fa54.jpg",
     "1|грач алексей": "assets/photos/grach-aleksei-e21dc6.jpg",
-    "5|железняков лев": "assets/photos/zheleznyakov-lev-52710b.jpg"
+    "5|железняков лев": "assets/photos/zheleznyakov-lev-52710b.jpg",
+    "3|зангиев тимур": "assets/photos/zangiev-timur-3c6bac.jpg",
+    "3|гладышев андрей": "assets/photos/gladyshev-andrei-d159e6.jpg",
+    "3|матвеев кирилл": "assets/photos/matveev-kirill-a388f7.jpg",
+    "3|ли станислав": "assets/photos/li-stanislav-8e9913.jpg",
+    "3|ушанов иван": "assets/photos/ushanov-ivan-b94110.jpg",
+    "3|рассохин александр": "assets/photos/rassokhin-aleksandr-592d1d.jpg",
+    "3|мартынов сергей": "assets/photos/martynov-sergei-74a5f9.jpg",
+    "3|рыбнов игорь": "assets/photos/rybnov-igor-56e467.jpg",
+    "3|золочевский кирилл": "assets/photos/zolochevskii-kirill-0250d3.jpg",
+    "3|анисимов алексей": "assets/photos/anisimov-aleksei-fcb008.jpg",
+    "3|смелков илья": "assets/photos/smelkov-ilya-3db946.jpg",
+    "3|александров максим": "assets/photos/aleksandrov-maksim-59eda8.jpg",
+    "3|алиев сархан": "assets/photos/aliev-sarkhan-62e45b.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
