@@ -1,7 +1,7 @@
 {
   "version": 8,
-  "revision": 319,
-  "updatedAt": "2026-09-27T19:58:52.423Z",
+  "revision": 334,
+  "updatedAt": "2026-09-27T21:02:30.691Z",
   "teams": [
     {
       "id": 1,
@@ -578,7 +578,22 @@
     "5|шевцов игорь": "assets/photos/shevtsov-igor-0ddf53.jpg",
     "5|носаков василий": "assets/photos/nosakov-vasilii-462809.jpg",
     "5|краснов александр": "assets/photos/krasnov-aleksandr-fe6f8e.jpg",
-    "5|зимин михаил": "assets/photos/zimin-mikhail-9502b7.jpg"
+    "5|зимин михаил": "assets/photos/zimin-mikhail-9502b7.jpg",
+    "2|сергеев валентин": "assets/photos/sergeev-valentin-5161f4.jpg",
+    "2|швецов иван": "assets/photos/shvetsov-ivan-ef2a2f.jpg",
+    "2|хамитов тимур": "assets/photos/khamitov-timur-e8a484.jpg",
+    "2|зенин константин": "assets/photos/zenin-konstantin-8d7ef9.jpg",
+    "2|аракелян арман": "assets/photos/arakelyan-arman-849db6.jpg",
+    "2|астафьев михаил": "assets/photos/astafev-mikhail-6d0c93.jpg",
+    "2|воронин леонид": "assets/photos/voronin-leonid-fe238a.jpg",
+    "2|лазарев максим": "assets/photos/lazarev-maksim-5349c5.jpg",
+    "2|аксенов александр": "assets/photos/aksenov-aleksandr-653800.jpg",
+    "2|веселовский егор": "assets/photos/veselovskii-egor-b0f1de.jpg",
+    "2|федоров владислав": "assets/photos/fedorov-vladislav-b53359.jpg",
+    "2|корявичев сергей": "assets/photos/koryavichev-sergei-f2b536.jpg",
+    "2|новосельцев евгений": "assets/photos/novoseltsev-evgenii-45fa54.jpg",
+    "1|грач алексей": "assets/photos/grach-aleksei-e21dc6.jpg",
+    "5|железняков лев": "assets/photos/zheleznyakov-lev-52710b.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
