@@ -1,7 +1,7 @@
 {
   "version": 8,
-  "revision": 364,
-  "updatedAt": "2026-09-27T22:07:22.279Z",
+  "revision": 365,
+  "updatedAt": "2026-09-27T22:09:03.928Z",
   "teams": [
     {
       "id": 1,
@@ -624,7 +624,8 @@
     "3": "assets/photos/team-fk-mamt-b75325.jpg",
     "4": "assets/photos/team-filarmoniya-b75ca1.jpg",
     "5": "assets/photos/team-bolshoi-teatr-e17923.jpg",
-    "6": "assets/photos/team-tsvo-mo-rf-9a162a.jpg"
+    "6": "assets/photos/team-tsvo-mo-rf-9a162a.jpg",
+    "8": "assets/photos/team-fk-motsart-7477ec.jpg"
   },
   "teamImages": {
     "1": [
