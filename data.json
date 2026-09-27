@@ -1,7 +1,7 @@
 {
   "version": 8,
-  "revision": 347,
-  "updatedAt": "2026-09-27T21:18:04.791Z",
+  "revision": 364,
+  "updatedAt": "2026-09-27T22:07:22.279Z",
   "teams": [
     {
       "id": 1,
@@ -606,7 +606,17 @@
     "3|анисимов алексей": "assets/photos/anisimov-aleksei-fcb008.jpg",
     "3|смелков илья": "assets/photos/smelkov-ilya-3db946.jpg",
     "3|александров максим": "assets/photos/aleksandrov-maksim-59eda8.jpg",
-    "3|алиев сархан": "assets/photos/aliev-sarkhan-62e45b.jpg"
+    "3|алиев сархан": "assets/photos/aliev-sarkhan-62e45b.jpg",
+    "1|шорохов александр": "assets/photos/shorokhov-aleksandr-6e5f54.jpg",
+    "1|желтов константин": "assets/photos/zheltov-konstantin-e80835.jpg",
+    "1|шибецкий константин": "assets/photos/shibetskii-konstantin-b2cded.jpg",
+    "1|артемов федор": "assets/photos/artemov-fedor-ee0b0c.jpg",
+    "1|бусырев сергей": "assets/photos/busyrev-sergei-e4902e.jpg",
+    "1|желтов александр": "assets/photos/zheltov-aleksandr-7a6d3e.jpg",
+    "1|абдрахманов олег": "assets/photos/abdrakhmanov-oleg-666786.jpg",
+    "1|карпец матвей": "assets/photos/karpets-matvei-846509.jpg",
+    "1|сысоев александр": "assets/photos/sysoev-aleksandr-d7ec0c.jpg",
+    "1|данилец василий": "assets/photos/danilets-vasilii-901b4f.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
@@ -621,5 +631,26 @@
       "assets/photos/team-photo-veterany-mgk-f1c0b2.jpg"
     ]
   },
-  "playerInfo": {}
+  "playerInfo": {
+    "1|желтов константин": {
+      "birthDate": "1981-09-25",
+      "note": ""
+    },
+    "1|желтов александр": {
+      "birthDate": "1984-05-31",
+      "note": ""
+    },
+    "1|абдрахманов олег": {
+      "birthDate": "1967-05-25",
+      "note": ""
+    },
+    "1|доброрадных сергей": {
+      "birthDate": "1975-01-01",
+      "note": ""
+    },
+    "1|карпец матвей": {
+      "birthDate": "1974-10-17",
+      "note": ""
+    }
+  }
 }
