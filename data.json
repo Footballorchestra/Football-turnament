@@ -1,7 +1,7 @@
 {
   "version": 8,
-  "revision": 300,
-  "updatedAt": "2026-09-26T08:03:43.212Z",
+  "revision": 308,
+  "updatedAt": "2026-09-27T18:23:20.147Z",
   "teams": [
     {
       "id": 1,
@@ -556,12 +556,28 @@
           "type": "goal"
         }
       ]
+    },
+    {
+      "id": 10,
+      "teamA": 8,
+      "teamB": 2,
+      "date": "2026-09-30",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
     }
   ],
   "photos": {
     "1|доброрадных сергей": "assets/photos/dobroradnykh-sergei-dcc974.jpg"
   },
-  "teamPhotos": {},
+  "teamPhotos": {
+    "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
+    "2": "assets/photos/team-fk-mgso-670d71.jpg",
+    "3": "assets/photos/team-fk-mamt-b75325.jpg",
+    "4": "assets/photos/team-filarmoniya-b75ca1.jpg",
+    "5": "assets/photos/team-bolshoi-teatr-e17923.jpg",
+    "6": "assets/photos/team-tsvo-mo-rf-9a162a.jpg"
+  },
   "teamImages": {
     "1": [
       "assets/photos/team-photo-veterany-mgk-f1c0b2.jpg"
