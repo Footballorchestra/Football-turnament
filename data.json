@@ -1,7 +1,7 @@
 {
   "version": 8,
-  "revision": 366,
-  "updatedAt": "2026-09-27T22:17:42.665Z",
+  "revision": 382,
+  "updatedAt": "2026-09-27T22:45:01.520Z",
   "teams": [
     {
       "id": 1,
@@ -616,7 +616,22 @@
     "1|абдрахманов олег": "assets/photos/abdrakhmanov-oleg-666786.jpg",
     "1|карпец матвей": "assets/photos/karpets-matvei-846509.jpg",
     "1|сысоев александр": "assets/photos/sysoev-aleksandr-d7ec0c.jpg",
-    "1|данилец василий": "assets/photos/danilets-vasilii-901b4f.jpg"
+    "1|данилец василий": "assets/photos/danilets-vasilii-901b4f.jpg",
+    "6|кора степан": "assets/photos/kora-stepan-9ba217.jpg",
+    "6|башмет грант": "assets/photos/bashmet-grant-38e8cf.jpg",
+    "6|аитбаев ирек": "assets/photos/aitbaev-irek-4451d5.jpg",
+    "6|кубышкин дмитрий": "assets/photos/kubyshkin-dmitrii-82b2f6.jpg",
+    "6|попов евгений": "assets/photos/popov-evgenii-62acf5.jpg",
+    "6|анненков никон": "assets/photos/annenkov-nikon-043850.jpg",
+    "6|винник андрей": "assets/photos/vinnik-andrei-3c8677.jpg",
+    "6|корнилов глеб": "assets/photos/kornilov-gleb-5c5dda.jpg",
+    "6|мелкумов александр": "assets/photos/melkumov-aleksandr-403a69.jpg",
+    "6|светлов владислав": "assets/photos/svetlov-vladislav-498c2f.jpg",
+    "6|бабичев владилен": "assets/photos/babichev-vladilen-6510df.jpg",
+    "6|дроманов тимофей": "assets/photos/dromanov-timofei-db9527.jpg",
+    "6|кузнецов иван": "assets/photos/kuznetsov-ivan-07337f.jpg",
+    "6|петухов михаил": "assets/photos/petukhov-mikhail-8e95a0.jpg",
+    "6|федоров артемий": "assets/photos/fedorov-artemii-3ca56e.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
@@ -651,6 +666,10 @@
     },
     "1|карпец матвей": {
       "birthDate": "1974-10-17",
+      "note": ""
+    },
+    "1|бусырев сергей": {
+      "birthDate": "1973-05-22",
       "note": ""
     }
   }
