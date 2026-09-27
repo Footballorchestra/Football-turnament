@@ -1,7 +1,7 @@
 {
   "version": 8,
-  "revision": 308,
-  "updatedAt": "2026-09-27T18:23:20.147Z",
+  "revision": 319,
+  "updatedAt": "2026-09-27T19:58:52.423Z",
   "teams": [
     {
       "id": 1,
@@ -87,9 +87,9 @@
         "Дмитров Артем",
         "Тынянских Александр",
         "Куклачев Никита",
-        "Самбир ---------",
+        "Самбир Тарас",
         "Шахбазян Артак",
-        "Шевцов ---------",
+        "Шевцов Игорь",
         "Зимин Михаил",
         "Гервассиев Глеб",
         "Железняков Лев"
@@ -561,14 +561,24 @@
       "id": 10,
       "teamA": 8,
       "teamB": 2,
-      "date": "2026-09-30",
       "scoreA": null,
       "scoreB": null,
-      "finished": false
+      "date": "2026-09-30",
+      "finished": false,
+      "events": []
     }
   ],
   "photos": {
-    "1|доброрадных сергей": "assets/photos/dobroradnykh-sergei-dcc974.jpg"
+    "1|доброрадных сергей": "assets/photos/dobroradnykh-sergei-dcc974.jpg",
+    "5|штода максим": "assets/photos/shtoda-maksim-14c53c.jpg",
+    "5|шахбазян артак": "assets/photos/shakhbazyan-artak-c72a37.jpg",
+    "5|тынянских александр": "assets/photos/tynyanskikh-aleksandr-fca3e5.jpg",
+    "5|гервассиев глеб": "assets/photos/gervassiev-gleb-6165a4.jpg",
+    "5|дмитров артем": "assets/photos/dmitrov-artem-504f81.jpg",
+    "5|шевцов игорь": "assets/photos/shevtsov-igor-0ddf53.jpg",
+    "5|носаков василий": "assets/photos/nosakov-vasilii-462809.jpg",
+    "5|краснов александр": "assets/photos/krasnov-aleksandr-fe6f8e.jpg",
+    "5|зимин михаил": "assets/photos/zimin-mikhail-9502b7.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
