@@ -1,7 +1,7 @@
 {
   "version": 9,
-  "revision": 434,
-  "updatedAt": "2026-09-28T15:11:05.633Z",
+  "revision": 445,
+  "updatedAt": "2026-09-28T17:06:45.732Z",
   "teams": [
     {
       "id": 1,
@@ -637,7 +637,18 @@
     "7|малахов александр": "assets/photos/malakhov-aleksandr-a434c2.jpg",
     "7|якушев антон": "assets/photos/yakushev-anton-9c3c0f.jpg",
     "7|иванюк илья": "assets/photos/ivanyuk-ilya-9a1848.jpg",
-    "7|терехов владимир": "assets/photos/terekhov-vladimir-3ab4c2.jpg"
+    "7|терехов владимир": "assets/photos/terekhov-vladimir-3ab4c2.jpg",
+    "8|рудычев дмитрий": "assets/photos/rudychev-dmitrii-e0c24b.jpg",
+    "8|шарифзода дониер": "assets/photos/sharifzoda-donier-1b6ac6.jpg",
+    "8|шварц григорий": "assets/photos/shvarts-grigorii-e4d9e2.jpg",
+    "8|алексеев никита": "assets/photos/alekseev-nikita-8a32d7.jpg",
+    "8|мещанов никита": "assets/photos/meshchanov-nikita-e12b8c.jpg",
+    "8|дживага андрей": "assets/photos/dzhivaga-andrei-017281.jpg",
+    "8|кадыгроб максим": "assets/photos/kadygrob-maksim-650b21.jpg",
+    "8|ильенко дмитрий": "assets/photos/ilenko-dmitrii-1a58f0.jpg",
+    "8|деревенко матвей": "assets/photos/derevenko-matvei-14e1b2.jpg",
+    "8|иванов святослав": "assets/photos/ivanov-svyatoslav-bf640f.jpg",
+    "8|заморов артемий": "assets/photos/zamorov-artemii-d89cfa.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
