@@ -1,7 +1,7 @@
 {
   "version": 9,
-  "revision": 445,
-  "updatedAt": "2026-09-28T17:06:45.732Z",
+  "revision": 448,
+  "updatedAt": "2026-09-28T20:31:40.575Z",
   "teams": [
     {
       "id": 1,
@@ -541,11 +541,17 @@
       "id": 10,
       "teamA": 8,
       "teamB": 2,
-      "scoreA": null,
-      "scoreB": null,
-      "date": "2026-09-30",
-      "finished": false,
-      "events": []
+      "scoreA": 0,
+      "scoreB": 1,
+      "date": "2026-09-28",
+      "finished": true,
+      "events": [
+        {
+          "team": 2,
+          "player": "Зенин Константин",
+          "type": "goal"
+        }
+      ]
     }
   ],
   "photos": {
