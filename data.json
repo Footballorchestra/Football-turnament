@@ -1,7 +1,7 @@
 {
   "version": 9,
-  "revision": 406,
-  "updatedAt": "2026-09-28T10:12:25.323Z",
+  "revision": 413,
+  "updatedAt": "2026-09-28T10:19:08.301Z",
   "teams": [
     {
       "id": 1,
@@ -623,7 +623,13 @@
     "4|колясников андрей": "assets/photos/kolyasnikov-andrei-3eda5c.jpg",
     "4|мясников ефим": "assets/photos/myasnikov-efim-a8cbf1.jpg",
     "4|файзулин арсений": "assets/photos/faizulin-arsenii-b89c1c.jpg",
-    "4|демиденко михаил": "assets/photos/demidenko-mikhail-6585fa.jpg"
+    "4|демиденко михаил": "assets/photos/demidenko-mikhail-6585fa.jpg",
+    "7|серов лев": "assets/photos/serov-lev-3ce6ab.jpg",
+    "7|шамиданов андрей": "assets/photos/shamidanov-andrei-a5bf09.jpg",
+    "7|митинский александр": "assets/photos/mitinskii-aleksandr-bdf2b1.jpg",
+    "7|кулик сергей": "assets/photos/kulik-sergei-39fef9.jpg",
+    "7|субботкин иван": "assets/photos/subbotkin-ivan-57f9aa.jpg",
+    "7|чекмарев григорий": "assets/photos/chekmarev-grigorii-bddd5d.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
