@@ -33,13 +33,16 @@
         // 6 — у команд появились эмблемы (карта teamPhotos)
         // 7 — у игроков появились дата рождения и принадлежность (карта playerInfo)
         // 8 — у команд появились фотографии: галерея на странице команды (карта teamImages)
-        dataVersion: 8,
+        // 9 — у игроков появился игровой номер (поле number в карточке playerInfo)
+        dataVersion: 9,
         // Пароль администратора. Внимание: это демонстрационная защита,
         // на статическом хостинге реальную авторизацию без сервера сделать нельзя
         // (подробности — в README.md).
         adminPassword: 'admin',
         maxTeamNameLength: 30,
         maxPlayerNameLength: 40,
+        // Игровой номер: целое число от 0 до этого значения
+        maxPlayerNumber: 99,
         // Принадлежность игрока — свободный текст (школа, клуб, тренер):
         // примерно 3–4 коротких предложения
         maxPlayerNoteLength: 200,
@@ -68,9 +71,11 @@
             teamPhotos: {},
             // Фотографии команд (галереи): «id команды» → список путей к файлам
             teamImages: {},
-            // Дата рождения и принадлежность игроков: ключ «команда|имя в нижнем регистре»
+            // Данные игроков: номер, дата рождения и принадлежность.
+            // Ключ — «команда|имя в нижнем регистре» (тот же, что и у фото)
             playerInfo: {
                 '1|иванов а.': {
+                    number: 10,
                     birthDate: '2011-04-18',
                     note: 'Школа №5, первый тренер — Петров И. До 2023 года играл за «Динамо».'
                 }
@@ -649,6 +654,8 @@
                     teamId: id,
                     teamName: team ? team.name : 'Неизвестная команда',
                     player: name,
+                    // Игровой номер берём из данных игрока ('' — номер не задан)
+                    number: getPlayerInfo(data, id, name).number,
                     goals: 0,
                     yellow: 0,
                     red: 0
@@ -791,6 +798,7 @@
                     teamName: team.name,
                     index: index,
                     player: cleanText(player, CONFIG.maxPlayerNameLength),
+                    number: info.number,
                     birthDate: info.birthDate,
                     goals: totals.goals,
                     yellow: totals.yellow,
@@ -1411,16 +1419,37 @@
     }
 
     /* ------------------------------------------------------------------ */
-    /* Данные игрока: дата рождения и принадлежность                       */
+    /* Данные игрока: игровой номер, дата рождения и принадлежность         */
     /* ------------------------------------------------------------------ */
 
     /**
-     * Дата рождения хранится строкой «ГГГГ-ММ-ДД» (как даты матчей), а принадлежность —
+     * Игровой номер — целое число от 0 до CONFIG.maxPlayerNumber ('' — номер не задан),
+     * дата рождения хранится строкой «ГГГГ-ММ-ДД» (как даты матчей), а принадлежность —
      * свободный текст: школа, клуб, тренер. Её длина ограничена (CONFIG.maxPlayerNoteLength,
      * примерно 3–4 коротких предложения), чтобы карточка игрока оставалась аккуратной.
      *
      * Записи живут в отдельной карте playerInfo с тем же ключом, что и фото: «3|иванов а.».
+     * Номер — необязательное поле: если он не задан, ключа number в данных нет.
      */
+
+    /**
+     * Игровой номер: целое 0…CONFIG.maxPlayerNumber ('' — номер не задан или записан
+     * неверно). Принимает число, строку с цифрами и запись вида «№10» — в данных
+     * и в поле админки номер всегда выглядит одинаково.
+     */
+    function normalizePlayerNumber(value) {
+        var text = String(value === null || value === undefined ? '' : value)
+            .replace(/[№#]/g, '')
+            .trim();
+
+        if (!/^\d{1,2}$/.test(text)) {
+            return '';
+        }
+
+        var number = Number(text);
+
+        return number <= CONFIG.maxPlayerNumber ? number : '';
+    }
 
     /** Самая ранняя разумная дата рождения. */
     var MIN_BIRTH_YEAR = 1900;
@@ -1505,7 +1534,7 @@
 
     /** Пустая запись игрока. */
     function emptyPlayerInfo() {
-        return { birthDate: '', note: '' };
+        return { number: '', birthDate: '', note: '' };
     }
 
     /** Данные игрока ('' — не заполнено). */
@@ -1517,6 +1546,7 @@
         }
 
         return {
+            number: normalizePlayerNumber(card.number),
             birthDate: isValidBirthDate(card.birthDate) ? card.birthDate.trim() : '',
             note: cleanNote(card.note)
         };
@@ -1526,7 +1556,7 @@
     function hasPlayerInfo(data, teamId, player) {
         var info = getPlayerInfo(data, teamId, player);
 
-        return info.birthDate !== '' || info.note !== '';
+        return info.number !== '' || info.birthDate !== '' || info.note !== '';
     }
 
     /** Записывает данные игрока; пустые значения убирают запись целиком. */
@@ -1545,12 +1575,18 @@
             return data;
         }
 
+        var number = normalizePlayerNumber(info && info.number);
         var value = {
             birthDate: isValidBirthDate(info && info.birthDate) ? String(info.birthDate).trim() : '',
             note: cleanNote(info && info.note)
         };
 
-        if (value.birthDate || value.note) {
+        // Номер не задан — ключа в данных нет (так записи остаются компактными)
+        if (number !== '') {
+            value.number = number;
+        }
+
+        if (number !== '' || value.birthDate || value.note) {
             data.playerInfo[key] = value;
         } else {
             delete data.playerInfo[key];
@@ -1582,7 +1618,8 @@
     function renamePlayerInfo(data, teamId, oldName, newName) {
         var info = getPlayerInfo(data, teamId, oldName);
 
-        if (!info.birthDate && !info.note) {
+        // Номер 0 — допустимый номер, поэтому сравниваем с пустой строкой, а не «на ложность»
+        if (info.number === '' && !info.birthDate && !info.note) {
             return data;
         }
 
@@ -1599,6 +1636,15 @@
         var source = input || {};
         var rawNote = source.note === undefined || source.note === null ? '' : String(source.note);
         var birthDate = cleanText(source.birthDate, 10);
+        var rawNumber = source.number === undefined || source.number === null ? '' : String(source.number).trim();
+        var number = normalizePlayerNumber(rawNumber);
+
+        if (rawNumber !== '' && number === '') {
+            return {
+                ok: false,
+                error: 'Игровой номер — целое число от 0 до ' + CONFIG.maxPlayerNumber
+            };
+        }
 
         if (birthDate && !isValidBirthDate(birthDate)) {
             return { ok: false, error: 'Дата рождения — «ДД.ММ.ГГГГ», не в будущем и не раньше 1900 года' };
@@ -1611,7 +1657,7 @@
             };
         }
 
-        return { ok: true, value: { birthDate: birthDate, note: cleanNote(rawNote) } };
+        return { ok: true, value: { number: number, birthDate: birthDate, note: cleanNote(rawNote) } };
     }
 
     /**
@@ -1645,16 +1691,26 @@
                 return;
             }
 
+            var number = normalizePlayerNumber(value.number);
             var birthDate = isValidBirthDate(value.birthDate) ? value.birthDate.trim() : '';
             var note = cleanNote(value.note);
             var rawNote = value.note === undefined || value.note === null ? '' : String(value.note);
+            var rawNumber = value.number === undefined || value.number === null ? '' : String(value.number).trim();
 
-            if ((value.birthDate && !birthDate) || rawNote.trim().length > CONFIG.maxPlayerNoteLength) {
+            if ((value.birthDate && !birthDate) || (rawNumber !== '' && number === '') ||
+                rawNote.trim().length > CONFIG.maxPlayerNoteLength) {
                 repaired = true;
             }
 
-            if (birthDate || note) {
-                cards[photoKey(team.id, name)] = { birthDate: birthDate, note: note };
+            if (number !== '' || birthDate || note) {
+                var card = { birthDate: birthDate, note: note };
+
+                // Номер записывается, только если он задан
+                if (number !== '') {
+                    card.number = number;
+                }
+
+                cards[photoKey(team.id, name)] = card;
             } else {
                 // Запись без данных не нужна — это тоже исправление
                 repaired = true;
@@ -2069,6 +2125,7 @@
         yearsWord: yearsWord,
         formatAge: formatAge,
         playerIndex: playerIndex,
+        normalizePlayerNumber: normalizePlayerNumber,
         playerStats: playerStats,
         computeAllPlayers: computeAllPlayers,
         sortRows: sortRows,

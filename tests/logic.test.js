@@ -334,7 +334,7 @@ test('нормализация фото: валидные пути остают�
     assert.deepEqual(Object.keys(result.data.photos), ['1|иванов а.'], 'осталось только фото игрока из заявки');
     assert.equal(result.data.photos['1|иванов а.'], 'assets/photos/ivanov-a-1a2b3c.jpg');
     assert.equal(result.repaired, true, 'отброшенные записи — это исправление данных');
-    assert.equal(result.data.version, 8);
+    assert.equal(result.data.version, 9);
 
     // Старый файл без карты фото грузится без предупреждений
     const legacy = L.normalizeData({ teams: [{ id: 1, name: 'A', players: ['X'] }], matches: [] });
@@ -389,31 +389,44 @@ test('эмблема команды: запись, чтение, удалени�
 
     assert.deepEqual(result.data.teamPhotos, { '1': 'assets/photos/team-spartak-33abcd.jpg' });
     assert.equal(result.repaired, true, 'отброшенные эмблемы — исправление данных');
-    assert.equal(result.data.version, 8);
+    assert.equal(result.data.version, 9);
 
     // Удаление и данные без карты эмблем загружаются без предупреждений
     L.removeTeamPhoto(data, 1);
     assert.equal(L.getTeamPhoto(data, 1), '');
     assert.equal(L.normalizeData({ teams: [{ id: 1, name: 'A', players: [] }], matches: [] }).repaired, false);
 });
-test('данные игрока: дата рождения, принадлежность и возраст', () => {
+test('данные игрока: игровой номер, дата рождения, принадлежность и возраст', () => {
     const data = L.createDefaultData();
 
     // В демонстрационных данных один игрок уже заполнен — так видно формат
     assert.deepEqual(L.getPlayerInfo(data, 1, 'Иванов А.'), {
+        number: 10,
         birthDate: '2011-04-18',
         note: 'Школа №5, первый тренер — Петров И. До 2023 года играл за «Динамо».'
     });
     assert.equal(L.hasPlayerInfo(data, 1, 'Иванов А.'), true);
     assert.equal(L.hasPlayerInfo(data, 1, 'петров п.'), false, 'регистр имени не важен, данных нет');
-    assert.deepEqual(L.getPlayerInfo(data, 2, 'Иванов А.'), { birthDate: '', note: '' });
+    assert.deepEqual(L.getPlayerInfo(data, 2, 'Иванов А.'), { number: '', birthDate: '', note: '' });
 
     // Запись, чтение и удаление
-    L.setPlayerInfo(data, 1, 'Петров П.', { birthDate: '2010-12-31', note: '  Школа №7,\n\n тренер Сидоров ' });
+    L.setPlayerInfo(data, 1, 'Петров П.', { number: '7', birthDate: '2010-12-31', note: '  Школа №7,\n\n тренер Сидоров ' });
     assert.deepEqual(L.getPlayerInfo(data, 1, 'Петров П.'), {
+        number: 7,
         birthDate: '2010-12-31',
         note: 'Школа №7,\nтренер Сидоров'
     });
+    assert.deepEqual(data.playerInfo['1|петров п.'], {
+        birthDate: '2010-12-31', note: 'Школа №7,\nтренер Сидоров', number: 7
+    });
+
+    // Номер записывается и без остальных данных; «мусор» вместо номера не сохраняется
+    L.setPlayerInfo(data, 1, 'Сидоров С.', { number: 99, birthDate: '', note: '' });
+    assert.deepEqual(L.getPlayerInfo(data, 1, 'Сидоров С.'), { number: 99, birthDate: '', note: '' });
+    assert.equal(L.hasPlayerInfo(data, 1, 'Сидоров С.'), true, 'одного номера достаточно');
+
+    L.setPlayerInfo(data, 1, 'Сидоров С.', { number: 100, birthDate: '', note: '' });
+    assert.equal(data.playerInfo['1|сидоров с.'], undefined, 'номер больше 99 не сохраняется');
 
     // Пустые значения убирают запись целиком, «мусорные» даты не сохраняются
     L.setPlayerInfo(data, 1, 'Петров П.', { birthDate: 'вчера', note: '' });
@@ -421,19 +434,28 @@ test('данные игрока: дата рождения, принадлежн
 
     L.setPlayerInfo(data, 1, 'Петров П.', { birthDate: '', note: 'только текст' });
     assert.equal(L.getPlayerInfo(data, 1, 'Петров П.').birthDate, '');
+    assert.equal(L.getPlayerInfo(data, 1, 'Петров П.').number, '', 'номер не задан — пустое значение');
     L.removePlayerInfo(data, 1, 'Петров П.');
     assert.equal(L.hasPlayerInfo(data, 1, 'Петров П.'), false);
 
     // Переименование переносит данные, удаление команды — убирает
-    L.setPlayerInfo(data, 1, 'Петров П.', { birthDate: '2010-12-31', note: 'школа' });
+    L.setPlayerInfo(data, 1, 'Петров П.', { number: 3, birthDate: '2010-12-31', note: 'школа' });
     L.renamePlayerInfo(data, 1, 'Петров П.', 'Петров Пётр');
     assert.equal(L.getPlayerInfo(data, 1, 'Петров Пётр').note, 'школа');
+    assert.equal(L.getPlayerInfo(data, 1, 'Петров Пётр').number, 3, 'номер переехал вместе с данными');
     assert.equal(L.hasPlayerInfo(data, 1, 'Петров П.'), false);
 
-    L.setPlayerInfo(data, 2, 'Кузнецов К.', { birthDate: '2010-01-01', note: 'клуб' });
+    L.setPlayerInfo(data, 2, 'Кузнецов К.', { number: 12, birthDate: '2010-01-01', note: 'клуб' });
     L.removeTeamPlayerInfo(data, 2);
     assert.equal(L.hasPlayerInfo(data, 2, 'Кузнецов К.'), false, 'данные команды убраны');
     assert.equal(L.getPlayerInfo(data, 1, 'Иванов А.').birthDate, '2011-04-18', 'чужие данные не задеты');
+    assert.equal(L.getPlayerInfo(data, 1, 'Иванов А.').number, 10, 'и номер тоже не задет');
+
+    // Номер 0 — допустимый номер: он тоже переезжает при переименовании
+    L.setPlayerInfo(data, 1, 'Сидоров С.', { number: 0, birthDate: '', note: '' });
+    assert.equal(L.hasPlayerInfo(data, 1, 'Сидоров С.'), true, 'нулевой номер считается данными');
+    L.renamePlayerInfo(data, 1, 'Сидоров С.', 'Сидоров Сергей');
+    assert.equal(L.getPlayerInfo(data, 1, 'Сидоров Сергей').number, 0, 'нулевой номер не потерялся');
 
     // Дата рождения: проверка формата, будущего и слишком ранних лет
     const now = new Date('2026-09-21');
@@ -473,25 +495,36 @@ test('данные игрока: проверка формы и нормализ
     assert.equal(L.validatePlayerInfo({ birthDate: '2030-01-01' }).ok, false, 'дата в будущем');
     assert.equal(L.validatePlayerInfo({ birthDate: '2011-13-01' }).ok, false, 'такого месяца нет');
 
-    const ok = L.validatePlayerInfo({ birthDate: ' 2011-04-18 ', note: '  Школа №5  ' });
+    // Игровой номер: только целое от 0 до 99
+    assert.equal(L.validatePlayerInfo({ number: '10' }).ok, true);
+    assert.deepEqual(L.validatePlayerInfo({ number: ' 7 ' }).value.number, 7, 'пробелы не мешают');
+    assert.equal(L.validatePlayerInfo({ number: '100' }).ok, false);
+    assert.equal(L.validatePlayerInfo({ number: '10а' }).ok, false);
+    assert.match(L.validatePlayerInfo({ number: '-1' }).error, /Игровой номер — целое число от 0 до 99/);
+    assert.equal(L.validatePlayerInfo({ number: '' }).ok, true, 'пустой номер допустим');
 
-    assert.deepEqual(ok.value, { birthDate: '2011-04-18', note: 'Школа №5' });
+    const ok = L.validatePlayerInfo({ number: '9', birthDate: ' 2011-04-18 ', note: '  Школа №5  ' });
+
+    assert.deepEqual(ok.value, { number: 9, birthDate: '2011-04-18', note: 'Школа №5' });
 
     // Нормализация: остаются данные игроков, которые есть в заявке
     const result = L.normalizeData({
         teams: [{ id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.'] }],
         matches: [],
         playerInfo: {
-            '1|Иванов А.': { birthDate: '2011-04-18', note: 'школа' },
+            '1|Иванов А.': { number: '№10', birthDate: '2011-04-18', note: 'школа' },
+            '1|Петров П.': { number: 300 },
             '1|Ушедший У.': { birthDate: '2010-01-01', note: 'клуб' },
-            '1|петров п.': { birthDate: 'вчера', note: '' },
+            '1|Сидоров С.': { birthDate: 'вчера', note: '' },
             '9|Иванов А.': 'мусор'
         }
     });
 
-    assert.deepEqual(result.data.playerInfo, { '1|иванов а.': { birthDate: '2011-04-18', note: 'школа' } });
+    assert.deepEqual(result.data.playerInfo, {
+        '1|иванов а.': { birthDate: '2011-04-18', note: 'школа', number: 10 }
+    });
     assert.equal(result.repaired, true, 'отброшенные записи — исправление данных');
-    assert.equal(result.data.version, 8);
+    assert.equal(result.data.version, 9);
 
     // Длинную принадлежность нормализация подрезает до лимита
     const clipped = L.normalizePlayerInfo(
@@ -506,6 +539,24 @@ test('данные игрока: проверка формы и нормализ
     assert.equal(L.normalizePlayerInfo(undefined, []).repaired, false);
     assert.equal(L.normalizePlayerInfo(null, []).repaired, false);
     assert.equal(L.normalizePlayerInfo([], []).repaired, true, 'не объект — исправление');
+});
+
+test('игровой номер: нормализация значений', () => {
+    assert.equal(L.normalizePlayerNumber(10), 10);
+    assert.equal(L.normalizePlayerNumber('10'), 10);
+    assert.equal(L.normalizePlayerNumber(' 7 '), 7, 'пробелы по краям не мешают');
+    assert.equal(L.normalizePlayerNumber('№10'), 10, 'запись с «№» тоже подходит');
+    assert.equal(L.normalizePlayerNumber('#9'), 9);
+    assert.equal(L.normalizePlayerNumber(0), 0, 'нулевой номер допустим');
+
+    assert.equal(L.normalizePlayerNumber(''), '', 'пустая строка — номера нет');
+    assert.equal(L.normalizePlayerNumber(null), '');
+    assert.equal(L.normalizePlayerNumber(undefined), '');
+    assert.equal(L.normalizePlayerNumber(100), '', 'больше 99 — не номер');
+    assert.equal(L.normalizePlayerNumber(-1), '');
+    assert.equal(L.normalizePlayerNumber('10а'), '');
+    assert.equal(L.normalizePlayerNumber('1.5'), '');
+    assert.equal(L.normalizePlayerNumber('01'), 1, 'нули впереди не сбивают');
 });
 
 test('номер игрока в заявке и его статистика по всем матчам', () => {
@@ -784,7 +835,7 @@ test('normalizeData: события матчей сохраняются, «му�
 
     assert.equal(result.repaired, true, 'событие чужой команды — это исправление данных');
     assert.deepEqual(result.data.matches[0].events, [{ team: 1, player: 'Иванов А.', type: 'goal' }]);
-    assert.equal(result.data.version, 8, 'в данных отмечена новая версия формата');
+    assert.equal(result.data.version, 9, 'в данных отмечена новая версия формата');
 });
 
 test('лучшие бомбардиры: сортировка по голам, при равенстве — по имени', () => {
@@ -851,6 +902,13 @@ test('лучшие бомбардиры: только забивавшие, ра
     assert.deepEqual(rows.map((row) => row.player), ['Иванов А.', 'Петров П.']);
     assert.equal(rows.some((row) => row.player === 'Сидоров С.'), false, 'игрок только с карточкой не бомбардир');
 
+    // В строке бомбардира есть игровой номер ('' — номер не задан)
+    assert.deepEqual(rows.map((row) => row.number), ['', '']);
+
+    data.playerInfo = { '1|иванов а.': { number: 17, birthDate: '2011-04-18', note: '' } };
+
+    assert.equal(L.computePlayerStats(data)[0].number, 17, 'номер берётся из данных игрока');
+
     // Нумерация идёт подряд — без пропусков из-за отброшенных записей
     assert.deepEqual(rows.map((row) => row.place), [1, 2]);
 });
@@ -874,7 +932,7 @@ test('лучшие бомбардиры: пустые данные и запис
 
     assert.equal(rows.length, 2, 'неизвестный тип события не считается');
     assert.deepEqual(rows[0], {
-        teamId: 1, teamName: 'Спартак', player: 'Ушедший У.', goals: 1, yellow: 0, red: 0, place: 1
+        teamId: 1, teamName: 'Спартак', player: 'Ушедший У.', number: '', goals: 1, yellow: 0, red: 0, place: 1
     });
     assert.equal(rows[1].teamName, 'Неизвестная команда');
 });
@@ -995,7 +1053,7 @@ test('фотографии команды: нормализация отбрас
     assert.equal(result.data.teamImages['1'].length, L.CONFIG.maxTeamImages, 'лишние фотографии отброшены');
     assert.equal('9' in result.data.teamImages, false, 'фотографии удалённой команды отброшены');
     assert.equal(result.repaired, true, 'отброшенное — исправление данных');
-    assert.equal(result.data.version, 8);
+    assert.equal(result.data.version, 9);
 
     // Данные без карты фотографий загружаются без предупреждений
     assert.equal(L.normalizeTeamImages(undefined, []).repaired, false);
@@ -1018,7 +1076,7 @@ test('все игроки турнира: команда, имя, дата ро�
         { team: 1, player: 'Иванов А.', type: 'yellow' },
         { team: 2, player: 'Попов П.', type: 'red' }
     ];
-    data.playerInfo = { '1|иванов а.': { birthDate: '2011-05-03', note: '' } };
+    data.playerInfo = { '1|иванов а.': { number: 8, birthDate: '2011-05-03', note: '' } };
 
     const rows = L.computeAllPlayers(data);
 
@@ -1028,6 +1086,7 @@ test('все игроки турнира: команда, имя, дата ро�
         teamName: 'Спартак',
         index: 0,
         player: 'Иванов А.',
+        number: 8,
         birthDate: '2011-05-03',
         goals: 1,
         yellow: 1,
@@ -1036,6 +1095,7 @@ test('все игроки турнира: команда, имя, дата ро�
     assert.equal(rows[1].player, 'Петров П.');
     assert.deepEqual([rows[1].goals, rows[1].yellow, rows[1].red], [0, 0, 0], 'игроки без событий тоже в списке');
     assert.equal(rows[1].birthDate, '', 'без даты рождения — пустая строка');
+    assert.equal(rows[1].number, '', 'без номера — пустая строка');
 
     const popov = rows.find((row) => row.player === 'Попов П.');
 

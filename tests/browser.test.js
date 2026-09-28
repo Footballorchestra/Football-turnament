@@ -1087,7 +1087,7 @@ test('фото, которого нет на сайте: повторные по
     mockRepository.changeExternally(before);
     await page.close();
 });
-test('карточка игрока: имя ведёт на карточку, администратор заполняет дату рождения и принадлежность', { skip }, async () => {
+test('карточка игрока: имя ведёт на карточку, администратор заполняет номер, дату рождения и принадлежность', { skip }, async () => {
     const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
 
     // 1. В списке команд имя игрока — ссылка на его карточку
@@ -1183,18 +1183,26 @@ test('карточка игрока: имя ведёт на карточку, а
     const limits = await page.evaluate(() => ({
         maxLength: document.getElementById('player-note').getAttribute('maxlength'),
         maxDate: document.getElementById('player-birth-date').getAttribute('max'),
+        maxNumber: document.getElementById('player-number').getAttribute('max'),
+        minNumber: document.getElementById('player-number').getAttribute('min'),
         admin: document.querySelector('.page-section.active').id
     }));
 
     assert.equal(limits.admin, 'page-admin-dashboard', 'открылась админка с формой данных игрока');
     assert.equal(limits.maxLength, '200', 'длина принадлежности ограничена 200 символами');
     assert.match(limits.maxDate, /^\d{4}-\d{2}-\d{2}$/, 'будущие даты рождения выбрать нельзя');
+    assert.equal(limits.maxNumber, '99', 'игровой номер ограничен 99');
+    assert.equal(limits.minNumber, '0', 'и отрицательные номера не принимаются');
 
     const note = 'Школа №5, первый тренер — Петров И. С 2023 года играет за «Добрик».';
 
     await page.$eval('#player-birth-date', (input) => {
         input.value = '2011-05-03';
     });
+    await page.$eval('#player-number', (input) => {
+        input.value = '';
+    });
+    await page.type('#player-number', '7');
     await page.type('#player-note', note);
     await page.click('[data-form="player-info"] button[type="submit"]');
 
@@ -1207,13 +1215,13 @@ test('карточка игрока: имя ведёт на карточку, а
         const player = team ? team.players[Number(parts[1])] : '';
         const key = parts[0] + '|' + String(player).toLowerCase();
 
-        return { key: key, value: (data.playerInfo || {})[key] || null };
+        return { key: key, player: player, value: (data.playerInfo || {})[key] || null };
     }, link.hash);
 
-    assert.deepEqual(saved.value, { birthDate: '2011-05-03', note: note },
-        'дата рождения и принадлежность сохранены (' + saved.key + ')');
+    assert.deepEqual(saved.value, { birthDate: '2011-05-03', note: note, number: 7 },
+        'игровой номер, дата рождения и принадлежность сохранены (' + saved.key + ')');
 
-    // 3. Данные видны на публичной карточке игрока
+    // 3. Данные и номер видны на публичной карточке игрока
     await page.evaluate((hash) => {
         window.location.hash = hash;
     }, link.hash);
@@ -1222,6 +1230,58 @@ test('карточка игрока: имя ведёт на карточку, а
     const shown = await page.evaluate(() => document.getElementById('player-card').textContent);
 
     assert.match(shown, /Школа №5, первый тренер/, 'принадлежность видна на карточке');
+
+    const cardNumber = await page.evaluate(() => {
+        const badge = document.querySelector('#player-card .player-number');
+
+        return badge ? { text: badge.textContent, title: badge.getAttribute('title') } : null;
+    });
+
+    assert.deepEqual(cardNumber, { text: '7', title: 'Игровой номер: 7' },
+        'игровой номер виден рядом с именем на карточке игрока');
+
+    // 4. Номер виден и в таблицах: страница «Все игроки» и состав на странице «Команды»
+    await page.evaluate(() => {
+        window.location.hash = '#/allplayers';
+    });
+    await page.waitForFunction((name) => Array.from(document.querySelectorAll('#all-players-body tr'))
+        .some((row) => row.textContent.includes(name) && row.querySelector('.player-number')), {}, saved.player);
+
+    const rowView = await page.evaluate((name) => {
+        const row = Array.from(document.querySelectorAll('#all-players-body tr'))
+            .find((item) => item.textContent.includes(name));
+        const badge = row.querySelector('.player-number');
+        const style = window.getComputedStyle(badge);
+
+        return {
+            text: badge.textContent,
+            display: style.display,
+            background: style.backgroundColor,
+            width: badge.offsetWidth,
+            height: badge.offsetHeight
+        };
+    }, saved.player);
+
+    assert.equal(rowView.text, '7', 'номер виден в таблице «Все игроки»');
+    // Плашка лежит внутри flex-строки, поэтому браузер «блокифицирует» inline-flex → flex
+    assert.match(rowView.display, /^(inline-)?flex$/, 'плашка номера отрисована стилями сайта');
+    assert.notEqual(rowView.background, 'rgba(0, 0, 0, 0)', 'у плашки есть фон — номер хорошо читается');
+    assert.ok(rowView.width > 0 && rowView.height > 0, 'плашка занимает место на экране, а не скрыта');
+
+    await page.evaluate(() => {
+        window.location.hash = '#/teams';
+    });
+    await page.waitForFunction((name) => Array.from(document.querySelectorAll('#teams-grid .chip-player'))
+        .some((chip) => chip.textContent.includes(name) && chip.querySelector('.player-number')), {}, saved.player);
+
+    const chipNumber = await page.evaluate((name) => {
+        const chip = Array.from(document.querySelectorAll('#teams-grid .chip-player'))
+            .find((item) => item.textContent.includes(name));
+
+        return chip.querySelector('.player-number').textContent;
+    }, saved.player);
+
+    assert.equal(chipNumber, '7', 'номер виден рядом с именем игрока в списке команд');
 
     const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
 

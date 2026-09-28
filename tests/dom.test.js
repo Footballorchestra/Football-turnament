@@ -1798,6 +1798,110 @@ test('карточка игрока: имя кликабельно, видны �
     assert.match(card().textContent, /Иванов А\./, 'из состава открылась карточка игрока');
 });
 
+test('игровой номер: виден рядом с именем везде и заполняется в админке', async () => {
+    const seeded = remoteData();
+
+    // Иванов А. — уже с номером и забитым голом, у Петрова П. номера нет
+    seeded.matches[0].events = [{ team: 1, player: 'Иванов А.', type: 'goal' }];
+    seeded.playerInfo = { '1|иванов а.': { number: 9, birthDate: '', note: '' } };
+
+    const app = boot({ mock: createMockRepository({ data: seeded }), autoPublishDelayMs: 10000 });
+
+    await app.settle();
+
+    const badge = (container) => container.querySelector('.player-number');
+    const badgeText = (container) => {
+        const found = badge(container);
+
+        return found ? found.textContent : null;
+    };
+
+    // 1. Список команд: плашка с номером рядом с именем игрока
+    app.navigate('teams');
+
+    const chips = Array.from(app.$$('#teams-grid .chip-player'));
+    const chipFor = (name) => chips.find((chip) => chip.textContent.includes(name));
+
+    assert.equal(badgeText(chipFor('Иванов А.')), '9', 'в чипе игрока виден игровой номер');
+    assert.equal(badge(chipFor('Иванов А.')).getAttribute('title'), 'Игровой номер: 9');
+    assert.equal(badge(chipFor('Петров П.')), null, 'без номера плашки нет');
+
+    // 2. Состав команды: номер — отдельная плашка, имя не склеивается с номером
+    app.click(app.id('teams-grid').querySelector('[data-action="team-public-open"][data-id="1"]'));
+    app.click(app.id('team-detail').querySelector('[data-action="squad-toggle"]'));
+
+    const squadRow = app.id('team-squad').querySelector('tbody tr');
+
+    assert.equal(badgeText(squadRow), '9');
+    assert.equal(squadRow.querySelector('.player-name').textContent, 'Иванов А.');
+
+    // 3. Карточка игрока: номер рядом с именем в заголовке
+    app.click(app.id('team-squad').querySelector('a.player-link'));
+    assert.equal(badgeText(app.id('player-card')), '9');
+
+    // 4. Бомбардиры и страница «Все игроки»
+    app.navigate('players');
+    assert.equal(badgeText(app.id('players-body')), '9');
+
+    app.navigate('allplayers');
+    assert.equal(badgeText(app.id('all-players-body')), '9');
+
+    // 5. Детальный результат матча: номер в составе
+    app.navigate('matches');
+    app.click(app.$('#matches-list [data-action="match-public-open"][data-id="1"]'));
+    assert.equal(badgeText(app.id('match-detail').querySelector('.squad-row')), '9');
+
+    // 6. Админка: отметки голов в карточке матча
+    app.login();
+    app.openMatch(1);
+
+    const eventRow = Array.from(app.id('admin-match-events').querySelectorAll('.event-row'))
+        .find((row) => row.textContent.includes('Иванов А.'));
+
+    assert.equal(badgeText(eventRow), '9', 'номер виден и в отметках матча');
+
+    // 7. Админка: список игроков команды и форма данных игрока
+    app.openTeam('Спартак');
+    assert.equal(badgeText(app.id('admin-players-list')), '9');
+
+    app.click(app.id('admin-players-list').querySelector('[data-action="player-info-open"][data-index="0"]'));
+
+    const form = () => app.id('admin-player-info').querySelector('form');
+
+    assert.match(app.id('admin-player-info').textContent, /Игровой номер/, 'поле номера есть в форме');
+    assert.equal(app.id('player-number').value, '9', 'форма показывает сохранённый номер');
+    assert.equal(app.id('player-number').getAttribute('max'), String(L.CONFIG.maxPlayerNumber));
+    assert.equal(app.id('player-number').getAttribute('min'), '0');
+
+    // «Мусорный» номер не сохраняется: данные остаются прежними
+    app.type(app.id('player-number'), '100');
+    app.submit(form());
+
+    assert.match(app.id('player-info-error').textContent, /Игровой номер — целое число от 0 до 99/);
+    assert.equal(app.storedData().playerInfo['1|иванов а.'].number, 9, 'номер не изменился');
+
+    // Новый номер сохраняется и сразу виден в списке игроков
+    app.type(app.id('player-number'), '5');
+    app.submit(form());
+
+    assert.deepEqual(app.storedData().playerInfo['1|иванов а.'], { birthDate: '', note: '', number: 5 });
+    assert.equal(badgeText(app.id('admin-players-list')), '5', 'номер обновился в списке игроков');
+
+    // Номер можно заполнить и отдельно от даты рождения и принадлежности
+    app.click(app.id('admin-players-list').querySelector('[data-action="player-info-open"][data-index="1"]'));
+    app.type(app.id('player-number'), '2');
+    app.submit(form());
+
+    assert.deepEqual(app.storedData().playerInfo['1|петров п.'], { birthDate: '', note: '', number: 2 });
+
+    // «Убрать данные» убирает и номер
+    app.click(app.id('admin-players-list').querySelector('[data-action="player-info-open"][data-index="1"]'));
+    app.click(app.id('admin-player-info').querySelector('[data-action="player-info-clear"]'));
+
+    assert.equal(app.storedData().playerInfo['1|петров п.'], undefined, 'номер убран вместе с данными');
+    assert.equal(badgeText(app.id('admin-players-list')), '5', 'у Иванова номер остался');
+});
+
 test('карточка игрока: открывается из бомбардиров и из составов матча, несуществующий не ломает сайт', () => {
     const seeded = remoteData();
 
