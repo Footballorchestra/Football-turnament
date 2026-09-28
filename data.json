@@ -1,7 +1,7 @@
 {
   "version": 9,
-  "revision": 413,
-  "updatedAt": "2026-09-28T10:19:08.301Z",
+  "revision": 425,
+  "updatedAt": "2026-09-28T10:27:28.256Z",
   "teams": [
     {
       "id": 1,
@@ -669,6 +669,66 @@
     "1|бусырев сергей": {
       "birthDate": "1973-05-22",
       "note": ""
+    },
+    "5|штода максим": {
+      "birthDate": "",
+      "note": "",
+      "number": 21
+    },
+    "5|носаков василий": {
+      "birthDate": "",
+      "note": "",
+      "number": 9
+    },
+    "5|краснов александр": {
+      "birthDate": "",
+      "note": "",
+      "number": 1
+    },
+    "5|дмитров артем": {
+      "birthDate": "",
+      "note": "",
+      "number": 15
+    },
+    "5|тынянских александр": {
+      "birthDate": "",
+      "note": "",
+      "number": 17
+    },
+    "5|куклачев никита": {
+      "birthDate": "",
+      "note": "",
+      "number": 99
+    },
+    "5|самбир тарас": {
+      "birthDate": "",
+      "note": "",
+      "number": 7
+    },
+    "5|шевцов игорь": {
+      "birthDate": "",
+      "note": "",
+      "number": 11
+    },
+    "5|шахбазян артак": {
+      "birthDate": "",
+      "note": "",
+      "number": 69
+    },
+    "5|зимин михаил": {
+      "birthDate": "",
+      "note": "",
+      "number": 96
+    },
+    "5|гервассиев глеб": {
+      "birthDate": "",
+      "note": "",
+      "number": 35
+    },
+    "5|железняков лев": {
+      "birthDate": "",
+      "note": "",
+      "number": 12
     }
   }
 }
