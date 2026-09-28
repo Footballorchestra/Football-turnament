@@ -939,10 +939,22 @@ test('эмблема команды: загрузка из админки, сж�
     await clickInView(page, '[data-action="github-save-token"]');
     await page.waitForFunction(() => document.getElementById('github-token').placeholder.includes('сохранён'));
 
-    const logosBefore = await page.evaluate(() => Object.keys(window.FTApp.getData().teamPhotos || {}).length);
+    // Эмблемы есть уже у многих команд, поэтому берём команду без эмблемы:
+    // тогда запись действительно добавляется, а не заменяет прежнюю
+    const logosBefore = await page.evaluate(() => {
+        const data = window.FTApp.getData();
+        const photos = data.teamPhotos || {};
+        const withoutLogo = data.teams.filter((team) => !photos[String(team.id)]);
 
-    // Открываем первую команду: в карточке есть загрузка эмблемы
-    await clickWhenReady(page, '#admin-teams-list [data-action="team-open"]');
+        return {
+            count: Object.keys(photos).length,
+            teamId: (withoutLogo[0] || data.teams[0]).id,
+            replaces: withoutLogo.length === 0
+        };
+    });
+
+    // Открываем выбранную команду: в карточке есть загрузка эмблемы
+    await clickInView(page, '#admin-teams-list [data-action="team-open"][data-id="' + logosBefore.teamId + '"]');
     await page.waitForFunction(() => !!document.querySelector('#admin-team-photo input[data-photo-kind="team"]'));
 
     // Отдаём настоящее изображение (6×6 PNG рисуется в браузере)
@@ -974,9 +986,9 @@ test('эмблема команды: загрузка из админки, сж�
             image.complete && image.naturalWidth > 0;
     });
 
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate((teamId) => {
         const data = window.FTApp.getData();
-        const team = data.teams[0];
+        const team = data.teams.filter((item) => String(item.id) === String(teamId))[0];
         const image = document.querySelector('#admin-team-photo img.team-photo');
 
         return {
@@ -985,9 +997,10 @@ test('эмблема команды: загрузка из админки, сж�
             previews: Object.keys(window.FTApp.getState().photoPreviews).length,
             width: image ? image.naturalWidth : 0
         };
-    });
+    }, logosBefore.teamId);
 
-    assert.equal(result.count, logosBefore + 1, 'эмблема записана в данные');
+    assert.equal(result.count, logosBefore.replaces ? logosBefore.count : logosBefore.count + 1,
+        'эмблема записана в данные');
     assert.match(result.path, /^assets\/photos\/team-[a-z0-9-]+-[0-9a-f]{6}\.jpg$/, 'имя файла эмблемы');
     assert.equal(result.previews, 1, 'предпросмотр эмблемы');
     assert.equal(result.width, 512, 'эмблема сжата до квадрата 512');
