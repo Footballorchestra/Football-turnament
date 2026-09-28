@@ -1,7 +1,7 @@
 {
   "version": 9,
-  "revision": 385,
-  "updatedAt": "2026-09-28T07:43:37.121Z",
+  "revision": 406,
+  "updatedAt": "2026-09-28T10:12:25.323Z",
   "teams": [
     {
       "id": 1,
@@ -213,21 +213,6 @@
           "team": 8,
           "player": "Иванов Святослав",
           "type": "goal"
-        },
-        {
-          "team": 7,
-          "player": "Митинский Александр",
-          "type": "yellow"
-        },
-        {
-          "team": 8,
-          "player": "Деревенко Матвей",
-          "type": "yellow"
-        },
-        {
-          "team": 8,
-          "player": "Шварц Григорий",
-          "type": "yellow"
         }
       ]
     },
@@ -440,11 +425,6 @@
         },
         {
           "team": 5,
-          "player": "Штода Максим",
-          "type": "yellow"
-        },
-        {
-          "team": 5,
           "player": "Тынянских Александр",
           "type": "goal"
         },
@@ -631,7 +611,19 @@
     "6|дроманов тимофей": "assets/photos/dromanov-timofei-db9527.jpg",
     "6|кузнецов иван": "assets/photos/kuznetsov-ivan-07337f.jpg",
     "6|петухов михаил": "assets/photos/petukhov-mikhail-8e95a0.jpg",
-    "6|федоров артемий": "assets/photos/fedorov-artemii-3ca56e.jpg"
+    "6|федоров артемий": "assets/photos/fedorov-artemii-3ca56e.jpg",
+    "4|саитов ринат": "assets/photos/saitov-rinat-67c875.jpg",
+    "4|баймулдин аким": "assets/photos/baimuldin-akim-2a4a38.jpg",
+    "4|жуков влад": "assets/photos/zhukov-vlad-03b07e.jpg",
+    "4|лазарев алексей": "assets/photos/lazarev-aleksei-a103d3.jpg",
+    "4|абраров артур": "assets/photos/abrarov-artur-72344c.jpg",
+    "4|демин андрей": "assets/photos/demin-andrei-a37ff1.jpg",
+    "4|бахарев клим": "assets/photos/bakharev-klim-3b0fbb.jpg",
+    "4|хатылев владимир": "assets/photos/khatylev-vladimir-f5f7e1.jpg",
+    "4|колясников андрей": "assets/photos/kolyasnikov-andrei-3eda5c.jpg",
+    "4|мясников ефим": "assets/photos/myasnikov-efim-a8cbf1.jpg",
+    "4|файзулин арсений": "assets/photos/faizulin-arsenii-b89c1c.jpg",
+    "4|демиденко михаил": "assets/photos/demidenko-mikhail-6585fa.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
