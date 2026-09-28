@@ -1,7 +1,7 @@
 {
   "version": 9,
-  "revision": 425,
-  "updatedAt": "2026-09-28T10:27:28.256Z",
+  "revision": 434,
+  "updatedAt": "2026-09-28T15:11:05.633Z",
   "teams": [
     {
       "id": 1,
@@ -629,7 +629,15 @@
     "7|митинский александр": "assets/photos/mitinskii-aleksandr-bdf2b1.jpg",
     "7|кулик сергей": "assets/photos/kulik-sergei-39fef9.jpg",
     "7|субботкин иван": "assets/photos/subbotkin-ivan-57f9aa.jpg",
-    "7|чекмарев григорий": "assets/photos/chekmarev-grigorii-bddd5d.jpg"
+    "7|чекмарев григорий": "assets/photos/chekmarev-grigorii-bddd5d.jpg",
+    "7|донской алексей": "assets/photos/donskoi-aleksei-4648cd.jpg",
+    "7|георгиевский игорь": "assets/photos/georgievskii-igor-b68c97.jpg",
+    "7|еремин иван": "assets/photos/eremin-ivan-066fa4.jpg",
+    "7|чакрыгин михаил": "assets/photos/chakrygin-mikhail-0ef6f2.jpg",
+    "7|малахов александр": "assets/photos/malakhov-aleksandr-a434c2.jpg",
+    "7|якушев антон": "assets/photos/yakushev-anton-9c3c0f.jpg",
+    "7|иванюк илья": "assets/photos/ivanyuk-ilya-9a1848.jpg",
+    "7|терехов владимир": "assets/photos/terekhov-vladimir-3ab4c2.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
@@ -638,6 +646,7 @@
     "4": "assets/photos/team-filarmoniya-b75ca1.jpg",
     "5": "assets/photos/team-bolshoi-teatr-e17923.jpg",
     "6": "assets/photos/team-tsvo-mo-rf-9a162a.jpg",
+    "7": "assets/photos/team-fk-gko-ef3c28.jpg",
     "8": "assets/photos/team-fk-motsart-7477ec.jpg"
   },
   "teamImages": {
