@@ -1,7 +1,7 @@
 {
   "version": 10,
-  "revision": 478,
-  "updatedAt": "2026-09-29T12:19:32.247Z",
+  "revision": 480,
+  "updatedAt": "2026-09-29T16:02:55.443Z",
   "teams": [
     {
       "id": 1,
@@ -552,6 +552,24 @@
           "type": "goal"
         }
       ]
+    },
+    {
+      "id": 11,
+      "teamA": 6,
+      "teamB": 7,
+      "date": "2026-10-06",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
+    },
+    {
+      "id": 12,
+      "teamA": 4,
+      "teamB": 2,
+      "date": "2026-09-29",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
     }
   ],
   "photos": {
