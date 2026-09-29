@@ -1,7 +1,7 @@
 {
   "version": 10,
-  "revision": 465,
-  "updatedAt": "2026-09-29T12:18:10.074Z",
+  "revision": 478,
+  "updatedAt": "2026-09-29T12:19:32.247Z",
   "teams": [
     {
       "id": 1,
@@ -151,22 +151,6 @@
         "Заморов Артемий",
         "Алексеев Никита",
         "Ильенко Дмитрий"
-      ]
-    },
-    {
-      "id": 9,
-      "name": "Тест 1",
-      "players": [
-        "А 1",
-        "А2"
-      ]
-    },
-    {
-      "id": 10,
-      "name": "Тест 2",
-      "players": [
-        "Б1",
-        "Б2"
       ]
     }
   ],
@@ -568,71 +552,6 @@
           "type": "goal"
         }
       ]
-    },
-    {
-      "id": 11,
-      "teamA": 9,
-      "teamB": 10,
-      "date": "2026-09-29",
-      "scoreA": 3,
-      "scoreB": 2,
-      "finished": true,
-      "events": [
-        {
-          "team": 9,
-          "player": "А 1",
-          "type": "yellow"
-        },
-        {
-          "team": 9,
-          "player": "А 1",
-          "type": "yellow"
-        },
-        {
-          "team": 9,
-          "player": "А 1",
-          "type": "yellow"
-        },
-        {
-          "team": 9,
-          "player": "А 1",
-          "type": "yellow"
-        },
-        {
-          "team": 9,
-          "player": "А 1",
-          "type": "goal"
-        },
-        {
-          "team": 9,
-          "player": "А 1",
-          "type": "goal"
-        },
-        {
-          "team": 9,
-          "player": "А 1",
-          "type": "goal"
-        },
-        {
-          "team": 10,
-          "player": "Б1",
-          "type": "goal"
-        },
-        {
-          "team": 10,
-          "player": "Б2",
-          "type": "goal"
-        }
-      ]
-    },
-    {
-      "id": 12,
-      "teamA": 9,
-      "teamB": 10,
-      "date": "2026-09-30",
-      "scoreA": null,
-      "scoreB": null,
-      "finished": false
     }
   ],
   "photos": {
