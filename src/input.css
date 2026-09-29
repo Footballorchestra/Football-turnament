@@ -780,9 +780,23 @@
         height: 56px;
     }
 
-    /* В компактной турнирной таблице (телефон) эмблема, как и бейдж, скрывается */
-    .standings-table.is-compact .team-photo {
-        display: none;
+    /* --- Турнирная таблица: сначала эмблема, потом название команды ---
+       Размер чуть меньше, чем в карточках, а отступ плотнее: строка таблицы
+       остаётся компактной. В компактном виде на телефоне эмблема уменьшается
+       ещё сильнее (см. медиазапрос для смартфонов ниже). */
+    .standings-table .team-link {
+        gap: 0.5rem;
+    }
+
+    .standings-table .team-photo,
+    .standings-table .team-badge {
+        width: 28px;
+        height: 28px;
+        border-radius: 4px;
+    }
+
+    .standings-table .team-badge {
+        font-size: 0.6875rem;
     }
 
     /* --- Карточка игрока: крупное фото, дата рождения и принадлежность --- */
@@ -1857,9 +1871,22 @@
     }
 
     /* --- Турнирная таблица: компактный вид по умолчанию (номер, команда, И, РМ, О) --- */
-    .standings-table.is-compact .col-optional,
-    .standings-table.is-compact .team-badge {
+    .standings-table.is-compact .col-optional {
         display: none;
+    }
+
+    /* Эмблема (или бейдж с инициалами) в компактной таблице остаётся, но совсем
+       небольшой: место и название команды важнее, а горизонтальной прокрутки
+       на сайте быть не должно */
+    .standings-table.is-compact .team-photo,
+    .standings-table.is-compact .team-badge {
+        width: 24px;
+        height: 24px;
+        border-radius: 3px;
+    }
+
+    .standings-table.is-compact .team-link {
+        gap: 0.375rem;
     }
 
     .standings-table.is-compact .row-detail {

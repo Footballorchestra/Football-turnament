@@ -344,6 +344,75 @@ test('все страницы открываются и по меню, и по �
     await page.close();
 });
 
+/**
+ * Турнирная таблица: сначала эмблема команды, потом название, а призовая тройка
+ * подсвечена (лидер — зелёным, 2 и 3 место — светло-жёлтым). Раньше стили прятали
+ * эмблему в компактной таблице на всех экранах, а лидер подсвечивался жёлтым.
+ */
+test('турнирная таблица: эмблема перед названием и подсветка призовой тройки', { skip }, async () => {
+    const { page, problems } = await openPage({ url: baseUrl + '/#/standings' });
+
+    // primary-50 — зелёный, amber-50 — светло-жёлтый
+    const LEADER = 'rgb(232, 245, 233)';
+    const PRIZE = 'rgb(255, 251, 235)';
+    const NONE = 'rgba(0, 0, 0, 0)';
+
+    const look = () => page.evaluate(() => {
+        const rows = Array.from(document.querySelectorAll('#standings-body tr'));
+
+        return {
+            emblems: document.querySelectorAll('#standings-body img.team-photo').length,
+            rows: rows.map((row) => {
+                const avatar = row.querySelector('.team-photo, .team-badge');
+                const label = row.querySelector('.team-name');
+                const box = avatar ? avatar.getBoundingClientRect() : null;
+
+                return {
+                    place: row.querySelector('td').textContent.trim(),
+                    avatarFirst: Boolean(avatar) && avatar.parentNode.firstElementChild === avatar,
+                    avatarFollowedByName: Boolean(avatar) && Boolean(label) && avatar.nextElementSibling === label,
+                    avatarWidth: box ? Math.round(box.width) : 0,
+                    avatarHeight: box ? Math.round(box.height) : 0,
+                    bg: getComputedStyle(row).backgroundColor
+                };
+            }),
+            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+        };
+    });
+
+    const desktop = await look();
+
+    assert.ok(desktop.emblems > 0, 'в данных есть эмблемы команд');
+    assert.ok(desktop.rows.length > 3, 'в таблице больше трёх строк: ' + desktop.rows.length);
+
+    desktop.rows.forEach((row) => {
+        assert.equal(row.avatarFirst, true, 'место ' + row.place + ': сначала эмблема');
+        assert.equal(row.avatarFollowedByName, true, 'место ' + row.place + ': затем название команды');
+        assert.ok(row.avatarWidth > 0 && row.avatarHeight > 0, 'место ' + row.place + ': эмблема видна стилями');
+    });
+
+    assert.equal(desktop.rows[0].bg, LEADER, 'лидер подсвечен зелёным');
+    assert.equal(desktop.rows[1].bg, PRIZE, 'второе место — светло-жёлтое');
+    assert.equal(desktop.rows[2].bg, PRIZE, 'третье место — светло-жёлтое');
+    assert.equal(desktop.rows[3].bg, NONE, 'остальные строки без подсветки');
+
+    // Телефон: компактная таблица — эмблема меньше, но по-прежнему видна,
+    // а горизонтальной прокрутки нет
+    await page.setViewport({ width: 360, height: 640, isMobile: true, hasTouch: true });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    const phone = await look();
+
+    assert.equal(phone.rows[0].avatarWidth > 0, true, 'на телефоне эмблема видна');
+    assert.equal(phone.rows[0].avatarWidth < desktop.rows[0].avatarWidth, true, 'на телефоне эмблема меньше');
+    assert.equal(phone.rows[0].bg, LEADER, 'на телефоне подсветка та же');
+    assert.equal(phone.rows[1].bg, PRIZE, 'на телефоне второе место — светло-жёлтое');
+    assert.equal(phone.overflow, 0, 'таблица не выходит за экран');
+
+    assert.deepEqual(problems, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+});
+
 test('админ-панель целиком в браузере: вход, команда, матч, счёт и сохранение после перезагрузки', { skip }, async () => {
     const { page, problems } = await openPage();
 
@@ -1013,6 +1082,23 @@ test('эмблема команды: загрузка из админки, сж�
 
         return images.some((image) => image.getAttribute('src').indexOf('data:image/jpeg;base64,') === 0);
     });
+
+    // И она действительно отрисована, а не спрятана стилями: сначала эмблема, потом название
+    const logoBox = await page.evaluate(() => {
+        const images = Array.from(document.querySelectorAll('#standings-body img.team-photo'));
+        const image = images.filter((item) => item.getAttribute('src').indexOf('data:image/jpeg;base64,') === 0)[0];
+        const box = image ? image.getBoundingClientRect() : { width: 0, height: 0 };
+
+        return {
+            width: Math.round(box.width),
+            height: Math.round(box.height),
+            first: image ? image.parentNode.firstElementChild === image : false
+        };
+    });
+
+    assert.ok(logoBox.width > 0 && logoBox.height > 0,
+        'эмблема в турнирной таблице не скрыта стилями: ' + logoBox.width + 'x' + logoBox.height);
+    assert.equal(logoBox.first, true, 'сначала эмблема, потом название команды');
 
     // Проверка «есть ли уже такой файл» штатно отвечает 404 — браузер пишет об этом в консоль.
     // В ответах 404 есть и запрос про файл эмблемы (значит, файл новый и sha не нужен).

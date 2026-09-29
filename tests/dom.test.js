@@ -249,6 +249,21 @@ test('турнирная таблица: места, очки и разница 
     // «Формы» в таблице больше нет: последний столбец — очки, точек формы нет
     assert.equal(rows[0].querySelectorAll('td').length, 9, 'место, команда, И, В, Н, П, мячи, РМ, очки');
     assert.equal(rows[0].querySelectorAll('.form-dot').length, 0, 'форма команды не показывается');
+
+    // Сначала эмблема команды (или бейдж с инициалами), потом название
+    const firstLink = rows[0].querySelector('.team-link');
+
+    assert.ok(firstLink.firstElementChild.classList.contains('team-badge'), 'эмблема стоит перед названием');
+    assert.equal(firstLink.firstElementChild.nextElementSibling.classList.contains('team-name'), true,
+        'после эмблемы идёт название команды');
+
+    // Подсветка призовой тройки: лидер — зелёный, 2 и 3 место — светло-жёлтый
+    assert.equal(rows[0].classList.contains('bg-primary-50'), true, 'лидер подсвечен зелёным');
+    assert.equal(rows[0].classList.contains('bg-amber-50'), false, 'у лидера нет жёлтой подсветки');
+    assert.equal(rows[1].classList.contains('bg-amber-50'), true, 'второе место — светло-жёлтое');
+    assert.equal(rows[2].classList.contains('bg-amber-50'), true, 'третье место — светло-жёлтое');
+    assert.equal(rows[1].classList.contains('bg-primary-50'), false, 'второе место без зелёной подсветки');
+    assert.equal(rows[3].className.trim(), '', 'четвёртое место без подсветки');
 });
 
 test('команды: карточки, поиск и состав', () => {

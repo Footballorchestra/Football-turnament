@@ -1707,7 +1707,8 @@
         }
 
         $('standings-body').innerHTML = standings.map(function (row) {
-            var rowClass = row.place === 1 ? 'bg-amber-50' : (row.place <= 3 ? 'bg-primary-50' : '');
+            /* Подсветка призовой тройки: лидер — зелёный, 2 и 3 место — светло-жёлтый */
+            var rowClass = row.place === 1 ? 'bg-primary-50' : (row.place <= 3 ? 'bg-amber-50' : '');
             var diffClass = row.goalDiff > 0 ? 'text-green-700' : (row.goalDiff < 0 ? 'text-red-700' : '');
             var detail = 'В ' + row.wins + ' · Н ' + row.draws + ' · П ' + row.losses +
                 ' · Мячи ' + row.goalsFor + '–' + row.goalsAgainst;
