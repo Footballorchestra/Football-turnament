@@ -18,6 +18,21 @@ const { createMockRepository, createMockServer } = require('./helpers/mock-githu
 
 const ROOT = path.resolve(__dirname, '..');
 
+/** Каталоги кэша puppeteer: переменная окружения, затем обычные места системы. */
+function puppeteerCacheRoots() {
+    const roots = [];
+
+    if (process.env.PUPPETEER_CACHE_DIR) {
+        roots.push(process.env.PUPPETEER_CACHE_DIR);
+    }
+
+    roots.push(path.join(os.homedir(), '.cache', 'puppeteer'));
+    roots.push(path.join(os.homedir(), 'Library', 'Caches', 'puppeteer'));
+    roots.push(path.join(os.homedir(), 'AppData', 'Local', 'puppeteer'));
+
+    return roots;
+}
+
 /** Ищет исполняемый файл Chrome: переменная окружения, кэш puppeteer, системные пути. */
 function findChrome() {
     const candidates = [];
@@ -26,13 +41,28 @@ function findChrome() {
         candidates.push(process.env.CHROME_PATH);
     }
 
-    const cacheDir = '/root/.cache/puppeteer/chrome-headless-shell';
+    puppeteerCacheRoots().forEach((root) => {
+        const builds = path.join(root, 'chrome-headless-shell');
 
-    if (fs.existsSync(cacheDir)) {
-        fs.readdirSync(cacheDir).forEach((version) => {
-            candidates.push(path.join(cacheDir, version, 'chrome-headless-shell-linux64', 'chrome-headless-shell'));
+        if (!fs.existsSync(builds)) {
+            return;
+        }
+
+        fs.readdirSync(builds).forEach((version) => {
+            const versionDir = path.join(builds, version);
+
+            if (!fs.statSync(versionDir).isDirectory()) {
+                return;
+            }
+
+            fs.readdirSync(versionDir)
+                .filter((entry) => entry.indexOf('chrome-headless-shell-') === 0)
+                .forEach((platform) => {
+                    candidates.push(path.join(versionDir, platform, 'chrome-headless-shell'));
+                    candidates.push(path.join(versionDir, platform, 'chrome-headless-shell.exe'));
+                });
         });
-    }
+    });
 
     candidates.push(
         '/usr/bin/chromium',

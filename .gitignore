@@ -10,7 +10,21 @@ venv/
 
 # Окружение и секреты
 .env
-.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Резервные копии и временные файлы
+*.bak
+*.orig
+*.rej
+*.tmp
+*.swp
+*~
+nohup.out
 
 # Сборка и логи
 dist/

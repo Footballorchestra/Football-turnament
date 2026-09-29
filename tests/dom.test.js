@@ -1520,6 +1520,17 @@ test('токен живёт только в браузере устройств�
     assert.equal(app.id('github-token').placeholder, 'github_pat_…');
 });
 
+test('страница просит верхнее окно не держать её в чужом iframe', () => {
+    const html = readSource('index.html');
+    const guard = readSource('assets/js/frame-guard.js');
+
+    assert.ok(html.includes('assets/js/frame-guard.js'), 'скрипт защиты подключён в разметке');
+    assert.match(guard, /window\.top === window\.self/, 'скрипт сравнивает верхнее окно со своим');
+    assert.match(guard, /window\.top\.location = window\.self\.location\.href/, 'во фрейме страница уходит на свой адрес');
+    assert.match(readSource('_headers'), /frame-ancestors 'none'/, 'жёсткий запрет остаётся в заголовках хостингов');
+    assert.equal(html.includes('frame-ancestors'), false, 'в <meta> директива frame-ancestors не работает — её место в _headers');
+});
+
 test('админка: «Забрать из репозитория» подтягивает свежие результаты', async () => {
     const mock = createMockRepository({ data: remoteData() });
     const app = boot({ mock, autoPublishDelayMs: 10000 });
