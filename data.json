@@ -1,7 +1,7 @@
 {
   "version": 10,
-  "revision": 454,
-  "updatedAt": "2026-09-29T12:15:20.352Z",
+  "revision": 464,
+  "updatedAt": "2026-09-29T12:16:11.856Z",
   "teams": [
     {
       "id": 1,
@@ -565,6 +565,62 @@
         {
           "team": 2,
           "player": "Зенин Константин",
+          "type": "goal"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "teamA": 9,
+      "teamB": 10,
+      "date": "2026-09-29",
+      "scoreA": 3,
+      "scoreB": 2,
+      "finished": true,
+      "events": [
+        {
+          "team": 9,
+          "player": "А 1",
+          "type": "yellow"
+        },
+        {
+          "team": 9,
+          "player": "А 1",
+          "type": "yellow"
+        },
+        {
+          "team": 9,
+          "player": "А 1",
+          "type": "yellow"
+        },
+        {
+          "team": 9,
+          "player": "А 1",
+          "type": "yellow"
+        },
+        {
+          "team": 9,
+          "player": "А 1",
+          "type": "goal"
+        },
+        {
+          "team": 9,
+          "player": "А 1",
+          "type": "goal"
+        },
+        {
+          "team": 9,
+          "player": "А 1",
+          "type": "goal"
+        },
+        {
+          "team": 10,
+          "player": "Б1",
+          "type": "goal"
+        },
+        {
+          "team": 10,
+          "player": "Б2",
           "type": "goal"
         }
       ]
