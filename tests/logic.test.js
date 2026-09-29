@@ -334,7 +334,7 @@ test('нормализация фото: валидные пути остают�
     assert.deepEqual(Object.keys(result.data.photos), ['1|иванов а.'], 'осталось только фото игрока из заявки');
     assert.equal(result.data.photos['1|иванов а.'], 'assets/photos/ivanov-a-1a2b3c.jpg');
     assert.equal(result.repaired, true, 'отброшенные записи — это исправление данных');
-    assert.equal(result.data.version, 9);
+    assert.equal(result.data.version, L.CONFIG.dataVersion);
 
     // Старый файл без карты фото грузится без предупреждений
     const legacy = L.normalizeData({ teams: [{ id: 1, name: 'A', players: ['X'] }], matches: [] });
@@ -389,7 +389,7 @@ test('эмблема команды: запись, чтение, удалени�
 
     assert.deepEqual(result.data.teamPhotos, { '1': 'assets/photos/team-spartak-33abcd.jpg' });
     assert.equal(result.repaired, true, 'отброшенные эмблемы — исправление данных');
-    assert.equal(result.data.version, 9);
+    assert.equal(result.data.version, L.CONFIG.dataVersion);
 
     // Удаление и данные без карты эмблем загружаются без предупреждений
     L.removeTeamPhoto(data, 1);
@@ -524,7 +524,7 @@ test('данные игрока: проверка формы и нормализ
         '1|иванов а.': { birthDate: '2011-04-18', note: 'школа', number: 10 }
     });
     assert.equal(result.repaired, true, 'отброшенные записи — исправление данных');
-    assert.equal(result.data.version, 9);
+    assert.equal(result.data.version, L.CONFIG.dataVersion);
 
     // Длинную принадлежность нормализация подрезает до лимита
     const clipped = L.normalizePlayerInfo(
@@ -835,7 +835,7 @@ test('normalizeData: события матчей сохраняются, «му�
 
     assert.equal(result.repaired, true, 'событие чужой команды — это исправление данных');
     assert.deepEqual(result.data.matches[0].events, [{ team: 1, player: 'Иванов А.', type: 'goal' }]);
-    assert.equal(result.data.version, 9, 'в данных отмечена новая версия формата');
+    assert.equal(result.data.version, L.CONFIG.dataVersion, 'в данных отмечена новая версия формата');
 });
 
 test('лучшие бомбардиры: сортировка по голам, при равенстве — по имени', () => {
@@ -1053,7 +1053,7 @@ test('фотографии команды: нормализация отбрас
     assert.equal(result.data.teamImages['1'].length, L.CONFIG.maxTeamImages, 'лишние фотографии отброшены');
     assert.equal('9' in result.data.teamImages, false, 'фотографии удалённой команды отброшены');
     assert.equal(result.repaired, true, 'отброшенное — исправление данных');
-    assert.equal(result.data.version, 9);
+    assert.equal(result.data.version, L.CONFIG.dataVersion);
 
     // Данные без карты фотографий загружаются без предупреждений
     assert.equal(L.normalizeTeamImages(undefined, []).repaired, false);
@@ -1104,6 +1104,223 @@ test('все игроки турнира: команда, имя, дата ро�
     // Пустые данные не ломают список
     assert.deepEqual(L.computeAllPlayers(null), []);
     assert.deepEqual(L.computeAllPlayers({ teams: [] }), []);
+});
+
+/* ------------------------------------------------------------------ */
+/* Дисциплина: жёлтые карточки превращаются в красную                   */
+/* ------------------------------------------------------------------ */
+
+/** Жёлтая карточка игрока (для краткости в тестах дисциплины). */
+const yellow = (team, player) => ({ team: team, player: player, type: 'yellow' });
+
+/** Красная карточка игрока. */
+const red = (team, player) => ({ team: team, player: player, type: 'red' });
+
+/** Четыре матча: 1 и 2 — прошедшие, 3 и 4 — предстоящие. */
+function disciplineMatches(eventsOf) {
+    const events = eventsOf || {};
+
+    return [
+        { id: 1, teamA: 1, teamB: 2, scoreA: 1, scoreB: 0, date: '2026-09-01', finished: true, events: events[1] || [] },
+        { id: 2, teamA: 2, teamB: 1, scoreA: 0, scoreB: 0, date: '2026-09-08', finished: true, events: events[2] || [] },
+        { id: 3, teamA: 1, teamB: 3, scoreA: null, scoreB: null, date: '2026-09-15', finished: false, events: events[3] || [] },
+        { id: 4, teamA: 2, teamB: 3, scoreA: null, scoreB: null, date: '2026-09-22', finished: false, events: events[4] || [] }
+    ];
+}
+
+/** Данные турнира для проверки дисквалификаций. */
+function disciplineData(options) {
+    const opts = options || {};
+
+    return {
+        teams: [
+            { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.'] },
+            { id: 2, name: 'Динамо', players: ['Сидоров С.'] },
+            { id: 3, name: 'ЦСКА', players: ['Новиков Н.'] }
+        ],
+        matches: disciplineMatches(opts.events),
+        playerInfo: opts.playerInfo || {},
+        settings: opts.settings || { yellowLimit: 4, yellowPeriodDays: 0 }
+    };
+}
+
+test('дисциплина: лимит жёлтых карточек превращается в красную и пропуск следующего матча команды', () => {
+    // Иванов А. набрал три жёлтые в первом матче и четвёртую — во втором
+    const data = disciplineData({
+        events: {
+            1: [yellow(1, 'Иванов А.'), yellow(1, 'Иванов А.'), yellow(1, 'Иванов А.')],
+            2: [yellow(1, 'Иванов А.')]
+        },
+        playerInfo: { '1|иванов а.': { number: 10, birthDate: '', note: '' } }
+    });
+
+    const result = L.computeSuspensions(data);
+
+    assert.equal(result.settings.yellowLimit, 4, 'правила попали в результат');
+    assert.deepEqual(Object.keys(result.bans), ['3'], 'дисквалификация только на ближайший матч Спартака');
+
+    const ban = result.bans['3'][0];
+
+    assert.equal(ban.player, 'Иванов А.');
+    assert.equal(ban.teamName, 'Спартак');
+    assert.equal(ban.number, 10, 'игровой номер берётся из карточки игрока');
+    assert.equal(ban.reason, 'yellow');
+    assert.equal(ban.reasonText, '4-я жёлтая карточка');
+    assert.equal(ban.yellows, 4);
+    assert.equal(ban.sourceMatchId, 2, 'карточка получена во втором матче');
+    assert.equal(ban.matchId, 3, 'пропускает третий матч');
+    assert.equal(ban.date, '2026-09-08');
+
+    // Матч Динамо и ЦСКА дисквалификация не затрагивает
+    assert.equal(result.bans['4'], undefined);
+
+    assert.deepEqual(L.matchSuspensions(data, 3).map((entry) => entry.player), ['Иванов А.']);
+    assert.deepEqual(L.matchSuspensions(data, 1), [], 'прошедший матч без дисквалификаций');
+    assert.deepEqual(L.matchSuspensions(data, null), []);
+});
+
+test('дисциплина: пропущенный матч снимает запрет, а счёт жёлтых начинается заново', () => {
+    // Четвёртая жёлтая во втором матче → пропуск третьего: игрок дисквалификацию отбыл
+    const served = disciplineData({
+        events: {
+            1: [yellow(1, 'Иванов А.'), yellow(1, 'Иванов А.'), yellow(1, 'Иванов А.')],
+            2: [yellow(1, 'Иванов А.')],
+            3: [yellow(1, 'Петров П.')]
+        }
+    });
+
+    assert.deepEqual(Object.keys(L.computeSuspensions(served).bans), ['3'],
+        'после отбытого матча новых дисквалификаций нет');
+
+    // Лимит 2: две жёлтые в первом матче → пропуск второго, ещё две во втором → пропуск третьего
+    const twice = disciplineData({
+        events: {
+            1: [yellow(1, 'Иванов А.'), yellow(1, 'Иванов А.')],
+            2: [yellow(1, 'Иванов А.'), yellow(1, 'Иванов А.'), yellow(1, 'Петров П.')]
+        },
+        settings: { yellowLimit: 2, yellowPeriodDays: 0 }
+    });
+
+    const result = L.computeSuspensions(twice);
+
+    assert.deepEqual(Object.keys(result.bans), ['2', '3'], 'каждое достижение лимита — новая дисквалификация');
+    assert.equal(result.bans['2'][0].reasonText, '2-я жёлтая карточка');
+    assert.deepEqual(result.bans['3'].map((entry) => entry.player), ['Иванов А.']);
+});
+
+test('дисциплина: прямая красная карточка — пропуск следующего матча; последний матч ничего не даёт', () => {
+    const data = disciplineData({
+        events: {
+            1: [red(2, 'Сидоров С.')],
+            4: [red(3, 'Новиков Н.')]
+        }
+    });
+
+    const result = L.computeSuspensions(data);
+
+    // Сидоров С. (Динамо) пропускает матч 2 — ближайший матч своей команды
+    assert.deepEqual(Object.keys(result.bans), ['2']);
+    assert.equal(result.bans['2'][0].reason, 'red');
+    assert.equal(result.bans['2'][0].reasonText, 'красная карточка');
+    assert.equal(result.bans['2'][0].yellows, 0);
+
+    // Матч 4 — последний у ЦСКА: пропускать нечего, дисквалификация не создаётся
+    assert.equal(result.bans['4'], undefined);
+    assert.deepEqual(L.computeSuspensions({ teams: data.teams, matches: [data.matches[0]] }).bans, {},
+        'у команды больше нет матчей — дисквалификацию отбывать не в чем');
+
+    // Игрока убрали из заявки: его карточки в истории остались, но пропускать некому
+    const withoutPlayer = disciplineData({ events: { 1: [red(2, 'Сидоров С.')] } });
+
+    withoutPlayer.teams[1].players = ['Другой Игрок'];
+
+    assert.deepEqual(L.computeSuspensions(withoutPlayer).bans, {});
+});
+
+test('дисциплина: период действия жёлтых карточек (0 — весь турнир)', () => {
+    const events = {
+        1: [yellow(1, 'Иванов А.'), yellow(1, 'Иванов А.'), yellow(1, 'Иванов А.')],
+        2: [yellow(1, 'Иванов А.')]
+    };
+    // Матчи разнесены во времени: первый — 1 января, второй — 1 марта
+    const spread = disciplineData({ events: events });
+
+    spread.matches[0].date = '2026-01-01';
+    spread.matches[1].date = '2026-03-01';
+    spread.matches[2].date = '2026-03-08';
+    spread.matches[3].date = '2026-03-15';
+
+    const month = L.deepCopy(spread);
+
+    month.settings = { yellowLimit: 4, yellowPeriodDays: 30 };
+
+    assert.deepEqual(Object.keys(L.computeSuspensions(month).bans), [],
+        'жёлтые старше периода не считаются — до лимита дело не дошло');
+    assert.deepEqual(Object.keys(L.computeSuspensions(spread).bans), ['3'],
+        'за весь турнир четвёртая жёлтая даёт красную');
+
+    // Период 59 дней: все четыре карточки ещё в периоде
+    const border = L.deepCopy(spread);
+
+    border.settings = { yellowLimit: 4, yellowPeriodDays: 59 };
+
+    assert.deepEqual(Object.keys(L.computeSuspensions(border).bans), ['3'], '59 дней — карточки действуют');
+});
+
+test('дисциплина: настройки читаются, проверяются и нормализуются', () => {
+    assert.deepEqual(L.getDisciplineSettings({}), { yellowLimit: 4, yellowPeriodDays: 0 }, 'значения по умолчанию');
+    assert.deepEqual(L.getDisciplineSettings({ settings: { yellowLimit: 5, yellowPeriodDays: 90 } }),
+        { yellowLimit: 5, yellowPeriodDays: 90 });
+    assert.deepEqual(L.normalizeDisciplineSettings({ yellowLimit: 100, yellowPeriodDays: -3 }),
+        { yellowLimit: 4, yellowPeriodDays: 0 }, 'невозможные значения заменяются разумными');
+    assert.deepEqual(L.normalizeDisciplineSettings({ yellowLimit: '3' }), { yellowLimit: 3, yellowPeriodDays: 0 });
+
+    assert.equal(L.validateDisciplineSettings({ yellowLimit: '', yellowPeriodDays: '0' }).ok, false);
+    assert.equal(L.validateDisciplineSettings({ yellowLimit: '0', yellowPeriodDays: '0' }).ok, false);
+    assert.equal(L.validateDisciplineSettings({ yellowLimit: '13', yellowPeriodDays: '0' }).ok, false);
+    assert.equal(L.validateDisciplineSettings({ yellowLimit: '4', yellowPeriodDays: '-1' }).ok, false);
+    assert.equal(L.validateDisciplineSettings({ yellowLimit: '4', yellowPeriodDays: '4000' }).ok, false);
+    assert.deepEqual(L.validateDisciplineSettings({ yellowLimit: '4', yellowPeriodDays: '30' }),
+        { ok: true, value: { yellowLimit: 4, yellowPeriodDays: 30 } });
+    assert.match(L.validateDisciplineSettings({ yellowLimit: 'x', yellowPeriodDays: '0' }).error, /от 1 до 12/);
+
+    // Правило словами
+    assert.equal(L.disciplinePeriodText({ yellowPeriodDays: 0 }), 'за весь турнир');
+    assert.equal(L.disciplinePeriodText({ yellowPeriodDays: 1 }), 'за 1 день');
+    assert.equal(L.disciplinePeriodText({ yellowPeriodDays: 30 }), 'за 30 дней');
+    assert.match(L.disciplineRuleText({ yellowLimit: 3, yellowPeriodDays: 90 }), /^3-я жёлтая карточка за 90 дней/);
+
+    // Запись настроек в данные
+    const data = { teams: [], matches: [] };
+
+    L.setDisciplineSettings(data, { yellowLimit: '5', yellowPeriodDays: '14' });
+    assert.deepEqual(data.settings, { yellowLimit: 5, yellowPeriodDays: 14 });
+
+    // Нормализация: «битые» значения исправляются, отсутствие блока — не поломка
+    const repaired = L.normalizeData({
+        teams: [{ id: 1, name: 'Спартак', players: [] }],
+        matches: [],
+        settings: { yellowLimit: 99, yellowPeriodDays: -5 }
+    });
+
+    assert.deepEqual(repaired.data.settings, { yellowLimit: 4, yellowPeriodDays: 0 });
+    assert.equal(repaired.repaired, true, 'неверные настройки помечаются как исправленные');
+
+    const withoutSettings = L.normalizeData({
+        teams: [{ id: 1, name: 'Спартак', players: [] }],
+        matches: []
+    });
+
+    assert.deepEqual(withoutSettings.data.settings, { yellowLimit: 4, yellowPeriodDays: 0 },
+        'в старых данных блок настроек появляется со значениями по умолчанию');
+    assert.equal(withoutSettings.repaired, false, 'отсутствие блока настроек — не поломка данных');
+
+    // Настройки попадают в экспорт данных
+    const exported = JSON.parse(L.serializeData({
+        teams: [], matches: [], settings: { yellowLimit: 2, yellowPeriodDays: 7 }
+    }));
+
+    assert.deepEqual(exported.settings, { yellowLimit: 2, yellowPeriodDays: 7 });
 });
 
 test('сортировка строк: текст, числа и даты; пустые значения — в конце', () => {

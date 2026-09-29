@@ -34,7 +34,9 @@
         // 7 — у игроков появились дата рождения и принадлежность (карта playerInfo)
         // 8 — у команд появились фотографии: галерея на странице команды (карта teamImages)
         // 9 — у игроков появился игровой номер (поле number в карточке playerInfo)
-        dataVersion: 9,
+        // 10 — появились правила дисциплины (блок settings): жёлтые карточки
+        //      превращаются в красную, игрок пропускает следующий матч команды
+        dataVersion: 10,
         // Пароль администратора. Внимание: это демонстрационная защита,
         // на статическом хостинге реальную авторизацию без сервера сделать нельзя
         // (подробности — в README.md).
@@ -52,7 +54,10 @@
         photoPathPrefix: 'assets/photos/',
         maxPhotoPathLength: 120,
         // Сколько фотографий можно добавить одной команде (галерея на её странице)
-        maxTeamImages: 6
+        maxTeamImages: 6,
+        // Дисциплина игроков: пределы настроек из админки
+        maxYellowLimit: 12,
+        maxYellowPeriodDays: 3650
     };
 
     /** Палитра бейджей команд (классы описаны в src/input.css). */
@@ -60,6 +65,13 @@
         'badge-color-1', 'badge-color-2', 'badge-color-3', 'badge-color-4',
         'badge-color-5', 'badge-color-6', 'badge-color-7', 'badge-color-8'
     ];
+
+    /**
+     * Правила дисциплины по умолчанию: 4-я жёлтая карточка за турнир превращается
+     * в красную, игрок пропускает следующий матч своей команды.
+     * yellowPeriodDays = 0 — жёлтые считаются за весь турнир (без срока давности).
+     */
+    var DEFAULT_DISCIPLINE = { yellowLimit: 4, yellowPeriodDays: 0 };
 
     /** Демонстрационный набор данных (первый запуск и сброс). */
     function createDefaultData() {
@@ -79,6 +91,12 @@
                     birthDate: '2011-04-18',
                     note: 'Школа №5, первый тренер — Петров И. До 2023 года играл за «Динамо».'
                 }
+            },
+            // Правила дисциплины: сколько жёлтых карточек приводит к красной
+            // и за какой период они считаются (0 — весь турнир)
+            settings: {
+                yellowLimit: DEFAULT_DISCIPLINE.yellowLimit,
+                yellowPeriodDays: DEFAULT_DISCIPLINE.yellowPeriodDays
             },
             teams: [
                 { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.', 'Сидоров С.'] },
@@ -1770,6 +1788,298 @@
     }
 
     /* ------------------------------------------------------------------ */
+    /* Дисциплина игроков: жёлтые карточки → красная, пропуск матча        */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Правила задаёт администратор в блоке «Настройки»:
+     *   • yellowLimit — при получении какой по счёту жёлтой карточки игрок
+     *     получает красную (жёлтые «превращаются» в неё);
+     *   • yellowPeriodDays — за какой период считаются жёлтые (0 — весь турнир).
+     * Красная карточка (прямая или полученная из жёлтых) означает пропуск
+     * следующего матча команды.
+     */
+
+    /** Настройки дисциплины, приведённые к допустимому виду. */
+    function normalizeDisciplineSettings(raw) {
+        var source = isPlainObject(raw) ? raw : {};
+        var limit = toInt(source.yellowLimit);
+        var days = toInt(source.yellowPeriodDays);
+
+        return {
+            yellowLimit: (limit === null || limit < 1 || limit > CONFIG.maxYellowLimit)
+                ? DEFAULT_DISCIPLINE.yellowLimit
+                : limit,
+            yellowPeriodDays: (days === null || days < 0 || days > CONFIG.maxYellowPeriodDays)
+                ? DEFAULT_DISCIPLINE.yellowPeriodDays
+                : days
+        };
+    }
+
+    /** Правила дисциплины из данных (если их нет — значения по умолчанию). */
+    function getDisciplineSettings(data) {
+        return normalizeDisciplineSettings(data && data.settings);
+    }
+
+    /** Записывает правила дисциплины в данные. */
+    function setDisciplineSettings(data, settings) {
+        if (!isPlainObject(data)) {
+            return data;
+        }
+
+        data.settings = normalizeDisciplineSettings(settings);
+
+        return data;
+    }
+
+    /** Проверяет правила дисциплины из формы администратора. */
+    function validateDisciplineSettings(input) {
+        var source = input || {};
+        var limit = toInt(source.yellowLimit);
+        var days = toInt(source.yellowPeriodDays);
+
+        if (limit === null || limit < 1 || limit > CONFIG.maxYellowLimit) {
+            return {
+                ok: false,
+                error: 'Сколько жёлтых карточек приводит к красной — целое число от 1 до ' + CONFIG.maxYellowLimit
+            };
+        }
+
+        if (days === null || days < 0 || days > CONFIG.maxYellowPeriodDays) {
+            return {
+                ok: false,
+                error: 'Период действия жёлтых — целое число дней от 0 до ' + CONFIG.maxYellowPeriodDays +
+                    ' (0 — весь турнир)'
+            };
+        }
+
+        return { ok: true, value: { yellowLimit: limit, yellowPeriodDays: days } };
+    }
+
+    /** «день», «дня» или «дней» — для периода действия карточек. */
+    function daysWord(count) {
+        var value = Math.abs(toInt(count) || 0) % 100;
+        var last = value % 10;
+
+        if (value > 10 && value < 20) {
+            return 'дней';
+        }
+
+        if (last === 1) {
+            return 'день';
+        }
+
+        return (last >= 2 && last <= 4) ? 'дня' : 'дней';
+    }
+
+    /** Период словами: «за весь турнир» или «за 30 дней». */
+    function disciplinePeriodText(settings) {
+        var rules = normalizeDisciplineSettings(settings);
+
+        return rules.yellowPeriodDays > 0
+            ? 'за ' + rules.yellowPeriodDays + ' ' + daysWord(rules.yellowPeriodDays)
+            : 'за весь турнир';
+    }
+
+    /** Правило дисквалификаций словами (подсказка в админке и на странице матча). */
+    function disciplineRuleText(settings) {
+        var rules = normalizeDisciplineSettings(settings);
+
+        return rules.yellowLimit + '-я жёлтая карточка ' + disciplinePeriodText(rules) + ' превращается ' +
+            'в красную, а любая красная карточка — пропуск следующего матча команды.';
+    }
+
+    /** Дата «ГГГГ-ММ-ДД», сдвинутая на days дней ('' — дата неизвестна). */
+    function shiftISODate(value, days) {
+        var date = parseISODate(value);
+
+        if (!date) {
+            return '';
+        }
+
+        date.setDate(date.getDate() + (toInt(days) || 0));
+
+        return toISODate(date);
+    }
+
+    /**
+     * Дисквалификации на каждый матч турнира.
+     *
+     * Матчи разбираются в календарном порядке, поэтому результат не зависит от того,
+     * как записи лежат в данных: если администратор поправит дату, дисквалификация
+     * сама «переедет» на другой матч. Пропущенный матч считается отбытым — дальше
+     * игрок снова может играть, а счёт жёлтых после превращения в красную
+     * начинается заново.
+     *
+     * Возвращает { settings, bans }: bans — «id матча» → список игроков,
+     * которые этот матч пропускают (с причиной и матчем, где получена карточка).
+     */
+    function computeSuspensions(data) {
+        var settings = getDisciplineSettings(data);
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        var matches = (data && Array.isArray(data.matches)) ? data.matches : [];
+        var order = sortMatches(matches, 'asc');
+        var bans = {};
+        var state = {};
+
+        var nameOf = function (player) {
+            return cleanText(player, CONFIG.maxPlayerNameLength);
+        };
+
+        var keyOf = function (teamId, player) {
+            return toInt(teamId) + '|' + nameOf(player).toLowerCase();
+        };
+
+        var stateOf = function (teamId, player) {
+            var key = keyOf(teamId, player);
+
+            if (!state[key]) {
+                state[key] = { yellows: [], ban: null };
+            }
+
+            return state[key];
+        };
+
+        /** Жёлтые карточки, которые ещё действуют на дату матча (период из настроек). */
+        var activeYellows = function (yellows, date) {
+            var boundary = (settings.yellowPeriodDays > 0 && date)
+                ? shiftISODate(date, -settings.yellowPeriodDays)
+                : '';
+
+            if (!boundary) {
+                return yellows.slice();
+            }
+
+            return yellows.filter(function (item) {
+                // Карточка без известной даты из периода не выпадает
+                return !item || item >= boundary;
+            });
+        };
+
+        /** Ближайший матч команды после матча с индексом index (null — матчей больше нет). */
+        var nextMatchOf = function (teamId, index) {
+            for (var i = index + 1; i < order.length; i++) {
+                if (toInt(order[i].teamA) === toInt(teamId) || toInt(order[i].teamB) === toInt(teamId)) {
+                    return toInt(order[i].id);
+                }
+            }
+
+            return null;
+        };
+
+        /** Записывает дисквалификацию игрока на ближайший матч его команды. */
+        var banPlayer = function (teamId, player, targetId, details) {
+            var current = stateOf(teamId, player);
+
+            if (toInt(targetId) === null) {
+                // Матчей у команды больше нет — отбывать дисквалификацию не в чем
+                current.ban = null;
+                return;
+            }
+
+            var team = findTeam(teams, teamId);
+            var entry = {
+                teamId: toInt(teamId),
+                teamName: team ? team.name : 'Неизвестная команда',
+                player: nameOf(player),
+                number: getPlayerInfo(data, teamId, player).number,
+                reason: details.reason === 'yellow' ? 'yellow' : 'red',
+                reasonText: details.reason === 'yellow'
+                    ? settings.yellowLimit + '-я жёлтая карточка'
+                    : 'красная карточка',
+                yellowLimit: settings.yellowLimit,
+                yellows: toInt(details.yellows) || 0,
+                date: details.date || '',
+                sourceMatchId: toInt(details.matchId),
+                matchId: toInt(targetId)
+            };
+
+            if (!bans[entry.matchId]) {
+                bans[entry.matchId] = [];
+            }
+
+            bans[entry.matchId].push(entry);
+            current.ban = { matchId: entry.matchId };
+        };
+
+        order.forEach(function (match, index) {
+            var matchId = toInt(match.id);
+            var date = cleanText(match.date, 10);
+
+            [toInt(match.teamA), toInt(match.teamB)].forEach(function (teamId) {
+                var team = findTeam(teams, teamId);
+                // Дисквалификация — только для игроков заявки: удалённого игрока
+                // (его карточки остались в истории) пропускать некому
+                var squad = (team && Array.isArray(team.players)) ? team.players : [];
+                var squadNames = {};
+
+                squad.forEach(function (player) {
+                    var current = stateOf(teamId, player);
+
+                    squadNames[nameOf(player).toLowerCase()] = true;
+
+                    // Дисквалификация отбыта: этот матч игрок пропускал
+                    if (current.ban && current.ban.matchId === matchId) {
+                        current.ban = null;
+                    }
+                });
+
+                // События матча — в том порядке, в каком их внёс администратор
+                (Array.isArray(match.events) ? match.events : []).forEach(function (event) {
+                    var player = nameOf(event.player);
+
+                    if (toInt(event.team) !== teamId || !player || !squadNames[player.toLowerCase()]) {
+                        return;
+                    }
+
+                    var current = stateOf(teamId, player);
+
+                    if (event.type === 'yellow') {
+                        current.yellows = activeYellows(current.yellows, date);
+                        current.yellows.push(date);
+
+                        if (current.yellows.length >= settings.yellowLimit) {
+                            // Жёлтые превращаются в красную — пропуск следующего матча,
+                            // а счёт жёлтых начинается заново
+                            banPlayer(teamId, player, nextMatchOf(teamId, index), {
+                                reason: 'yellow',
+                                yellows: current.yellows.length,
+                                date: date,
+                                matchId: matchId
+                            });
+                            current.yellows = [];
+                        }
+
+                        return;
+                    }
+
+                    if (event.type === 'red') {
+                        banPlayer(teamId, player, nextMatchOf(teamId, index), {
+                            reason: 'red',
+                            yellows: current.yellows.length,
+                            date: date,
+                            matchId: matchId
+                        });
+                    }
+                });
+            });
+        });
+
+        return { settings: settings, bans: bans };
+    }
+
+    /** Игроки, которые пропускают указанный матч (пустой список — никто). */
+    function matchSuspensions(data, matchId) {
+        var id = toInt(matchId);
+
+        if (id === null) {
+            return [];
+        }
+
+        return computeSuspensions(data).bans[id] || [];
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Нормализация данных и хранилище                                     */
     /* ------------------------------------------------------------------ */
 
@@ -1852,7 +2162,8 @@
                     photos: {},
                     teamPhotos: {},
                     teamImages: {},
-                    playerInfo: {}
+                    playerInfo: {},
+                    settings: normalizeDisciplineSettings(raw.settings)
                 },
                 repaired: repaired,
                 reason: repaired ? 'Часть данных была исправлена автоматически' : ''
@@ -1928,6 +2239,19 @@
         var normalizedTeamPhotos = normalizeTeamPhotos(raw.teamPhotos, teams);
         var normalizedPlayerInfo = normalizePlayerInfo(raw.playerInfo, teams);
         var normalizedTeamImages = normalizeTeamImages(raw.teamImages, teams);
+        var normalizedSettings = normalizeDisciplineSettings(raw.settings);
+        var rawSettings = isPlainObject(raw.settings) ? raw.settings : null;
+
+        // Правила дисциплины записаны с ошибкой — молча исправляем и предупреждаем
+        if (rawSettings) {
+            var rawLimit = toInt(rawSettings.yellowLimit);
+            var rawDays = toInt(rawSettings.yellowPeriodDays);
+
+            if ((rawLimit !== null && rawLimit !== normalizedSettings.yellowLimit) ||
+                (rawDays !== null && rawDays !== normalizedSettings.yellowPeriodDays)) {
+                repaired = true;
+            }
+        }
 
         if (normalizedPhotos.repaired || normalizedTeamPhotos.repaired ||
             normalizedPlayerInfo.repaired || normalizedTeamImages.repaired) {
@@ -1944,7 +2268,8 @@
                 photos: normalizedPhotos.photos,
                 teamPhotos: normalizedTeamPhotos.photos,
                 teamImages: normalizedTeamImages.images,
-                playerInfo: normalizedPlayerInfo.info
+                playerInfo: normalizedPlayerInfo.info,
+                settings: normalizedSettings
             },
             repaired: repaired,
             reason: repaired ? 'Часть данных была исправлена автоматически' : ''
@@ -2055,7 +2380,8 @@
             photos: (data && data.photos) || {},
             teamPhotos: (data && data.teamPhotos) || {},
             teamImages: (data && data.teamImages) || {},
-            playerInfo: (data && data.playerInfo) || {}
+            playerInfo: (data && data.playerInfo) || {},
+            settings: normalizeDisciplineSettings(data && data.settings)
         }, null, 2);
     }
 
@@ -2138,6 +2464,14 @@
         renamePlayerInfo: renamePlayerInfo,
         validatePlayerInfo: validatePlayerInfo,
         normalizePlayerInfo: normalizePlayerInfo,
+        getDisciplineSettings: getDisciplineSettings,
+        setDisciplineSettings: setDisciplineSettings,
+        normalizeDisciplineSettings: normalizeDisciplineSettings,
+        validateDisciplineSettings: validateDisciplineSettings,
+        disciplinePeriodText: disciplinePeriodText,
+        disciplineRuleText: disciplineRuleText,
+        computeSuspensions: computeSuspensions,
+        matchSuspensions: matchSuspensions,
         validateTeamName: validateTeamName,
         validatePlayerName: validatePlayerName,
         normalizeScore: normalizeScore,

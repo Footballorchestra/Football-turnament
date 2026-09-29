@@ -1016,6 +1016,137 @@ test('админка: в карточке матча отмечаются гол
     assert.equal(reloaded.markButton(2, 'Кузнецов К.', 'goal').classList.contains('is-active'), true);
 });
 
+test('дисциплина: лимит жёлтых карточек превращается в красную, игрок пропускает следующий матч', () => {
+    const app = boot();
+    app.login();
+
+    // Четыре жёлтые карточки Иванова А. в первом матче (Спартак — Локомотив, 10 сентября)
+    app.openMatch(1);
+
+    for (let i = 0; i < 4; i += 1) {
+        app.click(app.markButton(1, 'Иванов А.', 'yellow'));
+    }
+
+    assert.equal(app.storedData().matches[0].events.filter((event) => event.type === 'yellow').length, 4);
+
+    // Следующий матч Спартака (3-й) открыт в админке: игрок отмечен значком «пропуск»
+    app.click(app.button('match-back'));
+    app.openMatch(3);
+
+    const adminBans = app.id('admin-match-bans');
+
+    assert.match(adminBans.textContent, /Пропустят матч по карточкам/);
+    assert.match(adminBans.textContent, /Иванов А\./);
+    assert.match(adminBans.textContent, /4-я жёлтая карточка, получена 10\.09\.2026/);
+    assert.match(adminBans.textContent, /4-я жёлтая карточка за весь турнир превращается в красную/,
+        'в админке видно само правило');
+    assert.equal(adminBans.querySelectorAll('.admin-ban-item').length, 1);
+    assert.equal(app.id('admin-match-events').querySelectorAll('.event-ban').length, 1,
+        'значок «пропуск» стоит только у дисквалифицированного игрока');
+
+    // Публичная страница матчей: строка «Пропустят матч»
+    app.navigate('matches');
+
+    const card = (matchId) => app.id('matches-list').querySelector('.match-card[data-id="' + matchId + '"]');
+
+    assert.equal(card(1).querySelector('.match-bans'), null, 'в первом матче карточка получена — там запрета нет');
+    assert.equal(card(2).querySelector('.match-bans'), null, 'матч других команд');
+    assert.equal(card(4).querySelector('.match-bans'), null, 'матч Локомотива и ЦСКА ничего не пропускает');
+
+    const line = card(3).querySelector('.match-bans');
+
+    assert.ok(line, 'у предстоящего матча Спартака видна строка о дисквалификации');
+    assert.match(line.textContent, /Пропустят матч:/);
+    assert.match(line.textContent, /Иванов А\./);
+    assert.match(line.textContent, /\(Спартак\)/);
+    assert.equal(line.querySelector('.ban-name').getAttribute('title'), '4-я жёлтая карточка, получена 10.09.2026');
+
+    // Детальный результат: блок «Дисквалификации» с причиной и правилом
+    app.click(card(3));
+
+    const block = app.id('match-detail').querySelector('.match-bans-block');
+
+    assert.ok(block, 'на странице матча появился блок дисквалификаций');
+    assert.match(block.textContent, /Дисквалификации/);
+    assert.match(block.textContent, /Иванов А\./);
+    assert.match(block.textContent, /4-я жёлтая карточка, получена 10\.09\.2026/);
+    assert.match(block.textContent, /превращается в красную/);
+
+    // Матч сыгран — дисквалификация отбыта: новый матч Спартака без ограничений
+    app.navigate('admin');
+    app.openMatch(3);
+    app.id('score-a-3').value = '1';
+    app.id('score-b-3').value = '0';
+    app.click(app.button('match-save-score'));
+    app.click(app.button('match-back'));
+
+    app.id('match-team-a').value = '1';
+    app.id('match-team-b').value = '4';
+    app.id('match-date').value = '2026-10-01';
+    app.submit(app.$('[data-form="match"]'));
+
+    app.navigate('matches');
+    assert.equal(app.id('matches-list').querySelector('.match-card[data-id="5"] .match-bans'), null,
+        'после отбытого матча счёт жёлтых начинается заново');
+});
+
+test('дисциплина: правила задаются в админке, проверяются и применяются сразу', () => {
+    const app = boot();
+    app.login();
+
+    const form = app.$('[data-form="discipline"]');
+
+    assert.ok(form, 'в настройках есть блок «Дисциплина игроков»');
+    assert.equal(app.id('discipline-yellow-limit').value, '4', 'подставляются текущие правила');
+    assert.equal(app.id('discipline-period').value, '0');
+    assert.match(app.id('discipline-rule').textContent, /^4-я жёлтая карточка за весь турнир/);
+    assert.match(app.id('admin-matches-rule').textContent, /4-я жёлтая карточка за весь турнир/,
+        'то же правило видно и в разделе «Матчи»');
+
+    // Проверка ввода: при ошибке данные не меняются
+    app.id('discipline-yellow-limit').value = '0';
+    app.submit(form);
+
+    assert.match(app.id('discipline-form-error').textContent, /от 1 до 12/);
+    assert.deepEqual(app.storedData().settings, { yellowLimit: 4, yellowPeriodDays: 0 });
+
+    app.id('discipline-yellow-limit').value = '2';
+    app.id('discipline-period').value = '4000';
+    app.submit(form);
+
+    assert.match(app.id('discipline-form-error').textContent, /от 0 до 3650/);
+    assert.deepEqual(app.storedData().settings, { yellowLimit: 4, yellowPeriodDays: 0 });
+
+    // Рабочее правило: 2-я жёлтая за 30 дней превращается в красную
+    app.id('discipline-yellow-limit').value = '2';
+    app.id('discipline-period').value = '30';
+    app.submit(form);
+
+    assert.deepEqual(app.storedData().settings, { yellowLimit: 2, yellowPeriodDays: 30 });
+    assert.equal(app.id('discipline-form-error').textContent, '');
+    assert.match(app.id('toast-container').textContent, /Правила дисквалификаций сохранены/);
+    assert.match(app.id('discipline-rule').textContent, /^2-я жёлтая карточка за 30 дней/);
+
+    // Правило применяется сразу: две жёлтые — пропуск следующего матча
+    app.openMatch(1);
+    app.click(app.markButton(1, 'Иванов А.', 'yellow'));
+    app.click(app.markButton(1, 'Иванов А.', 'yellow'));
+    app.click(app.button('match-back'));
+
+    app.navigate('matches');
+
+    const line = app.id('matches-list').querySelector('.match-card[data-id="3"] .match-bans');
+
+    assert.ok(line, 'после двух жёлтых игрок пропускает следующий матч команды');
+    assert.match(line.textContent, /Иванов А\./);
+    assert.match(line.querySelector('.ban-name').getAttribute('title'), /^2-я жёлтая карточка/);
+
+    // Правила уезжают в данные вместе с остальными правками
+    const stored = JSON.parse(app.window.localStorage.getItem(DATA_KEY));
+
+    assert.deepEqual(stored.settings, { yellowLimit: 2, yellowPeriodDays: 30 });
+});
+
 test('админка: игроки — добавление, проверки, переименование и удаление', () => {
     const app = boot();
     app.login();

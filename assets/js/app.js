@@ -925,6 +925,7 @@
 
         if (state.settingsOpen) {
             fillSyncInputs();
+            fillDisciplineInputs();
         }
 
         // Обновляет содержимое панели и короткий статус в шапке
@@ -1056,6 +1057,66 @@
                 ? 'Токен сохранён — введите новый, чтобы заменить'
                 : 'github_pat_…';
         }
+    }
+
+    /* --- Дисциплина игроков: правила попадания карточек в дисквалификацию --- */
+
+    /**
+     * Заполняет поля блока «Дисциплина игроков» текущими правилами.
+     * Поля не перезаписываются, пока в них стоит курсор: иначе введённое значение
+     * пропало бы при очередной перерисовке страницы.
+     */
+    function fillDisciplineInputs() {
+        var rules = L.getDisciplineSettings(state.data);
+        var limit = $('discipline-yellow-limit');
+        var period = $('discipline-period');
+        var active = document.activeElement;
+
+        if (limit && limit !== active) {
+            limit.value = String(rules.yellowLimit);
+        }
+
+        if (period && period !== active) {
+            period.value = String(rules.yellowPeriodDays);
+        }
+
+        renderDisciplineRule();
+    }
+
+    /** Подсказка текущего правила: видна и в «Настройках», и в разделе «Матчи». */
+    function renderDisciplineRule() {
+        var text = L.disciplineRuleText(state.data.settings);
+
+        ['discipline-rule', 'admin-matches-rule'].forEach(function (id) {
+            var element = $(id);
+
+            if (element) {
+                element.textContent = text;
+            }
+        });
+    }
+
+    /** Сохраняет правила дисциплины из формы администратора. */
+    function handleDisciplineSubmit(event) {
+        event.preventDefault();
+
+        var limit = $('discipline-yellow-limit');
+        var period = $('discipline-period');
+        var check = L.validateDisciplineSettings({
+            yellowLimit: limit ? limit.value : '',
+            yellowPeriodDays: period ? period.value : ''
+        });
+
+        if (!check.ok) {
+            setFieldError('discipline-form-error', check.error);
+            return;
+        }
+
+        setFieldError('discipline-form-error', '');
+        L.setDisciplineSettings(state.data, check.value);
+        fillDisciplineInputs();
+        saveData('Правила дисквалификаций сохранены: ' + check.value.yellowLimit + '-я жёлтая карточка ' +
+            L.disciplinePeriodText(check.value));
     }
 
     /* --- Резервная копия перед заменой данных версией из репозитория --- */
@@ -1576,6 +1637,8 @@
                     '<span class="inline-flex items-center gap-1">' + icon('calendar') + esc(L.formatDate(match.date, 'long')) + '</span>' +
                     statusPill(match) +
                 '</div>' +
+                // Кто не может играть из-за карточек: «Пропустят матч: Иванов А. (Спартак)»
+                matchBanLine(match) +
             '</article>';
     }
 
@@ -1623,6 +1686,69 @@
                 ? '<span class="' + classes[item.type] + '">' + icon(item.icon) + count + '</span>'
                 : '';
         }).join('');
+    }
+
+    /* ================================================================== */
+    /* Дисквалификации: кто пропускает матч (жёлтые → красная, красная)    */
+    /* ================================================================== */
+
+    /**
+     * Подробная причина дисквалификации: «4-я жёлтая карточка, получена 28.09.2026».
+     * Показывается подсказкой к имени игрока — так строка списка остаётся короткой.
+     */
+    function banReasonText(entry) {
+        return entry.reasonText + (entry.date ? ', получена ' + L.formatDate(entry.date, 'numeric') : '');
+    }
+
+    /** Имена игроков, которые пропускают матч: «Иванов А. (Спартак)». */
+    function banNames(entries) {
+        return entries.map(function (entry) {
+            return '<span class="ban-name" title="' + esc(banReasonText(entry)) + '">' + esc(entry.player) +
+                ' <span class="ban-team">(' + esc(entry.teamName) + ')</span></span>';
+        }).join('<span class="ban-sep">, </span>');
+    }
+
+    /**
+     * Строка под карточкой матча: «Пропустят матч: …» (для прошедшего — «Пропустили матч»).
+     * Если дисквалификаций нет, строка не выводится.
+     */
+    function matchBanLine(match) {
+        var entries = L.matchSuspensions(state.data, match.id);
+
+        if (!entries.length) {
+            return '';
+        }
+
+        return '<div class="match-bans">' + icon('card-red') +
+            '<span class="match-bans-title">' + (match.finished ? 'Пропустили матч:' : 'Пропустят матч:') + '</span> ' +
+            banNames(entries) +
+        '</div>';
+    }
+
+    /**
+     * Блок «Дисквалификации» в детальном результате матча: кто пропускает,
+     * по какой причине и какое правило сейчас действует.
+     */
+    function matchBanBlock(match) {
+        var entries = L.matchSuspensions(state.data, match.id);
+        var list = entries.length
+            ? '<ul class="match-bans-list">' + entries.map(function (entry) {
+                return '<li class="match-ban-item">' +
+                    '<span class="match-ban-player">' + esc(entry.player) +
+                        playerNumberBadge(entry.teamId, entry.player) + '</span>' +
+                    '<span class="match-ban-team">' + esc(entry.teamName) + '</span>' +
+                    '<span class="match-ban-reason">' + esc(banReasonText(entry)) + '</span>' +
+                '</li>';
+            }).join('') + '</ul>'
+            : '<p class="match-bans-empty">' + (match.finished
+                ? 'Никто из игроков этот матч не пропускал.'
+                : 'Никто из игроков не пропускает этот матч.') + '</p>';
+
+        return '<section class="match-bans-block">' +
+            '<h3 class="match-bans-heading">' + icon('card-red') + 'Дисквалификации</h3>' +
+            list +
+            '<p class="match-bans-rule">' + esc(L.disciplineRuleText(state.data.settings)) + '</p>' +
+        '</section>';
     }
 
     /* ================================================================== */
@@ -2510,6 +2636,7 @@
                 matchDetailTeam(teamB, nameB, true) +
             '</div>' +
             '<p class="match-detail-hint">' + esc(hint) + '</p>' +
+            matchBanBlock(match) +
             '<div class="match-detail-squads">' +
                 squadColumn(match, teamA, match.teamA, nameA) +
                 squadColumn(match, teamB, match.teamB, nameB) +
@@ -2540,6 +2667,7 @@
         renderAdminMatches();
         renderAdminPlayers();
         renderAdminPlayerInfo();
+        renderDisciplineRule();
         fillAdminSelects();
     }
 
@@ -2940,6 +3068,8 @@
         var nameB = teamB ? teamB.name : 'Неизвестная команда';
         var goalsA = L.countTeamEvents(match.events, match.teamA, 'goal');
         var goalsB = L.countTeamEvents(match.events, match.teamB, 'goal');
+        // Кто пропускает этот матч из-за карточек (считается по событиям и правилам из настроек)
+        var bans = L.matchSuspensions(state.data, match.id);
         var hint = L.isFinished(match)
             ? 'Записано голов: ' + (goalsA + goalsB) + ' из ' + (match.scoreA + match.scoreB) +
                 '. Мяч — гол, прямоугольник — карточка, кнопка «Убрать» снимает последнюю запись игрока'
@@ -2964,8 +3094,10 @@
                 '<span class="admin-hint">' + hint + '</span>' +
             '</div>';
 
-        eventsBox.innerHTML = matchTeamColumn(match, teamA, match.teamA, nameA) +
-            matchTeamColumn(match, teamB, match.teamB, nameB);
+        eventsBox.innerHTML = matchTeamColumn(match, teamA, match.teamA, nameA, bans) +
+            matchTeamColumn(match, teamB, match.teamB, nameB, bans);
+
+        renderAdminMatchBans(match, bans);
 
         actionsBox.innerHTML =
             (L.isFinished(match)
@@ -2987,12 +3119,48 @@
             '" aria-label="Счёт команды ' + esc(teamName) + '">';
     }
 
+    /**
+     * Блок дисквалификаций в карточке матча админки: кто пропускает этот матч
+     * и по какой причине. Виден и для предстоящих, и для прошедших матчей.
+     */
+    function renderAdminMatchBans(match, bans) {
+        var box = $('admin-match-bans');
+        var entries = bans || [];
+
+        if (!box) {
+            return;
+        }
+
+        box.innerHTML =
+            '<h3 class="admin-title">' + icon('card-red') + 'Пропустят матч по карточкам</h3>' +
+            (entries.length
+                ? '<ul class="admin-ban-list">' + entries.map(function (entry) {
+                    return '<li class="admin-ban-item">' +
+                        '<span class="admin-ban-player">' + esc(entry.player) +
+                            playerNumberBadge(entry.teamId, entry.player) + '</span>' +
+                        '<span class="admin-ban-team">' + esc(entry.teamName) + '</span>' +
+                        '<span class="admin-ban-reason">' + esc(banReasonText(entry)) + '</span>' +
+                    '</li>';
+                }).join('') + '</ul>'
+                : '<p class="admin-hint">Дисквалификаций нет — играют все.</p>') +
+            '<p class="admin-hint mt-2">' + esc(L.disciplineRuleText(state.data.settings)) +
+                ' Правило меняется в разделе «Настройки» → «Дисциплина игроков».</p>';
+    }
+
     /** Колонка одной команды в карточке матча: игроки, гол и две карточки. */
-    function matchTeamColumn(match, team, teamId, teamName) {
+    function matchTeamColumn(match, team, teamId, teamName, bans) {
         var players = L.matchSquad(team, match.events, teamId);
+        var suspended = (bans || []).filter(function (entry) {
+            return L.toInt(entry.teamId) === L.toInt(teamId);
+        });
         var rows = players.length
             ? players.map(function (player) {
-                return matchPlayerRow(match, teamId, player);
+                // Дисквалификацию ищем по имени: в списке игроков она отмечена значком
+                var ban = suspended.filter(function (entry) {
+                    return L.cleanText(entry.player).toLowerCase() === L.cleanText(player).toLowerCase();
+                })[0];
+
+                return matchPlayerRow(match, teamId, player, ban);
             }).join('')
             : '<p class="admin-hint py-1">Состав пуст — добавьте игроков в разделе «Команды».</p>';
 
@@ -3003,7 +3171,7 @@
     }
 
     /** Строка игрока: имя и три отметки — гол, жёлтая и красная карточки. */
-    function matchPlayerRow(match, teamId, player) {
+    function matchPlayerRow(match, teamId, player, ban) {
         var goals = L.playerEventCount(match.events, teamId, player, 'goal');
         var yellow = L.playerEventCount(match.events, teamId, player, 'yellow');
         var red = L.playerEventCount(match.events, teamId, player, 'red');
@@ -3016,6 +3184,10 @@
             '<span class="flex items-center gap-2 min-w-0">' +
                 '<span class="truncate">' + esc(player) + '</span>' +
                 playerNumberBadge(teamId, player) +
+                // Игрок пропускает этот матч: отметки всё равно доступны — вдруг карточку
+                // вписали по ошибке и её нужно снять
+                (ban ? '<span class="event-ban" title="' + esc(banReasonText(ban)) + '">' +
+                    icon('card-red') + 'пропуск</span>' : '') +
             '</span>' +
             '<span class="event-actions">' +
                 eventButton(match.id, teamId, player, 'goal', goals) +
@@ -4454,6 +4626,8 @@
             handleAddPlayer(event);
         } else if (name === 'player-info') {
             handlePlayerInfoSubmit(event);
+        } else if (name === 'discipline') {
+            handleDisciplineSubmit(event);
         }
     }
 

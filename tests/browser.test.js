@@ -210,7 +210,18 @@ async function openPage(options) {
             problems.push('Консоль: ' + message.text());
         }
     });
-    page.on('requestfailed', (request) => problems.push('Не загрузилось: ' + request.url()));
+    page.on('requestfailed', (request) => {
+        const failure = request.failure() || {};
+
+        // Прерванная загрузка (перезагрузка страницы, уход на другую страницу)
+        // — нормальное поведение браузера, а не ошибка сайта: фото грузятся лениво,
+        // и часть запросов обрывается вместе со старой страницей
+        if (String(failure.errorText || '').indexOf('ERR_ABORTED') !== -1) {
+            return;
+        }
+
+        problems.push('Не загрузилось: ' + request.url());
+    });
 
     // Необработанное модальное окно блокирует страницу: любые запросы к ней «зависают».
     // Поэтому окна всегда закрываем, а сам факт их появления считаем проблемой теста.
@@ -1797,5 +1808,180 @@ test('заставка: на смартфоне фоном служит верт
 
     assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), [], 'нет ошибок консоли');
     await page.close();
+});
+
+
+/**
+ * Дисквалификации в браузере: жёлтые карточки превращаются в красную,
+ * игрок пропускает следующий матч команды — и это видно во всех местах,
+ * где смотрят матчи (список, детальный результат, карточка матча админки).
+ *
+ * Данные подставляются свои: в рабочем data.json карточек пока нет, а проверять
+ * нужно и расчёт, и вёрстку. В конце тест возвращает репозиторий в исходное состояние.
+ */
+test('дисквалификации: жёлтые карточки превращаются в красную и видны в матчах', { skip }, async () => {
+    const original = JSON.parse(fs.readFileSync(path.join(ROOT, 'data.json'), 'utf8'));
+    const yellow = (team, player) => ({ team: team, player: player, type: 'yellow' });
+    const red = (team, player) => ({ team: team, player: player, type: 'red' });
+    const goal = (team, player) => ({ team: team, player: player, type: 'goal' });
+
+    mockRepository.changeExternally({
+        version: 10,
+        revision: 900,
+        updatedAt: '2026-09-10T10:00:00.000Z',
+        teams: [
+            { id: 1, name: 'Ветераны МГК', players: ['Шорохов Александр', 'Бусырев Сергей'] },
+            { id: 2, name: 'ФК МГСО', players: ['Сергеев Валентин', 'Аракелян Арман'] },
+            { id: 3, name: 'ФК МАМТ', players: ['Зангиев Тимур'] }
+        ],
+        matches: [
+            {
+                id: 1, teamA: 1, teamB: 2, scoreA: 3, scoreB: 1, date: '2026-09-01', finished: true,
+                events: [
+                    goal(1, 'Шорохов Александр'), goal(1, 'Бусырев Сергей'),
+                    yellow(1, 'Шорохов Александр'), yellow(1, 'Шорохов Александр'),
+                    yellow(1, 'Шорохов Александр'), red(2, 'Аракелян Арман'),
+                    goal(2, 'Сергеев Валентин')
+                ]
+            },
+            {
+                id: 2, teamA: 1, teamB: 2, scoreA: 0, scoreB: 0, date: '2026-09-08', finished: true,
+                events: [yellow(1, 'Шорохов Александр')]
+            },
+            { id: 3, teamA: 1, teamB: 3, scoreA: null, scoreB: null, date: '2026-09-15', finished: false, events: [] },
+            { id: 4, teamA: 2, teamB: 3, scoreA: null, scoreB: null, date: '2026-09-16', finished: false, events: [] }
+        ],
+        photos: {},
+        teamPhotos: {},
+        teamImages: {},
+        playerInfo: { '1|шорохов александр': { number: 10, birthDate: '', note: '' } },
+        settings: { yellowLimit: 4, yellowPeriodDays: 0 }
+    });
+
+    const { page, problems } = await openPage({ url: mockBaseUrl + '/#/matches', isolated: true });
+
+    // 1. Список матчей: у предстоящего матча «Ветеранов МГК» — строка «Пропустят матч»
+    await page.waitForFunction(() => document.querySelectorAll('#matches-list .match-card').length > 0);
+
+    const list = await page.evaluate(() => {
+        const cardOf = (matchId) => document.querySelector('#matches-list .match-card[data-id="' + matchId + '"]');
+        const lineOf = (matchId) => (cardOf(matchId) ? cardOf(matchId).querySelector('.match-bans') : null);
+        const line = lineOf(3);
+        const finishedLine = lineOf(2);
+        const box = line ? line.getBoundingClientRect() : { width: 0, height: 0 };
+
+        return {
+            text: line ? line.textContent.replace(/\s+/g, ' ').trim() : '',
+            finishedText: finishedLine ? finishedLine.textContent.replace(/\s+/g, ' ').trim() : '',
+            width: Math.round(box.width),
+            height: Math.round(box.height),
+            withoutBans: [1, 4].filter((matchId) => lineOf(matchId)).length,
+            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+        };
+    });
+
+    assert.match(list.text, /Пропустят матч: Шорохов Александр \(Ветераны МГК\)/, 'строка в карточке матча: ' + list.text);
+    assert.match(list.finishedText, /Пропустили матч: Аракелян Арман \(ФК МГСО\)/,
+        'в сыгранном матче — «Пропустили матч»: ' + list.finishedText);
+    assert.ok(list.width > 0 && list.height > 0, 'строка отрисована стилями: ' + list.width + 'x' + list.height);
+    assert.equal(list.withoutBans, 0, 'у остальных матчей дисквалификаций нет');
+    assert.equal(list.overflow, 0, 'страница не выходит за экран');
+
+    // 2. Детальный результат: блок «Дисквалификации» с причиной и правилом
+    await gotoApp(page, mockBaseUrl + '/#/match/3');
+    await page.waitForFunction(() => !!document.querySelector('#match-detail .match-bans-block'));
+
+    const detail = await page.evaluate(() => {
+        const block = document.querySelector('#match-detail .match-bans-block');
+        const box = block.getBoundingClientRect();
+
+        return {
+            text: block.textContent.replace(/\s+/g, ' ').trim(),
+            width: Math.round(box.width),
+            height: Math.round(box.height)
+        };
+    });
+
+    assert.match(detail.text, /Дисквалификации/, 'заголовок блока');
+    assert.match(detail.text, /Шорохов Александр/);
+    assert.match(detail.text, /4-я жёлтая карточка, получена 08\.09\.2026/, 'причина дисквалификации');
+    assert.match(detail.text, /превращается в красную, а любая красная карточка/, 'правило словами');
+    assert.ok(detail.width > 0 && detail.height > 0, 'блок отрисован: ' + detail.width + 'x' + detail.height);
+
+    // 3. Админка: значок «пропуск» у игрока и блок в карточке матча
+    await clickWhenReady(page, '[data-nav="admin"]');
+    await page.type('#admin-password', 'admin');
+    await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
+    await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
+    await clickInView(page, '[data-action="admin-tab"][data-admin-tab="matches"]');
+    await clickInView(page, '#admin-matches-list [data-action="match-open"][data-id="3"]');
+    await page.waitForFunction(() => !!document.querySelector('#admin-match-bans .admin-ban-item'));
+
+    const adminMatch = await page.evaluate(() => {
+        const badge = document.querySelector('#admin-match-events .event-ban');
+        const box = badge ? badge.getBoundingClientRect() : { width: 0, height: 0 };
+
+        return {
+            badges: document.querySelectorAll('#admin-match-events .event-ban').length,
+            badgeWidth: Math.round(box.width),
+            bans: document.querySelector('#admin-match-bans').textContent.replace(/\s+/g, ' ').trim()
+        };
+    });
+
+    assert.equal(adminMatch.badges, 1, 'значок «пропуск» только у дисквалифицированного игрока');
+    assert.ok(adminMatch.badgeWidth > 0, 'значок виден: ' + adminMatch.badgeWidth + 'px');
+    assert.match(adminMatch.bans, /Пропустят матч по карточкам/);
+    assert.match(adminMatch.bans, /Шорохов Александр/);
+
+    // 4. Настройки: правило из данных подставлено, сохранение пересчитывает дисквалификации
+    await clickInView(page, '[data-action="toggle-settings"]');
+    await page.waitForFunction(() => !document.getElementById('admin-settings').hidden);
+
+    const before = await page.evaluate(() => ({
+        limit: document.getElementById('discipline-yellow-limit').value,
+        period: document.getElementById('discipline-period').value,
+        rule: document.getElementById('discipline-rule').textContent
+    }));
+
+    assert.equal(before.limit, '4', 'в поле — текущий лимит');
+    assert.equal(before.period, '0', 'в поле — текущий период');
+    assert.match(before.rule, /^4-я жёлтая карточка за весь турнир/);
+
+    // Пустое значение отклоняется с понятной подсказкой
+    await page.evaluate(() => {
+        document.getElementById('discipline-yellow-limit').value = '';
+    });
+    await clickInView(page, '[data-form="discipline"] button[type="submit"]');
+    await page.waitForFunction(() => document.getElementById('discipline-form-error').textContent.length > 0);
+
+    assert.match(await textOf(page, '#discipline-form-error'), /от 1 до 12/, 'пустое значение отклоняется');
+
+    // Рабочее правило: 3-я жёлтая за 30 дней
+    await page.evaluate(() => {
+        document.getElementById('discipline-yellow-limit').value = '3';
+        document.getElementById('discipline-period').value = '30';
+    });
+    await clickInView(page, '[data-form="discipline"] button[type="submit"]');
+    await page.waitForFunction(() => {
+        const settings = window.FTApp.getData().settings;
+
+        return settings && settings.yellowLimit === 3 && settings.yellowPeriodDays === 30;
+    });
+
+    const after = await page.evaluate(() => ({
+        settings: window.FTApp.getData().settings,
+        rule: document.getElementById('discipline-rule').textContent,
+        toast: document.getElementById('toast-container').textContent
+    }));
+
+    assert.deepEqual(after.settings, { yellowLimit: 3, yellowPeriodDays: 30 }, 'правила сохранены в данных');
+    assert.match(after.rule, /^3-я жёлтая карточка за 30 дней/, 'подсказка обновилась: ' + after.rule);
+    assert.match(after.toast, /Правила дисквалификаций сохранены/);
+
+    assert.deepEqual(problems, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+
+    // Репозиторий возвращаем в исходное состояние
+    mockRepository.changeExternally(original);
 });
 

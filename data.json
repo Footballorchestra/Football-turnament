@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "revision": 448,
   "updatedAt": "2026-09-28T20:31:40.575Z",
   "teams": [
@@ -756,5 +756,9 @@
       "note": "",
       "number": 12
     }
+  },
+  "settings": {
+    "yellowLimit": 4,
+    "yellowPeriodDays": 0
   }
 }

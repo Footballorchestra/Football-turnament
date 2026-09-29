@@ -477,6 +477,45 @@
         justify-content: flex-end;
     }
 
+    /* --- Дисквалификации: кто пропускает матч из-за карточек --- */
+
+    /* Строка под карточкой матча: «Пропустят матч: Иванов А. (Спартак)» */
+    .match-bans {
+        display: flex;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 0.25rem 0.375rem;
+        margin-top: 0.5rem;
+        padding: 0.375rem 0.5rem;
+        border-radius: 4px;
+        background: #fdecea;
+        color: #b3261e;
+        font-size: 0.75rem;
+        line-height: 1.35;
+    }
+
+    .match-bans > .icon {
+        margin-top: 0.15em;
+        color: #c62828;
+    }
+
+    .match-bans-title {
+        font-weight: 700;
+    }
+
+    .ban-name {
+        font-weight: 500;
+    }
+
+    .ban-team {
+        color: #7f2d28;
+        font-weight: 400;
+    }
+
+    .ban-sep {
+        color: #c62828;
+    }
+
     /* --- Детальный результат матча: счёт, составы, голы и карточки --- */
     .match-detail-score {
         display: flex;
@@ -506,6 +545,68 @@
         margin-bottom: 1rem;
         text-align: center;
         font-size: 0.75rem;
+        color: #5f6368;
+    }
+
+    /* Блок «Дисквалификации» в детальном результате матча */
+    .match-bans-block {
+        margin-bottom: 1rem;
+        padding: 0.75rem;
+        border: 1px solid #f0c6c2;
+        border-radius: 4px;
+        background: #fdf6f5;
+    }
+
+    .match-bans-heading {
+        display: flex;
+        align-items: center;
+        gap: 0.375rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: #b3261e;
+    }
+
+    .match-bans-list {
+        display: grid;
+        gap: 0.375rem;
+        list-style: none;
+    }
+
+    .match-ban-item {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 0.25rem 0.5rem;
+        font-size: 0.8125rem;
+    }
+
+    .match-ban-player {
+        font-weight: 500;
+    }
+
+    .match-ban-team {
+        color: #5f6368;
+        font-size: 0.75rem;
+    }
+
+    .match-ban-reason {
+        color: #b3261e;
+        font-size: 0.75rem;
+    }
+
+    .match-bans-empty {
+        font-size: 0.8125rem;
+        color: #5f6368;
+    }
+
+    .match-bans-rule {
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid #f0c6c2;
+        font-size: 0.6875rem;
         color: #5f6368;
     }
 
@@ -1636,6 +1737,60 @@
     }
 
     .event-btn-red.is-active .icon {
+        color: #ff8a80;
+    }
+
+    /* --- Дисквалификации в админке (тёмная панель) --- */
+
+    /* Значок «пропуск» у игрока, который не может играть из-за карточек */
+    .event-ban {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        padding: 0.05rem 0.375rem;
+        border: 1px solid #c62828;
+        border-radius: 9999px;
+        background: #402020;
+        color: #ff8a80;
+        font-size: 0.625rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        white-space: nowrap;
+    }
+
+    /* Список «Пропустят матч по карточкам» в карточке матча админки */
+    .admin-ban-list {
+        display: grid;
+        gap: 0.375rem;
+        list-style: none;
+    }
+
+    .admin-ban-item {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 0.25rem 0.5rem;
+        padding: 0.375rem 0.5rem;
+        border: 1px solid #c62828;
+        border-radius: 4px;
+        background: #402020;
+        font-size: 0.8125rem;
+        color: #ffcdd2;
+    }
+
+    .admin-ban-player {
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .admin-ban-team {
+        font-size: 0.75rem;
+        color: #ffcdd2;
+    }
+
+    .admin-ban-reason {
+        font-size: 0.75rem;
         color: #ff8a80;
     }
 
