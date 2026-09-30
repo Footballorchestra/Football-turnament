@@ -1531,6 +1531,14 @@ test('страница просит верхнее окно не держать 
     assert.equal(html.includes('frame-ancestors'), false, 'в <meta> директива frame-ancestors не работает — её место в _headers');
 });
 
+test('в подвале сайта сказано, что фото и имена публикуются с согласия участников', async () => {
+    const app = boot({ mock: createMockRepository({ data: remoteData() }) });
+
+    await app.settle();
+
+    assert.match(app.$('footer').textContent, /Фото и имена публикуются с согласия участников/);
+});
+
 test('админка: «Забрать из репозитория» подтягивает свежие результаты', async () => {
     const mock = createMockRepository({ data: remoteData() });
     const app = boot({ mock, autoPublishDelayMs: 10000 });
