@@ -36,7 +36,10 @@
         // 9 — у игроков появился игровой номер (поле number в карточке playerInfo)
         // 10 — появились правила дисциплины (блок settings): жёлтые карточки
         //      превращаются в красную, игрок пропускает следующий матч команды
-        dataVersion: 10,
+        // 11 — из карточек игроков убрана дата рождения (лишние персональные данные):
+        //      в данных остались игровой номер и принадлежность. Прежнее поле
+        //      birthDate отбрасывается при загрузке данных.
+        dataVersion: 11,
         // Пароль администратора. Внимание: это демонстрационная защита,
         // на статическом хостинге реальную авторизацию без сервера сделать нельзя
         // (подробности — в README.md).
@@ -83,12 +86,11 @@
             teamPhotos: {},
             // Фотографии команд (галереи): «id команды» → список путей к файлам
             teamImages: {},
-            // Данные игроков: номер, дата рождения и принадлежность.
+            // Данные игроков: игровой номер и принадлежность.
             // Ключ — «команда|имя в нижнем регистре» (тот же, что и у фото)
             playerInfo: {
                 '1|иванов а.': {
                     number: 10,
-                    birthDate: '2011-04-18',
                     note: 'Школа №5, первый тренер — Петров И. До 2023 года играл за «Динамо».'
                 }
             },
@@ -797,7 +799,7 @@
     }
 
     /**
-     * Все игроки турнира (по всем командам): имя, команда, дата рождения и статистика.
+     * Все игроки турнира (по всем командам): имя, команда, голы и карточки.
      * Порядок — как в заявках: команды по списку, внутри команды — как записаны игроки.
      */
     function computeAllPlayers(data) {
@@ -817,7 +819,6 @@
                     index: index,
                     player: cleanText(player, CONFIG.maxPlayerNameLength),
                     number: info.number,
-                    birthDate: info.birthDate,
                     goals: totals.goals,
                     yellow: totals.yellow,
                     red: totals.red
@@ -833,14 +834,13 @@
     /* ------------------------------------------------------------------ */
 
     /**
-     * Тип значения для сортировки: «число» — голы и карточки, «дата» — дата рождения
-     * («ГГГГ-ММ-ДД»), «текст» — имена игроков и названия команд.
+     * Тип значения для сортировки: «число» — голы и карточки, «текст» — имена
+     * игроков и названия команд.
      */
     var SORT_TYPES = {
         player: 'text',
         teamName: 'text',
         name: 'text',
-        birthDate: 'date',
         goals: 'number',
         yellow: 'number',
         red: 'number',
@@ -852,7 +852,7 @@
         return (SORT_TYPES[key] === 'number') ? 'desc' : 'asc';
     }
 
-    /** Пустое значение (нет даты, нет данных) — такие строки всегда идут в конец списка. */
+    /** Пустое значение (нет данных) — такие строки всегда идут в конец списка. */
     function isEmptySortValue(value) {
         return value === null || value === undefined || value === '';
     }
@@ -868,7 +868,7 @@
 
     /**
      * Сортирует строки таблицы по столбцу. rows — обычные объекты (player, teamName,
-     * birthDate, goals…), options — { key, dir, type }. Строки без значения всегда
+     * goals…), options — { key, dir, type }. Строки без значения всегда
      * оказываются в конце (независимо от направления), а при равенстве порядок
      * определяют команда и имя — так список выглядит предсказуемо.
      */
@@ -1437,14 +1437,18 @@
     }
 
     /* ------------------------------------------------------------------ */
-    /* Данные игрока: игровой номер, дата рождения и принадлежность         */
+    /* Данные игрока: игровой номер и принадлежность                        */
     /* ------------------------------------------------------------------ */
 
     /**
-     * Игровой номер — целое число от 0 до CONFIG.maxPlayerNumber ('' — номер не задан),
-     * дата рождения хранится строкой «ГГГГ-ММ-ДД» (как даты матчей), а принадлежность —
-     * свободный текст: школа, клуб, тренер. Её длина ограничена (CONFIG.maxPlayerNoteLength,
-     * примерно 3–4 коротких предложения), чтобы карточка игрока оставалась аккуратной.
+     * Данные игрока — два необязательных поля: игровой номер (целое число от 0 до
+     * CONFIG.maxPlayerNumber, '' — номер не задан) и принадлежность — свободный текст:
+     * школа, клуб, тренер. Длина текста ограничена (CONFIG.maxPlayerNoteLength, примерно
+     * 3–4 коротких предложения), чтобы карточка игрока оставалась аккуратной.
+     *
+     * Даты рождения в карточках нет намеренно: для турнирной таблицы она не нужна,
+     * а это лишние персональные данные. Прежнее поле birthDate (версия данных 10)
+     * отбрасывается при загрузке данных — см. normalizePlayerInfo.
      *
      * Записи живут в отдельной карте playerInfo с тем же ключом, что и фото: «3|иванов а.».
      * Номер — необязательное поле: если он не задан, ключа number в данных нет.
@@ -1469,71 +1473,6 @@
         return number <= CONFIG.maxPlayerNumber ? number : '';
     }
 
-    /** Самая ранняя разумная дата рождения. */
-    var MIN_BIRTH_YEAR = 1900;
-
-    /** Дата рождения: «ГГГГ-ММ-ДД», существующая, не в будущем и не раньше 1900 года. */
-    function isValidBirthDate(value, now) {
-        if (typeof value !== 'string') {
-            return false;
-        }
-
-        var text = value.trim();
-        var date = parseISODate(text);
-
-        if (!date || date.getFullYear() < MIN_BIRTH_YEAR) {
-            return false;
-        }
-
-        return toISODate(date) <= toISODate(now instanceof Date ? now : new Date());
-    }
-
-    /** Сколько лет игроку (null — дата не указана). Возраст считается на дату now. */
-    function playerAge(birthDate, now) {
-        if (!isValidBirthDate(birthDate, now)) {
-            return null;
-        }
-
-        var date = parseISODate(birthDate.trim());
-        var today = now instanceof Date ? now : new Date();
-        var age = today.getFullYear() - date.getFullYear();
-        var months = today.getMonth() - date.getMonth();
-
-        // День рождения в этом году ещё не наступил — год ещё не прибавился
-        if (months < 0 || (months === 0 && today.getDate() < date.getDate())) {
-            age -= 1;
-        }
-
-        return age;
-    }
-
-    /** «год», «года» или «лет» — для возраста. */
-    function yearsWord(age) {
-        var value = Math.abs(toInt(age) || 0) % 100;
-        var last = value % 10;
-
-        if (value > 10 && value < 20) {
-            return 'лет';
-        }
-
-        if (last === 1) {
-            return 'год';
-        }
-
-        return (last >= 2 && last <= 4) ? 'года' : 'лет';
-    }
-
-    /** «15 лет» — возраст словами ('' — дата не указана). */
-    function formatAge(age) {
-        var value = toInt(age);
-
-        if (value === null || value < 0) {
-            return '';
-        }
-
-        return value + ' ' + yearsWord(value);
-    }
-
     /** Принадлежность игрока: строки сохраняются, лишние пробелы и пустые строки — нет. */
     function cleanNote(value, maxLength) {
         var text = String(value === null || value === undefined ? '' : value)
@@ -1552,7 +1491,7 @@
 
     /** Пустая запись игрока. */
     function emptyPlayerInfo() {
-        return { number: '', birthDate: '', note: '' };
+        return { number: '', note: '' };
     }
 
     /** Данные игрока ('' — не заполнено). */
@@ -1565,7 +1504,6 @@
 
         return {
             number: normalizePlayerNumber(card.number),
-            birthDate: isValidBirthDate(card.birthDate) ? card.birthDate.trim() : '',
             note: cleanNote(card.note)
         };
     }
@@ -1574,7 +1512,7 @@
     function hasPlayerInfo(data, teamId, player) {
         var info = getPlayerInfo(data, teamId, player);
 
-        return info.number !== '' || info.birthDate !== '' || info.note !== '';
+        return info.number !== '' || info.note !== '';
     }
 
     /** Записывает данные игрока; пустые значения убирают запись целиком. */
@@ -1594,17 +1532,14 @@
         }
 
         var number = normalizePlayerNumber(info && info.number);
-        var value = {
-            birthDate: isValidBirthDate(info && info.birthDate) ? String(info.birthDate).trim() : '',
-            note: cleanNote(info && info.note)
-        };
+        var value = { note: cleanNote(info && info.note) };
 
         // Номер не задан — ключа в данных нет (так записи остаются компактными)
         if (number !== '') {
             value.number = number;
         }
 
-        if (number !== '' || value.birthDate || value.note) {
+        if (number !== '' || value.note) {
             data.playerInfo[key] = value;
         } else {
             delete data.playerInfo[key];
@@ -1637,7 +1572,7 @@
         var info = getPlayerInfo(data, teamId, oldName);
 
         // Номер 0 — допустимый номер, поэтому сравниваем с пустой строкой, а не «на ложность»
-        if (info.number === '' && !info.birthDate && !info.note) {
+        if (info.number === '' && !info.note) {
             return data;
         }
 
@@ -1653,7 +1588,6 @@
     function validatePlayerInfo(input) {
         var source = input || {};
         var rawNote = source.note === undefined || source.note === null ? '' : String(source.note);
-        var birthDate = cleanText(source.birthDate, 10);
         var rawNumber = source.number === undefined || source.number === null ? '' : String(source.number).trim();
         var number = normalizePlayerNumber(rawNumber);
 
@@ -1664,10 +1598,6 @@
             };
         }
 
-        if (birthDate && !isValidBirthDate(birthDate)) {
-            return { ok: false, error: 'Дата рождения — «ДД.ММ.ГГГГ», не в будущем и не раньше 1900 года' };
-        }
-
         if (rawNote.trim().length > CONFIG.maxPlayerNoteLength) {
             return {
                 ok: false,
@@ -1675,12 +1605,13 @@
             };
         }
 
-        return { ok: true, value: { number: number, birthDate: birthDate, note: cleanNote(rawNote) } };
+        return { ok: true, value: { number: number, note: cleanNote(rawNote) } };
     }
 
     /**
      * Приводит карту данных игроков к корректному виду: остаются только записи
-     * оставшихся в заявке игроков, дата проверяется, длина текста ограничивается.
+     * оставшихся в заявке игроков, номер проверяется, длина текста ограничивается.
+     * Прежнее поле birthDate (дата рождения) отбрасывается — оно больше не хранится.
      */
     function normalizePlayerInfo(rawInfo, teams) {
         var cards = {};
@@ -1710,18 +1641,20 @@
             }
 
             var number = normalizePlayerNumber(value.number);
-            var birthDate = isValidBirthDate(value.birthDate) ? value.birthDate.trim() : '';
             var note = cleanNote(value.note);
             var rawNote = value.note === undefined || value.note === null ? '' : String(value.note);
             var rawNumber = value.number === undefined || value.number === null ? '' : String(value.number).trim();
 
-            if ((value.birthDate && !birthDate) || (rawNumber !== '' && number === '') ||
+            // Прежнее поле birthDate (дата рождения) в данных больше не хранится:
+            // его наличие — тоже исправление, при загрузке оно просто отбрасывается
+            if (Object.prototype.hasOwnProperty.call(value, 'birthDate') ||
+                (rawNumber !== '' && number === '') ||
                 rawNote.trim().length > CONFIG.maxPlayerNoteLength) {
                 repaired = true;
             }
 
-            if (number !== '' || birthDate || note) {
-                var card = { birthDate: birthDate, note: note };
+            if (number !== '' || note) {
+                var card = { note: note };
 
                 // Номер записывается, только если он задан
                 if (number !== '') {
@@ -2446,10 +2379,6 @@
         removeTeamImage: removeTeamImage,
         removeTeamImages: removeTeamImages,
         normalizeTeamImages: normalizeTeamImages,
-        isValidBirthDate: isValidBirthDate,
-        playerAge: playerAge,
-        yearsWord: yearsWord,
-        formatAge: formatAge,
         playerIndex: playerIndex,
         normalizePlayerNumber: normalizePlayerNumber,
         playerStats: playerStats,

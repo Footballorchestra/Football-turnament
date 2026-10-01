@@ -802,7 +802,18 @@ test('синхронизация: посетитель видит данные �
 
     assert.equal(await textOf(otherPage, '#stat-teams'), String(remote.teams.length + 1), 'другое устройство получило опубликованные данные');
     assert.match(await textOf(otherPage, '#teams-grid'), /Опубликовано из админки/);
-    assert.match(await textOf(otherPage, '#data-freshness'), /10 сентября 2026|сентября 2026/);
+
+    // Время в подвале — это момент публикации из репозитория, а не «сейчас» на этом устройстве.
+    // Сравниваем не с конкретной датой (иначе тест ломается в другой месяц), а с тем, что опубликовано.
+    const publishedLabel = await otherPage.evaluate(
+        (iso) => window.FTLogic.formatDateTime(iso),
+        mockRepository.state.data.updatedAt
+    );
+    const freshness = await textOf(otherPage, '#data-freshness');
+
+    assert.match(freshness, /^Данные обновлены: /, 'в подвале видно время обновления');
+    assert.equal(freshness.indexOf(publishedLabel) > -1, true,
+        'другое устройство видит время публикации из репозитория: ' + publishedLabel);
 
     await otherPage.close();
     await otherContext.close();
@@ -961,7 +972,7 @@ test('страница команды: из турнирной таблицы в
     );
     assert.ok(await page.$$eval('#team-detail .squad-toggle', (buttons) => buttons.length) > 0, 'состав свёрнут в кнопку');
 
-    // Кнопка «Состав» раскрывает список игроков столбиком: имя, дата рождения, голы, карточки
+    // Кнопка «Состав» раскрывает список игроков столбиком: имя, голы, карточки
     assert.equal(await page.$eval('#team-squad', (block) => block.hidden), true, 'список состава скрыт');
 
     await clickInView(page, '#team-detail [data-action="squad-toggle"]');
@@ -970,8 +981,8 @@ test('страница команды: из турнирной таблицы в
     assert.deepEqual(
         await page.$$eval('#team-squad thead th', (cells) => cells.map(
             (cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim())),
-        ['Игрок', 'Дата рождения', 'Г', 'Ж', 'К'],
-        'столбцы состава'
+        ['Игрок', 'Г', 'Ж', 'К'],
+        'столбцы состава (без даты рождения)'
     );
     assert.ok(await page.$$eval('#team-squad tbody tr', (rows) => rows.length) > 0, 'игроки видны столбиком');
     assert.equal(await page.$eval('#team-detail [data-action="squad-toggle"]', (button) => button.getAttribute('aria-expanded')),
@@ -1227,7 +1238,7 @@ test('фото, которого нет на сайте: повторные по
     mockRepository.changeExternally(before);
     await page.close();
 });
-test('карточка игрока: имя ведёт на карточку, администратор заполняет номер, дату рождения и принадлежность', { skip }, async () => {
+test('карточка игрока: имя ведёт на карточку, администратор заполняет номер и принадлежность', { skip }, async () => {
     const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
 
     // 1. В списке команд имя игрока — ссылка на его карточку
@@ -1258,7 +1269,7 @@ test('карточка игрока: имя ведёт на карточку, а
             name: box.querySelector('h2').textContent,
             photo: !!box.querySelector('.player-avatar-xl'),
             team: box.querySelector('a.team-link .team-name').textContent,
-            hasBirthLine: box.textContent.includes('Дата рождения:'),
+            hasBirthLine: box.textContent.includes('Дата рождения'),
             hasNote: !!box.querySelector('.player-note-text'),
             stats: box.textContent.includes('В турнире: голы —')
         };
@@ -1269,7 +1280,7 @@ test('карточка игрока: имя ведёт на карточку, а
     assert.match(opened.name, /\S/);
     assert.equal(opened.photo, true, 'крупное фото игрока');
     assert.match(opened.team, /\S/, 'видна команда игрока');
-    assert.equal(opened.hasBirthLine, true, 'видна дата рождения');
+    assert.equal(opened.hasBirthLine, false, 'даты рождения на карточке больше нет');
     assert.equal(opened.hasNote, true, 'видна принадлежность');
     assert.equal(opened.stats, true, 'видна статистика игрока');
 
@@ -1322,7 +1333,7 @@ test('карточка игрока: имя ведёт на карточку, а
 
     const limits = await page.evaluate(() => ({
         maxLength: document.getElementById('player-note').getAttribute('maxlength'),
-        maxDate: document.getElementById('player-birth-date').getAttribute('max'),
+        birthField: document.getElementById('player-birth-date'),
         maxNumber: document.getElementById('player-number').getAttribute('max'),
         minNumber: document.getElementById('player-number').getAttribute('min'),
         admin: document.querySelector('.page-section.active').id
@@ -1330,15 +1341,12 @@ test('карточка игрока: имя ведёт на карточку, а
 
     assert.equal(limits.admin, 'page-admin-dashboard', 'открылась админка с формой данных игрока');
     assert.equal(limits.maxLength, '200', 'длина принадлежности ограничена 200 символами');
-    assert.match(limits.maxDate, /^\d{4}-\d{2}-\d{2}$/, 'будущие даты рождения выбрать нельзя');
+    assert.equal(limits.birthField, null, 'поля «дата рождения» в форме больше нет');
     assert.equal(limits.maxNumber, '99', 'игровой номер ограничен 99');
     assert.equal(limits.minNumber, '0', 'и отрицательные номера не принимаются');
 
     const note = 'Школа №5, первый тренер — Петров И. С 2023 года играет за «Добрик».';
 
-    await page.$eval('#player-birth-date', (input) => {
-        input.value = '2011-05-03';
-    });
     await page.$eval('#player-number', (input) => {
         input.value = '';
     });
@@ -1358,14 +1366,14 @@ test('карточка игрока: имя ведёт на карточку, а
         return { key: key, player: player, value: (data.playerInfo || {})[key] || null };
     }, link.hash);
 
-    assert.deepEqual(saved.value, { birthDate: '2011-05-03', note: note, number: 7 },
-        'игровой номер, дата рождения и принадлежность сохранены (' + saved.key + ')');
+    assert.deepEqual(saved.value, { note: note, number: 7 },
+        'игровой номер и принадлежность сохранены (' + saved.key + ')');
 
     // 3. Данные и номер видны на публичной карточке игрока
     await page.evaluate((hash) => {
         window.location.hash = hash;
     }, link.hash);
-    await page.waitForFunction(() => document.getElementById('player-card').textContent.includes('3 мая 2011'));
+    await page.waitForFunction(() => document.getElementById('player-card').textContent.includes('Школа №5'));
 
     const shown = await page.evaluate(() => document.getElementById('player-card').textContent);
 
@@ -1660,14 +1668,14 @@ test('счётчики на главной и сортировка таблиц 
     assert.equal(view.hash, '#/allplayers', 'у страницы свой адрес');
     assert.equal(view.title, 'Все игроки');
     assert.ok(view.rows > 0, 'игроки показаны: ' + view.rows);
-    assert.deepEqual(view.columns, ['Игрок', 'Команда', 'Дата рождения', 'Г', 'Ж', 'К']);
-    assert.equal(view.sortButtons, 6, 'сортировка по каждому столбцу');
+    assert.deepEqual(view.columns, ['Игрок', 'Команда', 'Г', 'Ж', 'К']);
+    assert.equal(view.sortButtons, 5, 'сортировка по каждому столбцу');
     assert.ok(view.firstRow[0].length > 0, 'в строке видно имя игрока');
 
     // Нажатие на «Г» сортирует по забитым голам (от большего), повторное — наоборот
     await clickInView(page, '#all-players-head [data-key="goals"]');
 
-    const goals = () => page.$$eval('#all-players-body tr td:nth-child(4)', (cells) => cells.map((cell) => Number(cell.textContent)));
+    const goals = () => page.$$eval('#all-players-body tr td:nth-child(3)', (cells) => cells.map((cell) => Number(cell.textContent)));
 
     const descending = await goals();
     const ariaDown = await page.$eval('#all-players-head [data-key="goals"]',
@@ -1884,7 +1892,7 @@ test('дисквалификации: жёлтые карточки превра
         photos: {},
         teamPhotos: {},
         teamImages: {},
-        playerInfo: { '1|шорохов александр': { number: 10, birthDate: '', note: '' } },
+        playerInfo: { '1|шорохов александр': { number: 10, note: '' } },
         settings: { yellowLimit: 4, yellowPeriodDays: 0 }
     });
 

@@ -1909,7 +1909,7 @@ test('фото, которого ещё нет на сайте: повторны
     assert.equal(row.querySelector('.team-badge').textContent, 'СП', 'бейдж с инициалами вернулся');
 });
 
-test('карточка игрока: имя кликабельно, видны фото, дата рождения и принадлежность', () => {
+test('карточка игрока: имя кликабельно, видны фото, номер и принадлежность', () => {
     const app = boot();
     const card = () => app.id('player-card');
 
@@ -1930,10 +1930,10 @@ test('карточка игрока: имя кликабельно, видны �
     assert.equal(app.$('[data-nav="teams"]').classList.contains('active'), true,
         'в меню подсвечен раздел «Команды»');
 
-    // Крупное фото, команда, дата рождения и принадлежность
+    // Крупное фото, команда и принадлежность: даты рождения на карточке больше нет
     assert.ok(card().querySelector('.player-avatar-xl'), 'крупный аватар игрока');
     assert.match(card().textContent, /Иванов А\./);
-    assert.match(card().textContent, /18 апреля 2011/, 'дата рождения из данных');
+    assert.equal(card().textContent.indexOf('Дата рождения'), -1, 'даты рождения на карточке нет');
     assert.match(card().textContent, /Школа №5/, 'принадлежность из данных');
     assert.match(card().textContent, /В турнире: голы — 0/, 'статистика игрока');
     assert.ok(card().querySelector('a.team-link'), 'название команды — ссылка на её страницу');
@@ -1943,11 +1943,10 @@ test('карточка игрока: имя кликабельно, видны �
     app.click(app.button('go-back'));
     assert.equal(app.activeSection(), 'page-teams');
 
-    // Игрок без данных: подсказки вместо пустых полей
+    // Игрок без данных: подсказка вместо пустого поля
     app.click(app.id('teams-grid').querySelectorAll('.chip-player')[1]);
 
-    assert.match(card().textContent, /Дата рождения: не указана/);
-    assert.equal((card().textContent.match(/не указана/g) || []).length, 2, 'и принадлежность тоже не указана');
+    assert.equal((card().textContent.match(/не указана/g) || []).length, 1, 'принадлежность не указана');
 
     // Состав на странице команды тоже кликабелен: раскрываем блок «Состав»
     app.navigate('teams');
@@ -1968,7 +1967,7 @@ test('игровой номер: виден рядом с именем везд�
 
     // Иванов А. — уже с номером и забитым голом, у Петрова П. номера нет
     seeded.matches[0].events = [{ team: 1, player: 'Иванов А.', type: 'goal' }];
-    seeded.playerInfo = { '1|иванов а.': { number: 9, birthDate: '', note: '' } };
+    seeded.playerInfo = { '1|иванов а.': { number: 9, note: '' } };
 
     const app = boot({ mock: createMockRepository({ data: seeded }), autoPublishDelayMs: 10000 });
 
@@ -2049,15 +2048,15 @@ test('игровой номер: виден рядом с именем везд�
     app.type(app.id('player-number'), '5');
     app.submit(form());
 
-    assert.deepEqual(app.storedData().playerInfo['1|иванов а.'], { birthDate: '', note: '', number: 5 });
+    assert.deepEqual(app.storedData().playerInfo['1|иванов а.'], { note: '', number: 5 });
     assert.equal(badgeText(app.id('admin-players-list')), '5', 'номер обновился в списке игроков');
 
-    // Номер можно заполнить и отдельно от даты рождения и принадлежности
+    // Номер можно заполнить и отдельно от принадлежности
     app.click(app.id('admin-players-list').querySelector('[data-action="player-info-open"][data-index="1"]'));
     app.type(app.id('player-number'), '2');
     app.submit(form());
 
-    assert.deepEqual(app.storedData().playerInfo['1|петров п.'], { birthDate: '', note: '', number: 2 });
+    assert.deepEqual(app.storedData().playerInfo['1|петров п.'], { note: '', number: 2 });
 
     // «Убрать данные» убирает и номер
     app.click(app.id('admin-players-list').querySelector('[data-action="player-info-open"][data-index="1"]'));
@@ -2127,7 +2126,7 @@ test('карточка игрока: открывается из бомбард�
 });
 
 
-test('админка: дата рождения и принадлежность заполняются и видны на карточке игрока', async () => {
+test('админка: игровой номер и принадлежность заполняются и видны на карточке игрока', async () => {
     const seeded = remoteData();
 
     // Начинаем с чистого листа: у игроков пока ничего не заполнено
@@ -2152,11 +2151,11 @@ test('админка: дата рождения и принадлежность 
 
     assert.equal(app.id('admin-player-info').hidden, false, 'форма открылась');
     assert.match(app.id('admin-player-info').textContent, /Данные игрока: Иванов А\./);
-    assert.equal(app.id('player-birth-date').value, '', 'дата рождения пока пустая');
+    assert.equal(app.id('player-birth-date'), null, 'поля «дата рождения» в форме больше нет');
+    assert.equal(app.id('player-number').value, '', 'номер пока пустой');
     assert.equal(app.id('player-note').value, '', 'принадлежность пока пустая');
     assert.equal(app.id('player-note').getAttribute('maxlength'), String(L.CONFIG.maxPlayerNoteLength),
         'длина принадлежности ограничена');
-    assert.equal(app.id('player-birth-date').getAttribute('max'), L.todayISO(), 'будущие даты выбрать нельзя');
 
     // Счётчик символов обновляется при вводе
     const note = 'Школа №5, первый тренер — Петров И.';
@@ -2164,10 +2163,10 @@ test('админка: дата рождения и принадлежность 
     app.type(app.id('player-note'), note);
     assert.equal(app.id('player-note-count').textContent, String(note.length));
 
-    app.id('player-birth-date').value = '2011-05-03';
+    app.type(app.id('player-number'), '7');
     app.submit(form());
 
-    assert.deepEqual(app.storedData().playerInfo['1|иванов а.'], { birthDate: '2011-05-03', note: note });
+    assert.deepEqual(app.storedData().playerInfo['1|иванов а.'], { number: 7, note: note });
     assert.match(app.id('toast-container').textContent, /Данные игрока «Иванов А\.» сохранены/);
     assert.equal(app.id('admin-player-info').hidden, true, 'после сохранения форма закрывается');
 
@@ -2177,8 +2176,12 @@ test('админка: дата рождения и принадлежность 
     app.click(app.id('team-detail').querySelector('[data-action="squad-toggle"]'));
     app.click(app.id('team-squad').querySelector('a.player-link'));
 
-    assert.match(app.id('player-card').textContent, /3 мая 2011/);
+    const bigNumber = app.id('player-card').querySelector('.player-number-lg');
+
+    assert.ok(bigNumber, 'на карточке виден игровой номер');
+    assert.equal(bigNumber.textContent, '7', 'номер из формы');
     assert.match(app.id('player-card').textContent, /Школа №5, первый тренер/);
+    assert.equal(app.id('player-card').textContent.indexOf('Дата рождения'), -1, 'даты рождения нет');
 
     // Карточка только для чтения: кнопок заполнения данных на ней нет даже у администратора
     assert.equal(app.id('player-card').querySelector('[data-action="admin-player-info-open"]'), null,
@@ -2187,10 +2190,10 @@ test('админка: дата рождения и принадлежность 
         'и кнопки из админки на карточке тоже нет');
 });
 
-test('админка: длина принадлежности и дата из будущего проверяются', async () => {
+test('админка: длина принадлежности проверяется', async () => {
     const seeded = remoteData();
 
-    seeded.playerInfo = { '1|иванов а.': { birthDate: '2011-05-03', note: 'Школа №5' } };
+    seeded.playerInfo = { '1|иванов а.': { note: 'Школа №5' } };
 
     const mock = createMockRepository({ data: seeded });
     const app = boot({ mock, autoPublishDelayMs: 10000 });
@@ -2203,21 +2206,22 @@ test('админка: длина принадлежности и дата из �
 
     const form = () => app.id('admin-player-info').querySelector('form');
 
-    // Слишком длинный текст не сохраняется — понятная ошибка вместо тихой обрезки
-    app.type(app.id('player-note'), 'а'.repeat(L.CONFIG.maxPlayerNoteLength + 1));
+    // Слишком длинный текст не сохраняется — форма показывает понятную ошибку
+    app.id('player-note').value = 'б'.repeat(L.CONFIG.maxPlayerNoteLength + 1);
     app.submit(form());
 
     assert.match(app.id('player-info-error').textContent, /не больше 200 символов/);
-    assert.equal(app.storedData().playerInfo['1|иванов а.'].note, 'Школа №5', 'данные не изменились');
+    assert.deepEqual(app.storedData().playerInfo, { '1|иванов а.': { note: 'Школа №5' } },
+        'данные остались прежними');
 
-    // Дата из будущего тоже не проходит
-    app.id('player-birth-date').value = '2030-01-01';
-    app.type(app.id('player-note'), 'Школа №6');
+    // Нормальный текст сохраняется
+    app.id('player-note').value = 'Школа №6';
     app.submit(form());
 
-    assert.match(app.id('player-info-error').textContent, /не в будущем/);
+    assert.deepEqual(app.storedData().playerInfo, { '1|иванов а.': { note: 'Школа №6' } });
 
-    // «Убрать данные» очищает дату рождения и принадлежность
+    // «Убрать данные» очищает номер и принадлежность
+    app.click(app.id('admin-players-list').querySelector('[data-action="player-info-open"]'));
     app.click(app.id('admin-player-info').querySelector('[data-action="player-info-clear"]'));
 
     assert.deepEqual(app.storedData().playerInfo, {});
@@ -2230,7 +2234,7 @@ test('админка: длина принадлежности и дата из �
 test('админка: переименование и удаление игрока переносят данные карточки', async () => {
     const seeded = remoteData();
 
-    seeded.playerInfo = { '1|иванов а.': { birthDate: '2011-05-03', note: 'Школа №5' } };
+    seeded.playerInfo = { '1|иванов а.': { note: 'Школа №5', number: 9 } };
 
     const mock = createMockRepository({ data: seeded });
     const app = boot({ mock, autoPublishDelayMs: 10000 });
@@ -2242,7 +2246,8 @@ test('админка: переименование и удаление игро�
 
     // Форма открыта на игроке с заполненными данными
     app.click(app.id('admin-players-list').querySelector('[data-action="player-info-open"]'));
-    assert.equal(app.id('player-birth-date').value, '2011-05-03');
+    assert.equal(app.id('player-number').value, '9');
+    assert.equal(app.id('player-note').value, 'Школа №5');
     assert.ok(app.id('admin-player-info').querySelector('[data-action="player-info-clear"]'),
         'есть кнопка «убрать данные»');
 
@@ -2250,7 +2255,7 @@ test('админка: переименование и удаление игро�
     app.click(app.id('admin-player-info').querySelector('[data-action="player-info-cancel"]'));
 
     assert.equal(app.id('admin-player-info').hidden, true);
-    assert.deepEqual(app.storedData().playerInfo, { '1|иванов а.': { birthDate: '2011-05-03', note: 'Школа №5' } });
+    assert.deepEqual(app.storedData().playerInfo, { '1|иванов а.': { note: 'Школа №5', number: 9 } });
 
     // Переименование переносит данные на новое имя
     app.click(app.id('admin-players-list').querySelector('[data-action="player-rename"]'));
@@ -2258,7 +2263,7 @@ test('админка: переименование и удаление игро�
     app.click(app.id('admin-players-list').querySelector('[data-action="player-save"]'));
 
     assert.deepEqual(app.storedData().playerInfo, {
-        '1|иванов-старший': { birthDate: '2011-05-03', note: 'Школа №5' }
+        '1|иванов-старший': { note: 'Школа №5', number: 9 }
     });
 
     // Удаление игрока убирает и его данные
@@ -2272,8 +2277,8 @@ test('админка: удаление команды убирает данны�
     const seeded = remoteData();
 
     seeded.playerInfo = {
-        '1|иванов а.': { birthDate: '2011-05-03', note: 'Школа №5' },
-        '2|кузнецов к.': { birthDate: '2010-02-02', note: 'Клуб' }
+        '1|иванов а.': { note: 'Школа №5', number: 9 },
+        '2|кузнецов к.': { note: 'Клуб', number: 3 }
     };
 
     const mock = createMockRepository({ data: seeded });
@@ -2285,7 +2290,7 @@ test('админка: удаление команды убирает данны�
     app.openTeam('Спартак');
     app.click(app.button('team-delete'));
 
-    assert.deepEqual(app.storedData().playerInfo, { '2|кузнецов к.': { birthDate: '2010-02-02', note: 'Клуб' } },
+    assert.deepEqual(app.storedData().playerInfo, { '2|кузнецов к.': { note: 'Клуб', number: 3 } },
         'данные игроков удалённой команды убраны, чужие не задеты');
 });
 
@@ -2523,7 +2528,7 @@ test('админка: фотографии команды загружаются
 });
 
 
-test('состав команды: блок «Состав», по нажатию — список с датой рождения и статистикой', () => {
+test('состав команды: блок «Состав», по нажатию — список со статистикой', () => {
     const seeded = remoteData();
 
     // Иванов А. забил дважды и получил жёлтую, Петров П. — красную
@@ -2533,7 +2538,7 @@ test('состав команды: блок «Состав», по нажати�
         { team: 1, player: 'Иванов А.', type: 'yellow' },
         { team: 1, player: 'Петров П.', type: 'red' }
     ];
-    seeded.playerInfo = { '1|иванов а.': { birthDate: '2011-05-03', note: '' } };
+    seeded.playerInfo = { '1|иванов а.': { number: 7, note: '' } };
 
     const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
 
@@ -2556,27 +2561,27 @@ test('состав команды: блок «Состав», по нажати�
     const columns = Array.from(block().querySelectorAll('thead th'))
         .map((cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim());
 
-    assert.deepEqual(columns, ['Игрок', 'Дата рождения', 'Г', 'Ж', 'К'], 'имя, дата рождения, голы, Ж и К');
+    assert.deepEqual(columns, ['Игрок', 'Г', 'Ж', 'К'], 'имя, голы, Ж и К');
 
     const rows = Array.from(block().querySelectorAll('tbody tr')).map((row) => ({
         name: row.querySelector('.player-name').textContent,
-        birth: row.children[1].textContent,
-        goals: row.children[2].textContent,
-        yellow: row.children[3].textContent,
-        red: row.children[4].textContent,
+        goals: row.children[1].textContent,
+        yellow: row.children[2].textContent,
+        red: row.children[3].textContent,
         link: row.querySelector('a.player-link').getAttribute('href')
     }));
 
     assert.equal(rows.length, 3, 'все игроки команды — столбиком');
     assert.deepEqual(rows[0], {
-        name: 'Иванов А.', birth: '03.05.2011', goals: '2', yellow: '1', red: '0', link: '#/player/1/0'
+        name: 'Иванов А.', goals: '2', yellow: '1', red: '0', link: '#/player/1/0'
     });
     assert.deepEqual(rows[1], {
-        name: 'Петров П.', birth: '—', goals: '0', yellow: '0', red: '1', link: '#/player/1/1'
+        name: 'Петров П.', goals: '0', yellow: '0', red: '1', link: '#/player/1/1'
     });
 
-    // Для телефона дата рождения продублирована под именем игрока
-    assert.match(block().querySelector('tbody tr .row-detail').textContent, /Дата рождения: 03\.05\.2011/);
+    // Даты рождения в составе больше нет — ни столбца, ни подписи под именем
+    assert.equal(block().textContent.indexOf('Дата рождения'), -1, 'в составе нет даты рождения');
+    assert.equal(block().querySelector('.row-detail'), null, 'под именем игрока ничего лишнего');
 
     // Повторное нажатие сворачивает список
     app.click(detail().querySelector('[data-action="squad-toggle"]'));
@@ -2702,8 +2707,8 @@ test('страница «Все игроки»: краткая информац�
         { team: 2, player: 'Кузнецов К.', type: 'goal' }
     ];
     seeded.playerInfo = {
-        '1|иванов а.': { birthDate: '2011-05-03', note: '' },
-        '2|кузнецов к.': { birthDate: '2009-12-01', note: '' }
+        '1|иванов а.': { number: 7, note: '' },
+        '2|кузнецов к.': { number: 13, note: '' }
     };
 
     const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
@@ -2719,12 +2724,13 @@ test('страница «Все игроки»: краткая информац�
     assert.equal(app.activeSection(), 'page-allplayers');
     assert.equal(body().querySelectorAll('tr').length, 9, 'все игроки турнира, а не только забивавшие');
 
-    // Столбцы и кнопки сортировки
+    // Столбцы и кнопки сортировки: даты рождения среди них больше нет
     assert.deepEqual(
         Array.from(head().querySelectorAll('th')).map((cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim()),
-        ['Игрок', 'Команда', 'Дата рождения', 'Г', 'Ж', 'К']
+        ['Игрок', 'Команда', 'Г', 'Ж', 'К']
     );
-    assert.equal(head().querySelectorAll('[data-action="sort"]').length, 6, 'сортировать можно по каждому столбцу');
+    assert.equal(head().querySelector('[data-key="birthDate"]'), null, 'столбца с датой рождения нет');
+    assert.equal(head().querySelectorAll('[data-action="sort"]').length, 5, 'сортировать можно по каждому столбцу');
     assert.equal(column('goals').getAttribute('aria-sort'), 'none', 'пока порядок исходный');
 
     // Краткая информация в строке
@@ -2732,8 +2738,7 @@ test('страница «Все игроки»: краткая информац�
 
     assert.equal(first.querySelector('.player-name').textContent, 'Иванов А.');
     assert.match(first.children[1].textContent, /Спартак/);
-    assert.equal(first.children[2].textContent, '03.05.2011', 'дата рождения в формате ДД.ММ.ГГГГ');
-    assert.deepEqual(Array.from(first.children).slice(3).map((cell) => cell.textContent), ['2', '1', '0'],
+    assert.deepEqual(Array.from(first.children).slice(2).map((cell) => cell.textContent), ['2', '1', '0'],
         'голы, жёлтые и красные карточки');
 
     // Сортировка по голам: сначала от большего, повторное нажатие — от меньшего
@@ -2755,12 +2760,6 @@ test('страница «Все игроки»: краткая информац�
     assert.equal(names()[0], 'Волков В.', 'по имени — по алфавиту');
     assert.equal(names()[8], 'Смирнов Д.');
     assert.equal(column('player').getAttribute('aria-sort'), 'ascending');
-
-    // Сортировка по дате рождения: с датой — сначала, без даты — в конце
-    app.click(head().querySelector('[data-key="birthDate"]'));
-
-    assert.deepEqual(names().slice(0, 2), ['Кузнецов К.', 'Иванов А.'], 'даты по возрастанию');
-    assert.equal(body().querySelectorAll('tr')[8].children[2].textContent, '—', 'без даты — в конце списка');
 
     // Сортировка по карточкам
     app.click(head().querySelector('[data-key="yellow"]'));
@@ -2795,7 +2794,7 @@ test('состав команды и бомбардиры тоже сортир�
 
     assert.deepEqual(squadNames(), ['Иванов А.', 'Сидоров С.', 'Петров П.'], 'по голам: 2, 1 и 0');
     assert.deepEqual(
-        Array.from(app.id('team-squad').querySelectorAll('tbody tr td:nth-child(3)')).map((cell) => cell.textContent),
+        Array.from(app.id('team-squad').querySelectorAll('tbody tr td:nth-child(2)')).map((cell) => cell.textContent),
         ['2', '1', '0'],
         'столбец голов'
     );

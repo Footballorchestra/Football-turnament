@@ -73,7 +73,7 @@
         editingTeamId: null,
         editingMatchId: null,
         editingPlayer: null,
-        /** Игрок, чью дату рождения и принадлежность заполняет администратор: { teamId, index }. */
+        /** Игрок, чьи игровой номер и принадлежность заполняет администратор: { teamId, index }. */
         editingPlayerInfo: null,
         /** Открытая команда в разделе «Команды» (null — показывается список команд). */
         selectedTeamId: null,
@@ -1995,7 +1995,7 @@
     }
 
     /**
-     * Страница «Все игроки»: имя, команда, дата рождения, голы и карточки по всем матчам.
+     * Страница «Все игроки»: имя, команда, голы и карточки по всем матчам.
      * Столбцы сортируются нажатием на заголовок.
      */
     function renderAllPlayers() {
@@ -2010,7 +2010,6 @@
             head.innerHTML = '<tr>' +
                 sortHeader('allPlayers', 'player', 'Игрок') +
                 sortHeader('allPlayers', 'teamName', 'Команда') +
-                sortHeader('allPlayers', 'birthDate', 'Дата рождения', { className: 'col-optional' }) +
                 sortHeader('allPlayers', 'goals', 'Г', { className: 'num', title: 'Забитые голы' }) +
                 sortHeader('allPlayers', 'yellow', 'Ж', { className: 'num', title: 'Жёлтые карточки' }) +
                 sortHeader('allPlayers', 'red', 'К', { className: 'num', title: 'Красные карточки' }) +
@@ -2020,14 +2019,13 @@
         var rows = L.computeAllPlayers(state.data);
 
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="6" class="empty-state">Игроки ещё не добавлены — их вносит ' +
+            body.innerHTML = '<tr><td colspan="5" class="empty-state">Игроки ещё не добавлены — их вносит ' +
                 'администратор в карточках команд</td></tr>';
             return;
         }
 
         body.innerHTML = sortedRows(rows, 'allPlayers').map(function (row) {
             var team = L.findTeam(state.data.teams, row.teamId);
-            var birth = row.birthDate ? L.formatDate(row.birthDate, 'numeric') : '—';
 
             return '<tr>' +
                 '<td class="cell-player">' +
@@ -2036,12 +2034,10 @@
                             '<span class="player-name">' + esc(row.player) + '</span>' +
                             playerNumberBadge(row.teamId, row.player) + '</span>'
                     }) +
-                    // На телефоне команда и дата рождения выводятся под именем
-                    '<span class="row-detail">' + teamLink(team, row.teamName, false, false) +
-                        ' · Дата рождения: ' + esc(birth) + '</span>' +
+                    // На телефоне команда выводится под именем игрока
+                    '<span class="row-detail">' + teamLink(team, row.teamName, false, false) + '</span>' +
                 '</td>' +
                 '<td class="col-optional">' + teamLink(team, row.teamName, false, true) + '</td>' +
-                '<td class="col-optional">' + esc(birth) + '</td>' +
                 '<td class="num squad-goals">' + row.goals + '</td>' +
                 '<td class="num">' + row.yellow + '</td>' +
                 '<td class="num">' + row.red + '</td>' +
@@ -2201,24 +2197,21 @@
             }).join('') + '</div>';
     }
 
-    /** Данные одного игрока заявки: имя, дата рождения и статистика по матчам. */
+    /** Данные одного игрока заявки: имя и статистика по матчам. */
     function squadRowData(team, player) {
-        var info = L.getPlayerInfo(state.data, team.id, player);
         var stats = L.playerStats(state.data, team.id, player);
 
         return {
             player: player,
-            birthDate: info.birthDate,
             goals: stats.goals,
             yellow: stats.yellow,
             red: stats.red
         };
     }
 
-    /** Строка состава: игрок (ссылка на карточку), дата рождения и статистика. */
+    /** Строка состава: игрок (ссылка на карточку) и статистика. */
     function squadListRow(team, row) {
         var player = row.player;
-        var birth = row.birthDate ? L.formatDate(row.birthDate, 'numeric') : '—';
 
         return '<tr>' +
             '<td class="cell-player">' +
@@ -2227,10 +2220,7 @@
                         '<span class="player-name">' + esc(player) + '</span>' +
                         playerNumberBadge(team.id, player) + '</span>'
                 }) +
-                // На телефоне столбец с датой рождения скрыт — дата видна под именем
-                '<span class="row-detail">Дата рождения: ' + esc(birth) + '</span>' +
             '</td>' +
-            '<td class="col-optional">' + esc(birth) + '</td>' +
             '<td class="num squad-goals" title="Забитые голы">' + row.goals + '</td>' +
             '<td class="num" title="Жёлтые карточки">' + row.yellow + '</td>' +
             '<td class="num" title="Красные карточки">' + row.red + '</td>' +
@@ -2239,7 +2229,7 @@
 
     /**
      * Состав команды: свёрнутый блок-кнопка «Состав», по нажатию раскрывается список
-     * столбиком — имя, дата рождения, забитые голы, жёлтые и красные карточки.
+     * столбиком — имя, забитые голы, жёлтые и красные карточки.
      * Имя игрока — ссылка на его карточку, заголовки столбцов сортируют список.
      */
     function teamSquadBlock(team) {
@@ -2273,7 +2263,6 @@
                     '<thead>' +
                         '<tr>' +
                             sortHeader('squad', 'player', 'Игрок') +
-                            sortHeader('squad', 'birthDate', 'Дата рождения', { className: 'col-optional' }) +
                             sortHeader('squad', 'goals', 'Г', { className: 'num', title: 'Забитые голы' }) +
                             sortHeader('squad', 'yellow', 'Ж', { className: 'num', title: 'Жёлтые карточки' }) +
                             sortHeader('squad', 'red', 'К', { className: 'num', title: 'Красные карточки' }) +
@@ -2333,7 +2322,7 @@
     }
 
     /* ------------------------------------------------------------------ */
-    /* Карточка игрока: фото, дата рождения и принадлежность               */
+    /* Карточка игрока: фото, игровой номер и принадлежность               */
     /* ------------------------------------------------------------------ */
 
     /** Хэш-адрес карточки игрока: команда и номер в заявке. */
@@ -2371,18 +2360,7 @@
         });
     }
 
-    /** «18 апреля 2011 · 15 лет» ('' — дата не указана). */
-    function playerBirthLine(birthDate) {
-        if (!birthDate) {
-            return '';
-        }
-
-        var age = L.formatAge(L.playerAge(birthDate));
-
-        return esc(L.formatDate(birthDate, 'long')) + (age ? ' · ' + esc(age) : '');
-    }
-
-    /** Карточка игрока: крупное фото, команда, дата рождения, принадлежность и статистика. */
+    /** Карточка игрока: крупное фото, команда, игровой номер, принадлежность и статистика. */
     function renderPlayerCard() {
         var box = $('player-card');
 
@@ -2402,7 +2380,6 @@
 
         var info = L.getPlayerInfo(state.data, opened.team.id, opened.player);
         var stats = L.playerStats(state.data, opened.team.id, opened.player);
-        var birth = playerBirthLine(info.birthDate);
 
         box.innerHTML =
             '<div class="player-card-head">' +
@@ -2412,10 +2389,6 @@
                         playerNumberBadge(opened.team.id, opened.player, { className: 'player-number-lg' }) + '</h2>' +
                     '<div class="player-card-team mb-2">' +
                         teamLink(opened.team, opened.team.name, false, true) + '</div>' +
-                    '<p class="text-sm text-dark-600">Дата рождения: ' +
-                        (birth
-                            ? '<span class="font-medium text-dark-800">' + birth + '</span>'
-                            : '<span class="text-dark-500">не указана</span>') + '</p>' +
                     '<p class="text-sm text-dark-600">В турнире: голы — ' +
                         '<span class="font-medium text-dark-800">' + stats.goals + '</span>, жёлтые — ' +
                         '<span class="font-medium text-dark-800">' + stats.yellow + '</span>, красные — ' +
@@ -3317,8 +3290,8 @@
                         : '') +
                     '<button type="button" class="btn btn-sm btn-ghost" data-action="player-info-open" data-team="' + team.id +
                         '" data-index="' + index + '" title="' + esc(hasInfo
-                            ? 'Номер, дата рождения и принадлежность заполнены — изменить'
-                            : 'Заполнить номер, дату рождения и принадлежность') + '">' + icon('info') + '</button>' +
+                            ? 'Игровой номер и принадлежность заполнены — изменить'
+                            : 'Заполнить игровой номер и принадлежность') + '">' + icon('info') + '</button>' +
                     '<button type="button" class="btn btn-sm btn-ghost" data-action="player-rename" data-team="' + team.id +
                         '" data-index="' + index + '" title="Переименовать">' + icon('pencil') + '</button>' +
                     '<button type="button" class="btn btn-sm btn-danger" data-action="player-delete" data-team="' + team.id +
@@ -3328,7 +3301,7 @@
         }).join('');
     }
 
-    /* --- Данные игрока: дата рождения и принадлежность (форма администратора) --- */
+    /* --- Данные игрока: игровой номер и принадлежность (форма администратора) --- */
 
     /** Открывает форму данных игрока. */
     function startPlayerInfoEdit(teamId, index) {
@@ -3336,7 +3309,7 @@
         renderAdminPlayerInfo();
 
         var box = $('admin-player-info');
-        var input = $('player-birth-date');
+        var input = $('player-number');
 
         if (box && typeof box.scrollIntoView === 'function') {
             box.scrollIntoView({ block: 'nearest' });
@@ -3352,7 +3325,7 @@
         renderAdminPlayerInfo();
     }
 
-    /** Убирает игровой номер, дату рождения и принадлежность игрока. */
+    /** Убирает игровой номер и принадлежность игрока. */
     function clearPlayerInfo(teamId, index) {
         var team = L.findTeam(state.data.teams, teamId);
         var player = (team && index !== null) ? team.players[index] : '';
@@ -3361,7 +3334,7 @@
             return;
         }
 
-        if (!askConfirm('Убрать игровой номер, дату рождения и принадлежность игрока «' + player + '»?')) {
+        if (!askConfirm('Убрать игровой номер и принадлежность игрока «' + player + '»?')) {
             return;
         }
 
@@ -3370,7 +3343,7 @@
         saveData('Данные игрока убраны');
     }
 
-    /** Сохраняет игровой номер, дату рождения и принадлежность из формы. */
+    /** Сохраняет игровой номер и принадлежность из формы. */
     function handlePlayerInfoSubmit(event) {
         event.preventDefault();
 
@@ -3378,7 +3351,6 @@
         var index = state.editingPlayerInfo ? state.editingPlayerInfo.index : null;
         var player = (team && index !== null) ? team.players[index] : '';
         var number = $('player-number');
-        var date = $('player-birth-date');
         var note = $('player-note');
 
         if (!team || !player) {
@@ -3388,7 +3360,6 @@
 
         var check = L.validatePlayerInfo({
             number: number ? number.value : '',
-            birthDate: date ? date.value : '',
             note: note ? note.value : ''
         });
 
@@ -3404,7 +3375,7 @@
     }
 
     /**
-     * Форма данных игрока: дата рождения и принадлежность.
+     * Форма данных игрока: игровой номер и принадлежность.
      * Открывается кнопкой у игрока в карточке команды; пока игрок не выбран — скрыта.
      */
     function renderAdminPlayerInfo() {
@@ -3432,7 +3403,7 @@
             '<h3 class="admin-title">' + icon('info') + 'Данные игрока: ' + esc(player) +
                 playerNumberBadge(team.id, player) + '</h3>' +
             '<p class="admin-hint mb-3">Команда «' + esc(team.name) + '». Игровой номер виден рядом с именем ' +
-                'во всех списках, а вместе с датой рождения и принадлежностью — на карточке игрока ' +
+                'во всех списках, а вместе с принадлежностью — на карточке игрока ' +
                 '(она открывается нажатием на имя игрока в составе).</p>' +
             '<form data-form="player-info" class="grid grid-cols-1 md:grid-cols-4 gap-3" novalidate>' +
                 '<div>' +
@@ -3441,12 +3412,7 @@
                         CONFIG.maxPlayerNumber + '" step="1" inputmode="numeric" placeholder="Например, 10" value="' +
                         esc(info.number) + '">' +
                 '</div>' +
-                '<div>' +
-                    '<label class="field-label text-dark-200" for="player-birth-date">Дата рождения</label>' +
-                    '<input type="date" id="player-birth-date" class="admin-input" min="1900-01-01" max="' +
-                        L.todayISO() + '" value="' + esc(info.birthDate) + '">' +
-                '</div>' +
-                '<div class="md:col-span-2">' +
+                '<div class="md:col-span-3">' +
                     '<label class="field-label text-dark-200" for="player-note">Принадлежность</label>' +
                     '<textarea id="player-note" class="admin-input" rows="3" maxlength="' +
                         CONFIG.maxPlayerNoteLength + '" placeholder="Например: школа №5, тренер Петров. ' +
@@ -4128,7 +4094,7 @@
             state.imageViewer = null;
         }
 
-        // Дата рождения и принадлежность игроков удалённой команды — тоже
+        // Игровой номер и принадлежность игроков удалённой команды — тоже
         L.removeTeamPlayerInfo(state.data, team.id);
 
         saveData('Команда «' + team.name + '» удалена');
@@ -4385,7 +4351,7 @@
         // Фото игрока тоже переезжает на новое имя
         L.renamePlayerPhoto(state.data, team.id, oldName, check.value);
 
-        // Дата рождения и принадлежность — тоже
+        // Игровой номер и принадлежность — тоже
         L.renamePlayerInfo(state.data, team.id, oldName, check.value);
 
         state.editingPlayer = null;

@@ -900,7 +900,7 @@
         font-size: 0.6875rem;
     }
 
-    /* --- Карточка игрока: крупное фото, дата рождения и принадлежность --- */
+    /* --- Карточка игрока: крупное фото, игровой номер и принадлежность --- */
 
     .player-link {
         color: inherit;
@@ -2071,19 +2071,6 @@
     }
 
     .players-table .row-detail {
-        display: block;
-        margin-top: 0.125rem;
-        font-size: 0.6875rem;
-        font-weight: 400;
-        color: #5f6368;
-    }
-
-    /* --- Состав команды на телефоне: дата рождения уходит под имя игрока --- */
-    .squad-table .col-optional {
-        display: none;
-    }
-
-    .squad-table .row-detail {
         display: block;
         margin-top: 0.125rem;
         font-size: 0.6875rem;
