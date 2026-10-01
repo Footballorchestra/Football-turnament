@@ -1,7 +1,7 @@
 {
   "version": 11,
-  "revision": 506,
-  "updatedAt": "2026-10-01T11:10:31.747Z",
+  "revision": 515,
+  "updatedAt": "2026-10-01T12:53:49.111Z",
   "teams": [
     {
       "id": 1,
@@ -157,10 +157,10 @@
   "matches": [
     {
       "id": 1,
-      "teamA": 7,
-      "teamB": 8,
-      "scoreA": 4,
-      "scoreB": 6,
+      "teamA": 8,
+      "teamB": 7,
+      "scoreA": 6,
+      "scoreB": 4,
       "date": "2026-09-07",
       "finished": true,
       "events": [
@@ -218,10 +218,10 @@
     },
     {
       "id": 2,
-      "teamA": 1,
-      "teamB": 6,
-      "scoreA": 6,
-      "scoreB": 2,
+      "teamA": 6,
+      "teamB": 1,
+      "scoreA": 2,
+      "scoreB": 6,
       "date": "2026-09-14",
       "finished": true,
       "events": [
@@ -269,10 +269,10 @@
     },
     {
       "id": 5,
-      "teamA": 5,
-      "teamB": 4,
-      "scoreA": 7,
-      "scoreB": 6,
+      "teamA": 4,
+      "teamB": 5,
+      "scoreA": 6,
+      "scoreB": 7,
       "date": "2026-09-14",
       "finished": true,
       "events": [
@@ -381,10 +381,10 @@
     },
     {
       "id": 7,
-      "teamA": 6,
-      "teamB": 5,
-      "scoreA": 3,
-      "scoreB": 8,
+      "teamA": 5,
+      "teamB": 6,
+      "scoreA": 8,
+      "scoreB": 3,
       "date": "2026-09-18",
       "finished": true,
       "events": [
@@ -539,10 +539,10 @@
     },
     {
       "id": 10,
-      "teamA": 8,
-      "teamB": 2,
-      "scoreA": 0,
-      "scoreB": 1,
+      "teamA": 2,
+      "teamB": 8,
+      "scoreA": 1,
+      "scoreB": 0,
       "date": "2026-09-28",
       "finished": true,
       "events": [
@@ -577,10 +577,11 @@
       "id": 13,
       "teamA": 5,
       "teamB": 1,
-      "date": "2026-10-14",
       "scoreA": null,
       "scoreB": null,
-      "finished": false
+      "date": "2026-10-14",
+      "finished": false,
+      "events": []
     }
   ],
   "photos": {
