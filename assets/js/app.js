@@ -1688,17 +1688,25 @@
     /* Публичные страницы                                                 */
     /* ================================================================== */
 
-    function renderHome() {
+    /**
+     * Плитки-счётчики постоянной шапки сайта: команды, матчи, игроки, завершённые.
+     * Шапка видна на всех публичных страницах, поэтому числа обновляются при любой
+     * перерисовке данных, а не только при открытии главной.
+     */
+    function renderSiteHead() {
         var stats = L.getStats(state.data);
-        var finished = L.sortMatches(state.data.matches.filter(L.isFinished), 'desc');
-        var upcoming = L.sortMatches(state.data.matches.filter(function (match) {
-            return !L.isFinished(match);
-        }), 'asc');
 
         $('stat-teams').textContent = stats.teams;
         $('stat-matches').textContent = stats.matches;
         $('stat-players').textContent = stats.players;
         $('stat-finished').textContent = stats.finished;
+    }
+
+    function renderHome() {
+        var finished = L.sortMatches(state.data.matches.filter(L.isFinished), 'desc');
+        var upcoming = L.sortMatches(state.data.matches.filter(function (match) {
+            return !L.isFinished(match);
+        }), 'asc');
 
         $('latest-results').innerHTML = finished.slice(0, CONFIG.recentMatches).map(matchCard).join('') ||
             '<p class="empty-state">Завершённых матчей пока нет</p>';
@@ -2756,6 +2764,7 @@
         // Оформление (класс theme-afisha на <body>) применяем первым:
         // от него зависят стили всех блоков ниже
         applyTheme();
+        renderSiteHead();
         renderHome();
         renderStandings();
         renderTeams();
@@ -3833,6 +3842,32 @@
         }
     }
 
+    /**
+     * Плитка-счётчик открытого сейчас раздела получает класс active.
+     * «Матчей» и «Завершено» ведут на одну страницу, поэтому их различает фильтр матчей.
+     */
+    function syncStatTiles() {
+        qsa('[data-stat]').forEach(function (tile) {
+            var stat = tile.getAttribute('data-stat');
+            var isActive;
+
+            if (stat === 'matches' || stat === 'finished') {
+                isActive = state.route === 'matches' &&
+                    (state.matchesFilter === 'finished') === (stat === 'finished');
+            } else {
+                isActive = state.route === stat;
+            }
+
+            tile.classList.toggle('active', isActive);
+
+            if (isActive) {
+                tile.setAttribute('aria-current', 'true');
+            } else {
+                tile.removeAttribute('aria-current');
+            }
+        });
+    }
+
     /** Переключение страницы: активная секция, подсветка меню (в т.ч. мобильного), хэш. */
     function applyRoute(route, options) {
         var opts = options || {};
@@ -3896,6 +3931,16 @@
                 element.removeAttribute('aria-current');
             }
         });
+
+        /* Постоянная шапка сайта (название и плитки-счётчики) в админке не нужна:
+           там своя рабочая область, поэтому блок прячется. */
+        var siteHead = $('site-head');
+
+        if (siteHead) {
+            siteHead.hidden = target === 'admin';
+        }
+
+        syncStatTiles();
 
         var menu = $('mobile-menu');
 
@@ -4607,6 +4652,7 @@
         } else if (action === 'filter') {
             state.matchesFilter = element.getAttribute('data-filter') || 'all';
             renderMatches();
+            syncStatTiles();
         } else if (action === 'toggle-standings-columns') {
             state.standingsCompact = !state.standingsCompact;
             renderStandings();

@@ -55,6 +55,23 @@ body.theme-afisha::before {
         url('../../Problem/fon.jpg');
 }
 
+/*
+ * Смартфоны: вертикальный снимок Problem/fontel.jpg виден целиком, как в заставке.
+ * Кадр снят под форму телефона, поэтому на узком вертикальном экране картинка
+ * не «приближается»: широкий fon.jpg пришлось бы обрезать почти втрое.
+ */
+@media (max-width: 767px) and (orientation: portrait) {
+    body.theme-afisha::before {
+        background-image: linear-gradient(180deg,
+                rgba(8, 14, 25, 0.74) 0%,
+                rgba(10, 17, 29, 0.58) 16%,
+                rgba(28, 38, 54, 0.34) 34%,
+                rgba(243, 239, 230, 0.84) 60%,
+                rgba(246, 243, 236, 0.92) 100%),
+            url('../../Problem/fontel.jpg');
+    }
+}
+
 /* Длинный блок никогда не «толкает» страницу вбок: украшения не создают прокрутку */
 body.theme-afisha main {
     overflow-x: clip;
@@ -203,21 +220,42 @@ body.theme-afisha .page-section:not(.admin-panel) .panel > .card-header .section
     line-height: 1;
 }
 
-/* Цифры турнира: первая плитка — тёмное табло, остальные — карточки с золотом */
+/*
+ * Цифры турнира: ровные плитки одной формы. Цветом выделяется только активная —
+ * та, чей раздел открыт сейчас. Никаких «особых» первой и последней плитки нет.
+ */
 body.theme-afisha .stat-ribbon .stat-box {
     background: var(--af-paper);
     border: 1px solid var(--af-line);
-    border-top: 3px solid var(--af-brass-soft);
     border-radius: var(--af-radius);
     box-shadow: var(--af-shadow);
     text-align: left;
     padding: 1rem 1.1rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 body.theme-afisha .stat-ribbon .stat-box:hover,
 body.theme-afisha .stat-ribbon .stat-box:focus-visible {
     border-color: var(--af-brass);
-    border-top-color: var(--af-brass);
+}
+
+body.theme-afisha .stat-ribbon .stat-box-link:focus-visible {
+    outline-color: var(--af-brass);
+}
+
+/* Активная плитка — открытый сейчас раздел: тёмное табло с золотыми цифрами */
+body.theme-afisha .stat-ribbon .stat-box.active {
+    background: linear-gradient(150deg, var(--af-night) 0%, var(--af-night-2) 100%);
+    border-color: var(--af-brass);
+    box-shadow: 0 12px 26px -18px rgba(9, 15, 26, 0.9);
+}
+
+body.theme-afisha .stat-ribbon .stat-box.active .stat-value {
+    color: #f2d79a;
+}
+
+body.theme-afisha .stat-ribbon .stat-box.active .stat-label {
+    color: #cfc8b6;
 }
 
 body.theme-afisha .stat-ribbon .stat-value {
@@ -230,51 +268,14 @@ body.theme-afisha .stat-ribbon .stat-label {
     letter-spacing: 0.08em;
 }
 
-body.theme-afisha .stat-ribbon .stat-box:first-child {
-    background: linear-gradient(150deg, var(--af-night) 0%, var(--af-night-2) 100%);
-    border-color: var(--af-brass-soft);
-    border-top-color: transparent;
-}
-
-body.theme-afisha .stat-ribbon .stat-box:first-child .stat-value {
-    color: #f2d79a;
-    font-size: 2.6rem;
-}
-
-body.theme-afisha .stat-ribbon .stat-box:first-child .stat-label {
-    color: #cfc8b6;
-}
-
-/*
- * «Завершено» — как штамп в программке: пунктирная золотая рамка и лёгкий наклон.
- * Наклон только на широких экранах, на телефоне всё стоит ровно.
- */
-@media (min-width: 768px) {
-    body.theme-afisha .stat-ribbon {
-        grid-template-columns: 1.35fr 1fr 1fr 1fr;
-    }
-
-    body.theme-afisha .stat-ribbon .stat-box:last-child {
-        border: 1px dashed var(--af-brass);
-        transform: rotate(-1deg);
-    }
-}
-
 @media (max-width: 767px) {
     body.theme-afisha .stat-ribbon {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 0.6rem;
     }
 
-    /* На телефоне лента читается ритмом: широкая плитка — две узких — широкая */
-    body.theme-afisha .stat-ribbon .stat-box:first-child,
-    body.theme-afisha .stat-ribbon .stat-box:last-child {
-        grid-column: span 2;
-        text-align: left;
-    }
-
-    body.theme-afisha .stat-ribbon .stat-box:first-child .stat-value {
-        font-size: 2.2rem;
+    body.theme-afisha .stat-ribbon .stat-box {
+        padding: 0.85rem 0.9rem;
     }
 }
 
@@ -332,26 +333,149 @@ body.theme-afisha .hero-subtitle {
     border-bottom: 2px solid var(--af-brass);
 }
 
-body.theme-afisha .hero-band .btn {
-    background: rgba(255, 255, 255, 0.10);
-    color: #f6f3ec;
-    border: 1px solid rgba(240, 215, 154, 0.45);
-    border-radius: 999px;
+/*
+ * Ноты и скрипичный ключ на табло — вместо кнопок-переходов: те лишь повторяли меню.
+ * Значки рассыпаны по правой части, как на афише, и рисуются кодом (SVG-спрайт),
+ * поэтому картинок не нужно. На телефоне часть нот скрыта и они тише,
+ * чтобы название турнира читалось легко.
+ */
+body.theme-afisha .hero-notes {
+    position: absolute;
+    inset: 0;
+    display: block;
+    overflow: hidden;
+    border-radius: inherit;
+    pointer-events: none;
 }
 
-body.theme-afisha .hero-band .btn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.18);
+body.theme-afisha .hero-note {
+    position: absolute;
+    width: 34px;
+    height: 34px;
+    color: var(--af-brass);
+    opacity: 0.5;
 }
 
-/* Вторая кнопка — латунная: «Матчи» как главное действие афиши */
-body.theme-afisha .hero-band .btn:nth-child(2) {
-    background: var(--af-brass);
-    border-color: transparent;
-    color: #231a05;
+body.theme-afisha .hero-note-1 {
+    top: 10%;
+    right: 30%;
+    width: 42px;
+    height: 42px;
+    transform: rotate(-14deg);
 }
 
-body.theme-afisha .hero-band .btn:nth-child(2):hover:not(:disabled) {
-    background: #d8b45e;
+body.theme-afisha .hero-note-2 {
+    top: 16%;
+    right: 16%;
+    width: 48px;
+    height: 48px;
+    transform: rotate(10deg);
+}
+
+body.theme-afisha .hero-note-3 {
+    top: 6%;
+    right: 4%;
+    width: 30px;
+    height: 30px;
+    color: #f0e6d2;
+    opacity: 0.4;
+    transform: rotate(18deg);
+}
+
+body.theme-afisha .hero-note-4 {
+    top: 46%;
+    right: 8%;
+    width: 54px;
+    height: 54px;
+    color: #f0e6d2;
+    opacity: 0.42;
+    transform: rotate(-6deg);
+}
+
+body.theme-afisha .hero-note-5 {
+    top: 40%;
+    right: 34%;
+    width: 34px;
+    height: 34px;
+    transform: rotate(-22deg);
+}
+
+body.theme-afisha .hero-note-6 {
+    top: 62%;
+    right: 22%;
+    width: 44px;
+    height: 44px;
+    transform: rotate(7deg);
+}
+
+body.theme-afisha .hero-note-7 {
+    top: 74%;
+    right: 6%;
+    width: 30px;
+    height: 30px;
+    opacity: 0.42;
+    transform: rotate(14deg);
+}
+
+body.theme-afisha .hero-note-8 {
+    top: 70%;
+    right: 44%;
+    width: 26px;
+    height: 26px;
+    color: #f0e6d2;
+    opacity: 0.32;
+    transform: rotate(-10deg);
+}
+
+body.theme-afisha .hero-note-9 {
+    top: 34%;
+    right: 2%;
+    width: 34px;
+    height: 34px;
+    opacity: 0.36;
+    transform: rotate(20deg);
+}
+
+@media (max-width: 767px) {
+    body.theme-afisha .hero-note {
+        display: none;
+    }
+
+    body.theme-afisha .hero-note-3,
+    body.theme-afisha .hero-note-5,
+    body.theme-afisha .hero-note-6,
+    body.theme-afisha .hero-note-7 {
+        display: block;
+        opacity: 0.3;
+    }
+
+    body.theme-afisha .hero-note-3 {
+        top: 5%;
+        right: 5%;
+        width: 26px;
+        height: 26px;
+    }
+
+    body.theme-afisha .hero-note-5 {
+        top: 58%;
+        right: 12%;
+        width: 28px;
+        height: 28px;
+    }
+
+    body.theme-afisha .hero-note-6 {
+        top: 72%;
+        right: 40%;
+        width: 34px;
+        height: 34px;
+    }
+
+    body.theme-afisha .hero-note-7 {
+        top: 74%;
+        right: 5%;
+        width: 26px;
+        height: 26px;
+    }
 }
 
 /*
@@ -377,15 +501,11 @@ body.theme-afisha .page-section:not(.admin-panel) .match-card::before {
     pointer-events: none;
 }
 
-body.theme-afisha .page-section:not(.admin-panel) .match-card.finished {
-    border-left: 0;
-    box-shadow: inset 4px 0 0 0 rgba(47, 125, 58, 0.85), var(--af-shadow);
-}
-
-body.theme-afisha .page-section:not(.admin-panel) .match-card.upcoming {
-    border-left: 0;
-    box-shadow: inset 4px 0 0 0 rgba(200, 162, 76, 0.90), var(--af-shadow);
-}
+/*
+ * Цветных полос по левому краю билета нет: «сыгран матч или нет» уже видно
+ * по отметке статуса и счёту, а разноцветные обрамления выглядели случайно.
+ * Состояние матча остаётся в отметке под счётом.
+ */
 
 /* Названия команд в билете переносятся по словам, без разрыва слов посередине */
 body.theme-afisha .match-card .team-name {
@@ -479,39 +599,34 @@ body.theme-afisha #standings-body tr:nth-child(even) {
     background: rgba(22, 32, 47, 0.035);
 }
 
-/* Золото, серебро и бронза: цветная лента у первого столбца */
+/*
+ * Призовые места: первое — светлая зелень, второе и третье — светлая жёлтая подсветка.
+ * Цветных полос по краю строки нет: место видно по самой подложке, а строка
+ * остаётся кликабельной и ведёт на страницу команды.
+ */
 body.theme-afisha #standings-body tr:nth-child(1) {
-    background: rgba(200, 162, 76, 0.18);
+    background: #e4f3e6;
 }
 
 body.theme-afisha #standings-body tr:nth-child(1) td:first-child {
-    box-shadow: inset 4px 0 0 rgba(200, 162, 76, 0.95);
-    color: #6c4f12;
+    color: #1e5c26;
     font-weight: 700;
 }
 
-body.theme-afisha #standings-body tr:nth-child(2) {
-    background: rgba(140, 148, 158, 0.18);
-}
-
-body.theme-afisha #standings-body tr:nth-child(2) td:first-child {
-    box-shadow: inset 4px 0 0 rgba(140, 148, 158, 0.90);
-    color: #4c545e;
-    font-weight: 700;
-}
-
+body.theme-afisha #standings-body tr:nth-child(2),
 body.theme-afisha #standings-body tr:nth-child(3) {
-    background: rgba(163, 110, 72, 0.18);
+    background: #fbf3d8;
 }
 
+body.theme-afisha #standings-body tr:nth-child(2) td:first-child,
 body.theme-afisha #standings-body tr:nth-child(3) td:first-child {
-    box-shadow: inset 4px 0 0 rgba(163, 110, 72, 0.90);
-    color: #6d452b;
+    color: #7a5c12;
     font-weight: 700;
 }
 
+/* Курсор на строке: мягкое затемнение поверх подложки, цвет призового места сохраняется */
 body.theme-afisha .panel-standings .standings-table tbody tr[data-action]:hover {
-    background: rgba(200, 162, 76, 0.14);
+    background-image: linear-gradient(rgba(22, 32, 47, 0.06), rgba(22, 32, 47, 0.06));
 }
 
 /* Дополнительные показатели в компактной таблице — мелкой подписью под командой */
@@ -551,11 +666,10 @@ body.theme-afisha .team-page > div:first-child .team-badge {
     box-shadow: 0 0 0 3px rgba(240, 215, 154, 0.45);
 }
 
-/* Показатели команды — небольшие медальоны */
+/* Показатели команды — небольшие медальоны без цветных полос по краю */
 body.theme-afisha .team-page .stat-box {
     background: var(--af-paper);
     border: 1px solid var(--af-line);
-    border-top: 3px solid var(--af-brass-soft);
     border-radius: 14px;
     box-shadow: var(--af-shadow);
     padding: 0.75rem 0.5rem;

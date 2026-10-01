@@ -47,11 +47,11 @@
 
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=43">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=44">
     <!-- Второй стиль «Афиша матча». Файл подключён всегда, но применяется только тогда,
          когда администратор включил этот стиль в панели: все правила внутри ограничены
          классом theme-afisha на <body> (см. applyTheme в assets/js/app.js). -->
-    <link rel="stylesheet" href="assets/css/theme-afisha.css?v=43">
+    <link rel="stylesheet" href="assets/css/theme-afisha.css?v=44">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -188,6 +188,26 @@
             <circle cx="12" cy="8" r="3.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
             <path d="M4.8 19.6c0-3.4 3.2-5.7 7.2-5.7s7.2 2.3 7.2 5.7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
         </symbol>
+
+        <!-- Ноты и скрипичный ключ: украшение шапки сайта в оформлении «Афиша матча».
+             Рисуются кодом (SVG), картинки и внешние шрифты не нужны, поэтому сайт
+             остаётся строгим по защите. Цвет берётся из свойства color (currentColor). -->
+        <symbol id="i-note-eighth" viewBox="0 0 24 24">
+            <ellipse cx="8.2" cy="17.6" rx="4" ry="3" transform="rotate(-20 8.2 17.6)" fill="currentColor"/>
+            <path d="M11.6 16.4V4.2c3.1.7 5.2 2 5.2 4.1 0 .5-.1 1-.3 1.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </symbol>
+        <symbol id="i-note-beam" viewBox="0 0 24 24">
+            <ellipse cx="6.2" cy="17.8" rx="3.5" ry="2.7" transform="rotate(-20 6.2 17.8)" fill="currentColor"/>
+            <ellipse cx="16.4" cy="15.6" rx="3.5" ry="2.7" transform="rotate(-20 16.4 15.6)" fill="currentColor"/>
+            <path d="M9.3 17V6.6M19.5 14.8V4.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M8.2 6 20.6 3.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+        </symbol>
+        <symbol id="i-treble" viewBox="0 0 24 24">
+            <path d="M12.6 3.2v14.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M12.6 3.2c1.3 1.5 2 3.1 2 4.8 0 2.3-1.6 4.1-4.1 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M10.5 13c-2.6.9-4.1 2.5-4.1 4.4 0 1.9 1.6 3.4 3.6 3.4 1.8 0 3.3-1.3 3.3-3 0-1.5-1.1-2.7-2.7-2.9" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M12.6 21.4c1.2-.6 1.9-1.6 1.9-2.7" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </symbol>
     </svg>
 
     <!-- Шапка -->
@@ -261,50 +281,59 @@
             </div>
         </div>
 
-        <!-- ============================ ГЛАВНАЯ ============================ -->
-        <section id="page-home" class="page-section active">
+        <!-- Постоянная шапка сайта: название турнира и плитки-счётчики. Блок виден на всех
+             публичных страницах, а содержимое каждой страницы строится под ним (в админке
+             блок скрывается: там своя рабочая область). Так счётчики-переходы всегда под рукой. -->
+        <div id="site-head">
             <div class="card mb-6 overflow-hidden hero-card">
                 <div class="hero-band bg-gradient-to-r from-primary-700 to-primary-900 p-6 sm:p-8 text-white">
-                    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                        <div>
-                            <h1 class="hero-title text-2xl sm:text-3xl font-bold mb-1">Чемпионат среди Артистов по футболу 2026-2027</h1>
-                            <p class="hero-subtitle text-primary-100">Турнирная таблица, составы команд и результаты матчей</p>
-                        </div>
-                        <div class="flex flex-wrap gap-3">
-                            <button type="button" class="btn bg-white text-primary-800 hover:bg-primary-50"
-                                    data-action="navigate" data-page="standings">Таблица</button>
-                            <button type="button" class="btn bg-primary-600 text-white hover:bg-primary-500"
-                                    data-action="navigate" data-page="matches">Матчи</button>
-                            <button type="button" class="btn bg-white text-primary-800 hover:bg-primary-50"
-                                    data-action="navigate" data-page="players">Лучшие бомбардиры</button>
-                        </div>
+                    <!-- Ноты рисуются кодом поверх табло — только в оформлении «Афиша матча» -->
+                    <div class="hero-notes" aria-hidden="true">
+                        <svg class="hero-note hero-note-1" aria-hidden="true"><use href="#i-note-eighth"></use></svg>
+                        <svg class="hero-note hero-note-2" aria-hidden="true"><use href="#i-note-beam"></use></svg>
+                        <svg class="hero-note hero-note-3" aria-hidden="true"><use href="#i-note-eighth"></use></svg>
+                        <svg class="hero-note hero-note-4" aria-hidden="true"><use href="#i-treble"></use></svg>
+                        <svg class="hero-note hero-note-5" aria-hidden="true"><use href="#i-note-eighth"></use></svg>
+                        <svg class="hero-note hero-note-6" aria-hidden="true"><use href="#i-note-beam"></use></svg>
+                        <svg class="hero-note hero-note-7" aria-hidden="true"><use href="#i-note-eighth"></use></svg>
+                        <svg class="hero-note hero-note-8" aria-hidden="true"><use href="#i-note-eighth"></use></svg>
+                        <svg class="hero-note hero-note-9" aria-hidden="true"><use href="#i-note-eighth"></use></svg>
+                    </div>
+                    <div class="relative">
+                        <h1 class="hero-title text-2xl sm:text-3xl font-bold mb-1">Чемпионат среди Артистов по футболу 2026-2027</h1>
+                        <p class="hero-subtitle text-primary-100">Турнирная таблица, составы команд и результаты матчей</p>
                     </div>
                 </div>
             </div>
 
+            <!-- Плитки-счётчики: ведут на разделы и подсвечивают открытый сейчас.
+                 data-stat — по нему приложение решает, какая плитка активна. -->
             <div class="stat-ribbon grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <button type="button" class="stat-box stat-box-link" data-action="navigate" data-page="teams"
-                        title="Команды турнира: составы, статистика и матчи">
+                        data-stat="teams" title="Команды турнира: составы, статистика и матчи">
                     <div class="stat-value" id="stat-teams">0</div>
                     <div class="stat-label">Команд</div>
                 </button>
                 <button type="button" class="stat-box stat-box-link" data-action="open-matches" data-filter="all"
-                        title="Все матчи турнира">
+                        data-stat="matches" title="Все матчи турнира">
                     <div class="stat-value" id="stat-matches">0</div>
                     <div class="stat-label">Матчей</div>
                 </button>
                 <button type="button" class="stat-box stat-box-link" data-action="navigate" data-page="allplayers"
-                        title="Все игроки турнира: игровой номер, команда, голы и карточки">
+                        data-stat="allplayers" title="Все игроки турнира: игровой номер, команда, голы и карточки">
                     <div class="stat-value" id="stat-players">0</div>
                     <div class="stat-label">Игроков</div>
                 </button>
                 <button type="button" class="stat-box stat-box-link" data-action="open-matches" data-filter="finished"
-                        title="Завершённые матчи с результатами">
+                        data-stat="finished" title="Завершённые матчи с результатами">
                     <div class="stat-value" id="stat-finished">0</div>
                     <div class="stat-label">Завершено</div>
                 </button>
             </div>
+        </div>
 
+        <!-- ============================ ГЛАВНАЯ ============================ -->
+        <section id="page-home" class="page-section active">
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div class="card panel panel-results">
                     <div class="card-header">
@@ -886,12 +915,12 @@
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
     <!-- На GitHub Pages заголовки ответа задать нельзя, поэтому страница сама проверяет,
          не встроена ли она в чужой iframe. Скрипт идёт первым, до кода приложения. -->
-    <script src="assets/js/frame-guard.js?v=43" defer></script>
-    <script src="assets/js/config.js?v=43" defer></script>
-    <script src="assets/js/splash.js?v=43" defer></script>
-    <script src="assets/js/logic.js?v=43" defer></script>
-    <script src="assets/js/sync.js?v=43" defer></script>
-    <script src="assets/js/photo.js?v=43" defer></script>
-    <script src="assets/js/app.js?v=43" defer></script>
+    <script src="assets/js/frame-guard.js?v=44" defer></script>
+    <script src="assets/js/config.js?v=44" defer></script>
+    <script src="assets/js/splash.js?v=44" defer></script>
+    <script src="assets/js/logic.js?v=44" defer></script>
+    <script src="assets/js/sync.js?v=44" defer></script>
+    <script src="assets/js/photo.js?v=44" defer></script>
+    <script src="assets/js/app.js?v=44" defer></script>
 </body>
 </html>
