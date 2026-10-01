@@ -1108,21 +1108,21 @@ test('дисциплина: правила задаются в админке, �
     app.submit(form);
 
     assert.match(app.id('discipline-form-error').textContent, /от 1 до 12/);
-    assert.deepEqual(app.storedData().settings, { yellowLimit: 4, yellowPeriodDays: 0 });
+    assert.deepEqual(app.storedData().settings, { yellowLimit: 4, yellowPeriodDays: 0, theme: 'classic' });
 
     app.id('discipline-yellow-limit').value = '2';
     app.id('discipline-period').value = '4000';
     app.submit(form);
 
     assert.match(app.id('discipline-form-error').textContent, /от 0 до 3650/);
-    assert.deepEqual(app.storedData().settings, { yellowLimit: 4, yellowPeriodDays: 0 });
+    assert.deepEqual(app.storedData().settings, { yellowLimit: 4, yellowPeriodDays: 0, theme: 'classic' });
 
     // Рабочее правило: 2-я жёлтая за 30 дней превращается в красную
     app.id('discipline-yellow-limit').value = '2';
     app.id('discipline-period').value = '30';
     app.submit(form);
 
-    assert.deepEqual(app.storedData().settings, { yellowLimit: 2, yellowPeriodDays: 30 });
+    assert.deepEqual(app.storedData().settings, { yellowLimit: 2, yellowPeriodDays: 30, theme: 'classic' });
     assert.equal(app.id('discipline-form-error').textContent, '');
     assert.match(app.id('toast-container').textContent, /Правила дисквалификаций сохранены/);
     assert.match(app.id('discipline-rule').textContent, /^2-я жёлтая карточка за 30 дней/);
@@ -1144,8 +1144,72 @@ test('дисциплина: правила задаются в админке, �
     // Правила уезжают в данные вместе с остальными правками
     const stored = JSON.parse(app.window.localStorage.getItem(DATA_KEY));
 
-    assert.deepEqual(stored.settings, { yellowLimit: 2, yellowPeriodDays: 30 });
+    assert.deepEqual(stored.settings, { yellowLimit: 2, yellowPeriodDays: 30, theme: 'classic' });
 });
+
+test('оформление сайта: админка включает второй стиль, примерку видно только на своём устройстве', () => {
+    const app = boot();
+    app.login();
+
+    const body = app.document.body;
+
+    // В блоке настроек есть выбор оформления, по умолчанию — обычный вид
+    assert.equal(app.$$('#theme-publish [data-action="theme-publish"]').length, 2,
+        'два оформления: обычное и «Афиша матча»');
+    assert.match(app.id('theme-status').textContent, /Классическое/, 'видно, что включено сейчас');
+    assert.equal(body.classList.contains('theme-afisha'), false, 'без выбора стиля класс не появляется');
+
+    const publishButton = (theme) => app.$('#theme-publish [data-action="theme-publish"][data-theme="' + theme + '"]');
+    const previewButton = (theme) => app.$('#theme-preview [data-action="theme-preview"][data-theme="' + theme + '"]');
+
+    assert.equal(publishButton('classic').getAttribute('aria-pressed'), 'true');
+    assert.equal(publishButton('afisha').getAttribute('aria-pressed'), 'false');
+
+    // 1. Примерка: вид меняется только у нас, общие данные не трогаются
+    app.click(previewButton('afisha'));
+
+    assert.equal(body.classList.contains('theme-afisha'), true, 'стиль «Афиша» применяется сразу');
+    assert.equal(body.getAttribute('data-theme'), 'afisha');
+    assert.deepEqual(app.storedData().settings, { yellowLimit: 4, yellowPeriodDays: 0, theme: 'classic' },
+        'примерка не меняет то, что видят зрители');
+    assert.match(app.id('theme-status').textContent, /примеряется/);
+    assert.ok(app.button('theme-preview-off'), 'есть кнопка «Вернуть как у всех»');
+
+    // 2. «Вернуть как у всех» — снова обычный вид
+    app.click(app.button('theme-preview-off'));
+
+    assert.equal(body.classList.contains('theme-afisha'), false);
+    assert.equal(body.getAttribute('data-theme'), 'classic');
+    assert.match(app.id('theme-status').textContent, /Классическое/);
+
+    // 3. Публикация: выбор уезжает в данные турнира — его увидят все зрители
+    app.click(publishButton('afisha'));
+
+    assert.equal(body.classList.contains('theme-afisha'), true);
+    assert.deepEqual(app.storedData().settings, { yellowLimit: 4, yellowPeriodDays: 0, theme: 'afisha' });
+    assert.match(app.id('toast-container').textContent, /Оформление «Афиша матча» включено/);
+    assert.equal(app.$$('#theme-publish [data-action="theme-publish"][aria-pressed="true"]')[0]
+        .getAttribute('data-theme'), 'afisha', 'активная кнопка переключилась');
+
+    // 4. Обычный вид возвращается одной кнопкой
+    app.click(publishButton('classic'));
+
+    assert.equal(body.classList.contains('theme-afisha'), false);
+    assert.deepEqual(app.storedData().settings, { yellowLimit: 4, yellowPeriodDays: 0, theme: 'classic' });
+    assert.match(app.id('toast-container').textContent, /Оформление «Классическое» включено/);
+
+    // 5. Выбор оформления сохраняется вместе с данными и после перезапуска
+    app.click(publishButton('afisha'));
+
+    const restarted = boot({ seed: { [DATA_KEY]: app.window.localStorage.getItem(DATA_KEY) } });
+
+    assert.equal(restarted.window.FTApp.theme.current(), 'afisha', 'оформление применилось при открытии');
+    assert.equal(restarted.document.body.classList.contains('theme-afisha'), true);
+
+    app.stopAutoRefresh();
+    restarted.stopAutoRefresh();
+});
+
 
 test('админка: игроки — добавление, проверки, переименование и удаление', () => {
     const app = boot();

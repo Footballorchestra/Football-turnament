@@ -39,7 +39,9 @@
         // 11 — из карточек игроков убрана дата рождения (лишние персональные данные):
         //      в данных остались игровой номер и принадлежность. Прежнее поле
         //      birthDate отбрасывается при загрузке данных.
-        dataVersion: 11,
+        // 12 — появился выбор оформления сайта (settings.theme): администратор
+        //      включает второй стиль «Афиша матча» одной кнопкой в панели.
+        dataVersion: 12,
         // Пароль администратора. Внимание: это демонстрационная защита,
         // на статическом хостинге реальную авторизацию без сервера сделать нельзя
         // (подробности — в README.md).
@@ -76,6 +78,20 @@
      */
     var DEFAULT_DISCIPLINE = { yellowLimit: 4, yellowPeriodDays: 0 };
 
+    /**
+     * Оформление сайта (settings.theme):
+     *   • classic — обычный стиль, включён по умолчанию;
+     *   • afisha — второй стиль «Афиша матча» (файл assets/css/theme-afisha.css).
+     * Стиль выбирает администратор в панели, значение хранится вместе с данными
+     * турнира, поэтому его видят все зрители. Неизвестное значение — это classic:
+     * испорченные настройки не должны ломать вид страницы.
+     */
+    var THEMES = {
+        classic: 'Классическое',
+        afisha: 'Афиша матча'
+    };
+    var DEFAULT_THEME = 'classic';
+
     /** Демонстрационный набор данных (первый запуск и сброс). */
     function createDefaultData() {
         return {
@@ -95,10 +111,12 @@
                 }
             },
             // Правила дисциплины: сколько жёлтых карточек приводит к красной
-            // и за какой период они считаются (0 — весь турнир)
+            // и за какой период они считаются (0 — весь турнир).
+            // theme — оформление сайта («Афиша матча» включает администратор).
             settings: {
                 yellowLimit: DEFAULT_DISCIPLINE.yellowLimit,
-                yellowPeriodDays: DEFAULT_DISCIPLINE.yellowPeriodDays
+                yellowPeriodDays: DEFAULT_DISCIPLINE.yellowPeriodDays,
+                theme: DEFAULT_THEME
             },
             teams: [
                 { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.', 'Сидоров С.'] },
@@ -1754,13 +1772,79 @@
         return normalizeDisciplineSettings(data && data.settings);
     }
 
-    /** Записывает правила дисциплины в данные. */
+    /* --- Оформление сайта: второй стиль «Афиша матча» --- */
+
+    /** Стиль оформления, приведённый к допустимому значению. */
+    function normalizeTheme(value) {
+        var id = String(value === undefined || value === null ? '' : value).trim().toLowerCase();
+
+        return Object.prototype.hasOwnProperty.call(THEMES, id) ? id : DEFAULT_THEME;
+    }
+
+    /**
+     * Полные настройки турнира: правила дисциплины и выбранное оформление.
+     * Читать и записывать настройки нужно этой функцией: она не теряет ни один
+     * раздел настроек, когда администратор меняет другой.
+     */
+    function normalizeSettings(raw) {
+        var discipline = normalizeDisciplineSettings(raw);
+        var source = isPlainObject(raw) ? raw : {};
+
+        return {
+            yellowLimit: discipline.yellowLimit,
+            yellowPeriodDays: discipline.yellowPeriodDays,
+            theme: normalizeTheme(source.theme)
+        };
+    }
+
+    /** Все настройки из данных. */
+    function getSettings(data) {
+        return normalizeSettings(data && data.settings);
+    }
+
+    /** Выбранное оформление сайта. */
+    function getTheme(data) {
+        return getSettings(data).theme;
+    }
+
+    /** Записывает оформление сайта, не задевая остальные настройки. */
+    function setTheme(data, theme) {
+        if (!isPlainObject(data)) {
+            return data;
+        }
+
+        data.settings = normalizeSettings({
+            yellowLimit: getSettings(data).yellowLimit,
+            yellowPeriodDays: getSettings(data).yellowPeriodDays,
+            theme: normalizeTheme(theme)
+        });
+
+        return data;
+    }
+
+    /** Название оформления для интерфейса: «Классическое» или «Афиша матча». */
+    function themeLabel(theme) {
+        return THEMES[normalizeTheme(theme)];
+    }
+
+    /** Все доступные оформления по порядку: [{ id, label }]. */
+    function themeList() {
+        return Object.keys(THEMES).map(function (id) {
+            return { id: id, label: THEMES[id] };
+        });
+    }
+
+    /** Записывает правила дисциплины в данные (оформление сайта сохраняется). */
     function setDisciplineSettings(data, settings) {
         if (!isPlainObject(data)) {
             return data;
         }
 
-        data.settings = normalizeDisciplineSettings(settings);
+        data.settings = normalizeSettings({
+            yellowLimit: (settings || {}).yellowLimit,
+            yellowPeriodDays: (settings || {}).yellowPeriodDays,
+            theme: getSettings(data).theme
+        });
 
         return data;
     }
@@ -2096,7 +2180,7 @@
                     teamPhotos: {},
                     teamImages: {},
                     playerInfo: {},
-                    settings: normalizeDisciplineSettings(raw.settings)
+                    settings: normalizeSettings(raw.settings)
                 },
                 repaired: repaired,
                 reason: repaired ? 'Часть данных была исправлена автоматически' : ''
@@ -2172,7 +2256,7 @@
         var normalizedTeamPhotos = normalizeTeamPhotos(raw.teamPhotos, teams);
         var normalizedPlayerInfo = normalizePlayerInfo(raw.playerInfo, teams);
         var normalizedTeamImages = normalizeTeamImages(raw.teamImages, teams);
-        var normalizedSettings = normalizeDisciplineSettings(raw.settings);
+        var normalizedSettings = normalizeSettings(raw.settings);
         var rawSettings = isPlainObject(raw.settings) ? raw.settings : null;
 
         // Правила дисциплины записаны с ошибкой — молча исправляем и предупреждаем
@@ -2182,6 +2266,13 @@
 
             if ((rawLimit !== null && rawLimit !== normalizedSettings.yellowLimit) ||
                 (rawDays !== null && rawDays !== normalizedSettings.yellowPeriodDays)) {
+                repaired = true;
+            }
+
+            // Оформление сайта: неизвестное значение (старые или испорченные данные)
+            // заменяется обычным стилем — страница не должна «поехать» из-за настроек.
+            if (rawSettings.theme !== undefined && rawSettings.theme !== null &&
+                normalizeTheme(rawSettings.theme) !== String(rawSettings.theme)) {
                 repaired = true;
             }
         }
@@ -2314,7 +2405,7 @@
             teamPhotos: (data && data.teamPhotos) || {},
             teamImages: (data && data.teamImages) || {},
             playerInfo: (data && data.playerInfo) || {},
-            settings: normalizeDisciplineSettings(data && data.settings)
+            settings: normalizeSettings(data && data.settings)
         }, null, 2);
     }
 
@@ -2399,6 +2490,13 @@
         validateDisciplineSettings: validateDisciplineSettings,
         disciplinePeriodText: disciplinePeriodText,
         disciplineRuleText: disciplineRuleText,
+        getSettings: getSettings,
+        normalizeSettings: normalizeSettings,
+        getTheme: getTheme,
+        setTheme: setTheme,
+        normalizeTheme: normalizeTheme,
+        themeLabel: themeLabel,
+        themeList: themeList,
         computeSuspensions: computeSuspensions,
         matchSuspensions: matchSuspensions,
         validateTeamName: validateTeamName,

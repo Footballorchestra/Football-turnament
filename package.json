@@ -4,7 +4,8 @@
   "private": true,
   "description": "Статический сайт футбольного турнира: таблица, команды, матчи и админ-панель (без бэкенда, данные в localStorage)",
   "scripts": {
-    "build:css": "tailwindcss -i ./src/input.css -o ./assets/css/tailwind.css --minify",
+    "build:css": "tailwindcss -i ./src/input.css -o ./assets/css/tailwind.css --minify && npm run build:theme",
+    "build:theme": "tailwindcss -i ./src/theme-afisha.css -o ./assets/css/theme-afisha.css --minify",
     "watch:css": "tailwindcss -i ./src/input.css -o ./assets/css/tailwind.css --watch",
     "test": "node --test tests/logic.test.js tests/photo.test.js tests/sync.test.js tests/dom.test.js",
     "test:browser": "node --test --test-timeout=90000 tests/browser.test.js",

@@ -2012,7 +2012,8 @@ test('дисквалификации: жёлтые карточки превра
         toast: document.getElementById('toast-container').textContent
     }));
 
-    assert.deepEqual(after.settings, { yellowLimit: 3, yellowPeriodDays: 30 }, 'правила сохранены в данных');
+    assert.deepEqual(after.settings, { yellowLimit: 3, yellowPeriodDays: 30, theme: 'classic' },
+        'правила сохранены в данных, оформление сайта при этом не потерялось');
     assert.match(after.rule, /^3-я жёлтая карточка за 30 дней/, 'подсказка обновилась: ' + after.rule);
     assert.match(after.toast, /Правила дисквалификаций сохранены/);
 
@@ -2023,3 +2024,144 @@ test('дисквалификации: жёлтые карточки превра
     mockRepository.changeExternally(original);
 });
 
+/**
+ * Второй стиль «Афиша матча»: администратор включает его кнопкой в настройках,
+ * стиль применяется сразу, уезжает в данные турнира (значит, его видят все зрители)
+ * и ничего не ломает на узких экранах: страница не шире экрана, блоки не «уезжают».
+ */
+test('оформление «Афиша матча»: включение в админке, работа на страницах и на телефоне', { skip }, async () => {
+    const original = JSON.parse(fs.readFileSync(path.join(ROOT, 'data.json'), 'utf8'));
+
+    // Своё хранилище: включаем стиль как администратор на своём устройстве
+    const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
+
+    await clickWhenReady(page, '[data-nav="admin"]');
+    await page.type('#admin-password', 'admin');
+    await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
+    await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
+
+    // Настройки скрыты за кнопкой в шапке панели
+    await clickInView(page, '[data-action="toggle-settings"]');
+    await page.waitForFunction(() => !document.getElementById('admin-settings').hidden);
+
+    const before = await page.evaluate(() => ({
+        buttons: document.querySelectorAll('#theme-publish [data-action="theme-publish"]').length,
+        status: document.getElementById('theme-status').textContent,
+        theme: window.FTApp.theme.current()
+    }));
+
+    assert.equal(before.buttons, 2, 'в настройках два оформления: обычное и «Афиша матча»');
+    assert.equal(before.theme, 'classic', 'по умолчанию включён обычный вид');
+    assert.match(before.status, /Классическое/);
+
+    // Включаем «Афишу» для всех зрителей
+    await clickInView(page, '#theme-publish [data-action="theme-publish"][data-theme="afisha"]');
+    await page.waitForFunction(() => document.body.classList.contains('theme-afisha'));
+
+    const published = await page.evaluate(() => ({
+        data: window.FTApp.getData().settings.theme,
+        pressed: document.querySelector('#theme-publish [data-action="theme-publish"][aria-pressed="true"]')
+            .getAttribute('data-theme'),
+        toast: document.getElementById('toast-container').textContent
+    }));
+
+    assert.equal(published.data, 'afisha', 'выбор сохранён в данных турнира — его увидят все');
+    assert.equal(published.pressed, 'afisha', 'кнопка показывает выбранное оформление');
+    assert.match(published.toast, /Оформление «Афиша матча» включено/);
+
+    // Стилевой файл подключён и действительно применился
+    const look = await page.evaluate(() => {
+        const panel = document.querySelector('#page-home .panel');
+        const title = panel.querySelector('.section-title');
+        const badge = getComputedStyle(title, '::before');
+        const lastTile = document.querySelector('.stat-ribbon .stat-box:last-child');
+
+        return {
+            sheet: Array.from(document.styleSheets).map((item) => item.href || '').join(' '),
+            theme: document.body.getAttribute('data-theme'),
+            radius: getComputedStyle(panel).borderTopLeftRadius,
+            number: badge.content,
+            numberBorder: badge.borderTopStyle,
+            numberPadding: badge.paddingLeft,
+            heading: getComputedStyle(title).textTransform,
+            lastTileStyle: getComputedStyle(lastTile).borderTopStyle
+        };
+    });
+
+    assert.match(look.sheet, /theme-afisha\.css/, 'подключён файл второго оформления');
+    assert.equal(look.theme, 'afisha');
+    assert.equal(look.radius, '18px', 'блоки стали с мягкими скруглениями: ' + look.radius);
+    assert.match(look.number, /counter\(af-panel|[0-9]{2}/,
+        'заголовок раздела получает номер как в программке: ' + look.number);
+    assert.equal(look.numberBorder, 'solid', 'номер оформлен рамкой');
+    assert.notEqual(look.numberPadding, '0px', 'номер не прилипает к заголовку');
+    assert.equal(look.heading, 'uppercase', 'заголовки разделов — капителью');
+    assert.match(look.lastTileStyle, /dashed/, '«Завершено» оформлено как штамп: ' + look.lastTileStyle);
+
+    // Публичные страницы: стиль работает и данные на месте
+    for (const [hash, selector] of [['#/', '.match-card'], ['#/standings', '#standings-body tr'], ['#/teams', '#teams-grid .card']]) {
+        await gotoApp(page, mockBaseUrl + '/' + hash);
+        await page.waitForFunction((target) => Boolean(document.querySelector(target)), {}, selector);
+
+        const view = await page.evaluate((target) => ({
+            hash: window.location.hash,
+            items: document.querySelectorAll(target).length,
+            theme: document.body.classList.contains('theme-afisha')
+        }), selector);
+
+        assert.ok(view.items > 0, view.hash + ': список заполнен');
+        assert.equal(view.theme, true, view.hash + ': стиль «Афиша» применён');
+    }
+
+    // Телефон, планшет и компьютер: страница не шире экрана, блоки внутри экрана.
+    // Это и есть защита от «уехавших» блоков и горизонтальной прокрутки.
+    const widths = [[320, 640], [360, 740], [390, 844], [768, 1024]];
+    const pages = [['#/', 'page-home'], ['#/standings', 'page-standings'], ['#/teams', 'page-teams']];
+
+    for (const [width, height] of widths) {
+        await page.setViewport({ width, height, isMobile: width < 768, hasTouch: width < 768 });
+
+        for (const [hash, section] of pages) {
+            await page.evaluate((target) => { window.location.hash = target; }, hash);
+            await page.waitForFunction((id) => document.getElementById(id).classList.contains('active'), {}, section);
+
+            const fit = await page.evaluate(() => {
+                const doc = document.documentElement;
+                const wider = [];
+
+                document.querySelectorAll('main .stat-ribbon, main .panel, main .match-card, main .stat-box, ' +
+                    'main .hero-band, main .squad-toggle, main .team-gallery-item').forEach((element) => {
+                    const box = element.getBoundingClientRect();
+
+                    if (box.width > 0 && (box.right > doc.clientWidth + 1 || box.left < -1)) {
+                        wider.push((element.className || element.tagName) +
+                            ' [' + Math.round(box.left) + '…' + Math.round(box.right) + ']');
+                    }
+                });
+
+                return {
+                    page: doc.scrollWidth - doc.clientWidth,
+                    wider: wider.slice(0, 4)
+                };
+            });
+
+            assert.equal(fit.page, 0, width + 'px ' + hash + ': страница не шире экрана');
+            assert.deepEqual(fit.wider, [], width + 'px ' + hash + ': все блоки внутри экрана');
+        }
+    }
+
+    // Обычный вид возвращается той же кнопкой: зрителям — как было
+    await gotoApp(page, mockBaseUrl + '/#/admin');
+    await clickInView(page, '[data-action="toggle-settings"]');
+    await clickInView(page, '#theme-publish [data-action="theme-publish"][data-theme="classic"]');
+    await page.waitForFunction(() => !document.body.classList.contains('theme-afisha'));
+
+    assert.equal(await page.evaluate(() => window.FTApp.getData().settings.theme), 'classic',
+        'обычный вид возвращается одной кнопкой');
+
+    assert.deepEqual(problems, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+
+    // Репозиторий возвращаем в исходное состояние
+    mockRepository.changeExternally(original);
+});

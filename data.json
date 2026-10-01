@@ -1,7 +1,7 @@
 {
-  "version": 11,
-  "revision": 517,
-  "updatedAt": "2026-10-01T12:59:55.521Z",
+  "version": 12,
+  "revision": 518,
+  "updatedAt": "2026-10-01T16:02:43.000Z",
   "teams": [
     {
       "id": 1,
@@ -849,6 +849,7 @@
   },
   "settings": {
     "yellowLimit": 4,
-    "yellowPeriodDays": 0
+    "yellowPeriodDays": 0,
+    "theme": "classic"
   }
 }

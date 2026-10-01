@@ -1292,7 +1292,8 @@ test('дисциплина: настройки читаются, проверя�
     const data = { teams: [], matches: [] };
 
     L.setDisciplineSettings(data, { yellowLimit: '5', yellowPeriodDays: '14' });
-    assert.deepEqual(data.settings, { yellowLimit: 5, yellowPeriodDays: 14 });
+    assert.deepEqual(data.settings, { yellowLimit: 5, yellowPeriodDays: 14, theme: 'classic' },
+        'оформление сайта при сохранении правил не теряется');
 
     // Нормализация: «битые» значения исправляются, отсутствие блока — не поломка
     const repaired = L.normalizeData({
@@ -1301,7 +1302,7 @@ test('дисциплина: настройки читаются, проверя�
         settings: { yellowLimit: 99, yellowPeriodDays: -5 }
     });
 
-    assert.deepEqual(repaired.data.settings, { yellowLimit: 4, yellowPeriodDays: 0 });
+    assert.deepEqual(repaired.data.settings, { yellowLimit: 4, yellowPeriodDays: 0, theme: 'classic' });
     assert.equal(repaired.repaired, true, 'неверные настройки помечаются как исправленные');
 
     const withoutSettings = L.normalizeData({
@@ -1309,7 +1310,7 @@ test('дисциплина: настройки читаются, проверя�
         matches: []
     });
 
-    assert.deepEqual(withoutSettings.data.settings, { yellowLimit: 4, yellowPeriodDays: 0 },
+    assert.deepEqual(withoutSettings.data.settings, { yellowLimit: 4, yellowPeriodDays: 0, theme: 'classic' },
         'в старых данных блок настроек появляется со значениями по умолчанию');
     assert.equal(withoutSettings.repaired, false, 'отсутствие блока настроек — не поломка данных');
 
@@ -1318,8 +1319,61 @@ test('дисциплина: настройки читаются, проверя�
         teams: [], matches: [], settings: { yellowLimit: 2, yellowPeriodDays: 7 }
     }));
 
-    assert.deepEqual(exported.settings, { yellowLimit: 2, yellowPeriodDays: 7 });
+    assert.deepEqual(exported.settings, { yellowLimit: 2, yellowPeriodDays: 7, theme: 'classic' });
 });
+
+test('оформление сайта: второй стиль читается, включается и не теряется', () => {
+    // 1. По умолчанию — обычный вид, даже если блока настроек нет вовсе
+    assert.equal(L.getTheme({}), 'classic');
+    assert.equal(L.getTheme({ settings: {} }), 'classic');
+    assert.equal(L.normalizeTheme(''), 'classic');
+    assert.equal(L.normalizeTheme(undefined), 'classic');
+    assert.equal(L.normalizeTheme('Афиша'), 'classic', 'значение, которого нет в списке, не применяется');
+
+    // 2. Выбранный стиль читается из данных (регистр не важен)
+    assert.equal(L.getTheme({ settings: { theme: 'afisha' } }), 'afisha');
+    assert.equal(L.normalizeTheme('AFISHA'), 'afisha');
+
+    // 3. Названия для интерфейса
+    assert.equal(L.themeLabel('afisha'), 'Афиша матча');
+    assert.equal(L.themeLabel('classic'), 'Классическое');
+    assert.deepEqual(L.themeList().map((item) => item.id), ['classic', 'afisha']);
+    assert.deepEqual(L.themeList().map((item) => item.label), ['Классическое', 'Афиша матча']);
+
+    // 4. Сохранение одного раздела настроек не стирает другой
+    const data = { settings: { yellowLimit: 3, yellowPeriodDays: 30, theme: 'classic' } };
+
+    L.setTheme(data, 'afisha');
+    assert.deepEqual(data.settings, { yellowLimit: 3, yellowPeriodDays: 30, theme: 'afisha' });
+
+    L.setDisciplineSettings(data, { yellowLimit: 5, yellowPeriodDays: 0 });
+    assert.deepEqual(data.settings, { yellowLimit: 5, yellowPeriodDays: 0, theme: 'afisha' },
+        'правила дисциплины и оформление живут рядом');
+
+    // 5. Новые данные сразу получают оформление по умолчанию
+    assert.equal(L.createDefaultData().settings.theme, 'classic');
+
+    // 6. Неизвестное оформление в файле данных — это поломка: заменяем обычным видом
+    const broken = L.normalizeData({
+        teams: [{ id: 1, name: 'Спартак', players: [] }],
+        matches: [],
+        settings: { theme: 'ночная афиша' }
+    });
+
+    assert.equal(broken.data.settings.theme, 'classic');
+    assert.equal(broken.repaired, true, 'неизвестное оформление помечается как исправленное');
+
+    // Выбранное оформление — не поломка: данные остаются как есть
+    const chosen = L.normalizeData({
+        teams: [{ id: 1, name: 'Спартак', players: [] }],
+        matches: [],
+        settings: { theme: 'afisha' }
+    });
+
+    assert.equal(chosen.data.settings.theme, 'afisha');
+    assert.equal(chosen.repaired, false, 'включённый стиль «Афиша» — нормальное состояние');
+});
+
 
 test('сортировка строк: текст и числа; пустые значения — в конце', () => {
     const rows = [

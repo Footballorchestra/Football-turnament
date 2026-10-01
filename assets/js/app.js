@@ -23,7 +23,9 @@
         autoPublish: 'ft.autoPublish',
         publishedAt: 'ft.publishedAt',
         localBackup: 'ft.localBackup',
-        localEdits: 'ft.localEdits'
+        localEdits: 'ft.localEdits',
+        // Примерка оформления: стиль, выбранный только на этом устройстве
+        themePreview: 'ft.themePreview'
     };
 
     /** Состояние приложения (в хранилище попадает только state.data). */
@@ -1117,6 +1119,139 @@
         fillDisciplineInputs();
         saveData('Правила дисквалификаций сохранены: ' + check.value.yellowLimit + '-я жёлтая карточка ' +
             L.disciplinePeriodText(check.value));
+    }
+
+    /* --- Оформление сайта: обычный стиль и «Афиша матча» --- */
+
+    /** Оформление, выбранное администратором для всех зрителей (лежит в данных турнира). */
+    function publishedTheme() {
+        return L.getTheme(state.data);
+    }
+
+    /** Оформление, примеряемое только на этом устройстве ('' — примерки нет). */
+    function previewTheme() {
+        var saved = readStoredValue(KEYS.themePreview) || '';
+
+        return (saved && L.normalizeTheme(saved) === saved) ? saved : '';
+    }
+
+    /** Оформление, которое показывается сейчас: примерка старше общего выбора. */
+    function activeTheme() {
+        return previewTheme() || publishedTheme();
+    }
+
+    /**
+     * Применяет оформление к странице: класс theme-afisha на <body> включает стили
+     * assets/css/theme-afisha.css. Обычное оформление — это отсутствие класса,
+     * поэтому классический вид остаётся ровно таким, как был.
+     */
+    function applyTheme() {
+        var theme = activeTheme();
+        var body = document.body;
+
+        if (!body) {
+            return theme;
+        }
+
+        body.classList.toggle('theme-afisha', theme === 'afisha');
+        body.setAttribute('data-theme', theme);
+
+        // Цвет адресной строки на телефоне подстраивается под оформление
+        var meta = document.querySelector('meta[name="theme-color"]');
+
+        if (meta) {
+            meta.setAttribute('content', theme === 'afisha' ? '#101a2b' : '#1b5e20');
+        }
+
+        return theme;
+    }
+
+    /** Кнопка выбора оформления (для «всем» и для примерки на устройстве). */
+    function themeButton(item, action, active) {
+        return '<button type="button" class="btn btn-sm ' + (active ? 'btn-primary' : 'btn-ghost') + '"' +
+                ' data-action="' + action + '" data-theme="' + item.id + '"' +
+                ' aria-pressed="' + (active ? 'true' : 'false') + '" title="' + esc(
+                    action === 'theme-publish'
+                        ? 'Оформление «' + item.label + '» для всех зрителей'
+                        : 'Примерить оформление «' + item.label + '» на этом устройстве') + '">' +
+            (active ? icon('check') : '') + esc(item.label) +
+        '</button>';
+    }
+
+    /** Блок «Оформление сайта» в настройках админки: что увидят зрители и что видно только у нас. */
+    function renderThemeControls() {
+        var publishBox = $('theme-publish');
+        var previewBox = $('theme-preview');
+        var status = $('theme-status');
+        var published = publishedTheme();
+        var sample = previewTheme();
+
+        if (publishBox) {
+            publishBox.innerHTML = L.themeList().map(function (item) {
+                return themeButton(item, 'theme-publish', item.id === published);
+            }).join('');
+        }
+
+        if (previewBox) {
+            previewBox.innerHTML = L.themeList().map(function (item) {
+                return themeButton(item, 'theme-preview', item.id === sample);
+            }).join('') + (sample
+                ? '<button type="button" class="btn btn-sm btn-ghost" data-action="theme-preview-off"' +
+                    ' title="Убрать примерку и показывать оформление, выбранное для всех">Вернуть как у всех</button>'
+                : '');
+        }
+
+        if (status) {
+            status.textContent = sample
+                ? 'На этом устройстве примеряется «' + L.themeLabel(sample) + '». Зрители пока видят «' +
+                    L.themeLabel(published) + '»: примерку видите только вы.'
+                : 'Сейчас у всех зрителей оформление «' + L.themeLabel(published) + '».' +
+                    (published === 'afisha'
+                        ? ' Оформление хранится в данных турнира и меняется этой же кнопкой.'
+                        : ' Второй стиль «Афиша матча» включается кнопкой выше.');
+        }
+    }
+
+    /** Кнопка «Примерка»: показывает оформление только на этом устройстве. */
+    function previewThemeOn(theme) {
+        var id = L.normalizeTheme(theme);
+
+        writeStoredValue(KEYS.themePreview, id);
+        applyTheme();
+        renderThemeControls();
+        toast('Примеряем «' + L.themeLabel(id) + '»: это видно только на этом устройстве');
+    }
+
+    /** Убирает примерку: возвращается оформление, выбранное для всех. */
+    function previewThemeOff() {
+        writeStoredValue(KEYS.themePreview, null);
+        applyTheme();
+        renderThemeControls();
+        toast('Показываем «' + L.themeLabel(publishedTheme()) + '» — как у всех зрителей');
+    }
+
+    /**
+     * Публикует оформление для всех: значение сохраняется в данных турнира
+     * (settings.theme) и уезжает в репозиторий вместе с остальными данными.
+     */
+    function publishTheme(theme) {
+        var id = L.normalizeTheme(theme);
+
+        if (id === publishedTheme()) {
+            renderThemeControls();
+            return;
+        }
+
+        L.setTheme(state.data, id);
+
+        // Примерка больше не нужна: выбранное оформление теперь видно всем
+        if (previewTheme() === id) {
+            writeStoredValue(KEYS.themePreview, null);
+        }
+
+        applyTheme();
+        renderThemeControls();
+        saveData('Оформление «' + L.themeLabel(id) + '» включено для всех зрителей');
     }
 
     /* --- Резервная копия перед заменой данных версией из репозитория --- */
@@ -2618,6 +2753,9 @@
 
     /** Полная перерисовка всех страниц (публичных и админских). */
     function renderAll() {
+        // Оформление (класс theme-afisha на <body>) применяем первым:
+        // от него зависят стили всех блоков ниже
+        applyTheme();
         renderHome();
         renderStandings();
         renderTeams();
@@ -2641,6 +2779,7 @@
         renderAdminPlayers();
         renderAdminPlayerInfo();
         renderDisciplineRule();
+        renderThemeControls();
         fillAdminSelects();
     }
 
@@ -4575,6 +4714,12 @@
             toggleAdminSettings();
         } else if (action === 'open-settings') {
             openAdminSettings();
+        } else if (action === 'theme-publish') {
+            publishTheme(element.getAttribute('data-theme'));
+        } else if (action === 'theme-preview') {
+            previewThemeOn(element.getAttribute('data-theme'));
+        } else if (action === 'theme-preview-off') {
+            previewThemeOff();
         }
     }
 
@@ -4822,6 +4967,14 @@
             },
             importData: applyImport,
             render: renderAll,
+            /* Оформление сайта: используется автотестами и для отладки */
+            theme: {
+                current: activeTheme,
+                published: publishedTheme,
+                preview: previewThemeOn,
+                previewOff: previewThemeOff,
+                publish: publishTheme
+            },
             /* Синхронизация с репозиторием: используется автотестами и для отладки */
             sync: {
                 pull: pullFromRepository,
