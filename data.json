@@ -1,7 +1,7 @@
 {
   "version": 12,
-  "revision": 518,
-  "updatedAt": "2026-10-01T16:02:43.000Z",
+  "revision": 519,
+  "updatedAt": "2026-10-01T18:31:00.835Z",
   "teams": [
     {
       "id": 1,
@@ -850,6 +850,6 @@
   "settings": {
     "yellowLimit": 4,
     "yellowPeriodDays": 0,
-    "theme": "classic"
+    "theme": "afisha"
   }
 }
