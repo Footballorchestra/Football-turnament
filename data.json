@@ -1,7 +1,7 @@
 {
   "version": 11,
-  "revision": 516,
-  "updatedAt": "2026-10-01T12:55:22.487Z",
+  "revision": 517,
+  "updatedAt": "2026-10-01T12:59:55.521Z",
   "teams": [
     {
       "id": 1,
@@ -569,7 +569,7 @@
       "teamB": 2,
       "scoreA": null,
       "scoreB": null,
-      "date": "2026-09-29",
+      "date": "2026-10-09",
       "finished": false,
       "events": []
     },
