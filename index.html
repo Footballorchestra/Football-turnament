@@ -47,11 +47,11 @@
 
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=44">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=45">
     <!-- Второй стиль «Афиша матча». Файл подключён всегда, но применяется только тогда,
          когда администратор включил этот стиль в панели: все правила внутри ограничены
          классом theme-afisha на <body> (см. applyTheme в assets/js/app.js). -->
-    <link rel="stylesheet" href="assets/css/theme-afisha.css?v=44">
+    <link rel="stylesheet" href="assets/css/theme-afisha.css?v=45">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -417,12 +417,10 @@
                 <div id="teams-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
             </div>
 
-            <!-- Страница команды: статистика, состав и матчи -->
+            <!-- Страница команды: статистика, состав и матчи. Кнопка возврата к списку
+                 команд рисуется внутри карточки команды — рядом с её названием. -->
             <div id="team-detail-view" hidden>
-                <button type="button" class="btn btn-sm btn-ghost" data-action="team-public-back">
-                    <svg class="icon" aria-hidden="true"><use href="#i-back"></use></svg>Все команды
-                </button>
-                <div id="team-detail" class="card mt-3 p-4 sm:p-5 team-page"></div>
+                <div id="team-detail" class="card p-4 sm:p-5 team-page"></div>
             </div>
         </section>
 
@@ -915,12 +913,12 @@
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
     <!-- На GitHub Pages заголовки ответа задать нельзя, поэтому страница сама проверяет,
          не встроена ли она в чужой iframe. Скрипт идёт первым, до кода приложения. -->
-    <script src="assets/js/frame-guard.js?v=44" defer></script>
-    <script src="assets/js/config.js?v=44" defer></script>
-    <script src="assets/js/splash.js?v=44" defer></script>
-    <script src="assets/js/logic.js?v=44" defer></script>
-    <script src="assets/js/sync.js?v=44" defer></script>
-    <script src="assets/js/photo.js?v=44" defer></script>
-    <script src="assets/js/app.js?v=44" defer></script>
+    <script src="assets/js/frame-guard.js?v=45" defer></script>
+    <script src="assets/js/config.js?v=45" defer></script>
+    <script src="assets/js/splash.js?v=45" defer></script>
+    <script src="assets/js/logic.js?v=45" defer></script>
+    <script src="assets/js/sync.js?v=45" defer></script>
+    <script src="assets/js/photo.js?v=45" defer></script>
+    <script src="assets/js/app.js?v=45" defer></script>
 </body>
 </html>

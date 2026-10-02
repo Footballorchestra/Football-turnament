@@ -312,6 +312,35 @@ function clickAction(page, selector) {
     return page.click(selector);
 }
 
+/**
+ * Оформление сайта выбирает владелец, и оно лежит в данных (`settings.theme`).
+ * Поэтому цвета фона и подиума в тестах берём по фактически показанному оформлению,
+ * а не по одному «зашитому» виду: иначе смена оформления ломает проверки.
+ */
+const THEME_LOOK = {
+    classic: {
+        body: 'rgb(248, 249, 250)',
+        leader: 'rgb(232, 245, 233)',
+        prize: 'rgb(255, 251, 235)',
+        other: 'rgba(0, 0, 0, 0)',
+        status: /Классическое/
+    },
+    afisha: {
+        body: 'rgb(243, 239, 230)',
+        leader: 'rgb(228, 243, 230)',
+        prize: 'rgb(251, 243, 216)',
+        other: 'rgba(22, 32, 47, 0.035)',
+        status: /«Афиша матча»/
+    }
+};
+
+/** Оформление открытой страницы и ожидаемые для него цвета. */
+async function themeLook(page) {
+    const theme = await page.evaluate(() => window.FTApp.theme.current());
+
+    return Object.assign({ theme }, THEME_LOOK[theme]);
+}
+
 test('страница открывается без ошибок: стили, локальные шрифты и CSP', { skip }, async () => {
     const { page, problems } = await openPage();
 
@@ -319,9 +348,11 @@ test('страница открывается без ошибок: стили, �
     assert.equal(await textOf(page, '#stat-teams'), String(data.teams));
     assert.equal(await textOf(page, '#stat-matches'), String(data.matches));
 
-    // Стили из собранного Tailwind применились
+    // Стили из собранного Tailwind применились (фон зависит от оформления сайта)
+    const skin = await themeLook(page);
     const background = await page.$eval('body', (element) => getComputedStyle(element).backgroundColor);
-    assert.equal(background, 'rgb(248, 249, 250)');
+
+    assert.equal(background, skin.body, 'фон страницы соответствует оформлению «' + skin.theme + '»');
 
     // Локальный шрифт Roboto подхватился (без Google Fonts)
     assert.equal(await page.evaluate(() => document.fonts.check('16px Roboto')), true);
@@ -393,10 +424,11 @@ test('все страницы открываются и по меню, и по �
 test('турнирная таблица: эмблема перед названием и подсветка призовой тройки', { skip }, async () => {
     const { page, problems } = await openPage({ url: baseUrl + '/#/standings' });
 
-    // primary-50 — зелёный, amber-50 — светло-жёлтый
-    const LEADER = 'rgb(232, 245, 233)';
-    const PRIZE = 'rgb(255, 251, 235)';
-    const NONE = 'rgba(0, 0, 0, 0)';
+    // Подиум размечается по-разному в зависимости от оформления сайта
+    const skin = await themeLook(page);
+    const LEADER = skin.leader;
+    const PRIZE = skin.prize;
+    const NONE = skin.other;
 
     const look = () => page.evaluate(() => {
         const rows = Array.from(document.querySelectorAll('#standings-body tr'));
@@ -435,7 +467,7 @@ test('турнирная таблица: эмблема перед назван�
     assert.equal(desktop.rows[0].bg, LEADER, 'лидер подсвечен зелёным');
     assert.equal(desktop.rows[1].bg, PRIZE, 'второе место — светло-жёлтое');
     assert.equal(desktop.rows[2].bg, PRIZE, 'третье место — светло-жёлтое');
-    assert.equal(desktop.rows[3].bg, NONE, 'остальные строки без подсветки');
+    assert.equal(desktop.rows[3].bg, NONE, 'остальные строки без призовой подсветки');
 
     // Телефон: компактная таблица — эмблема меньше, но по-прежнему видна,
     // а горизонтальной прокрутки нет
@@ -662,10 +694,12 @@ test('сайт работает из подпапки — как на GitHub Pag
     try {
         const { page, problems } = await openPage({ url: subUrl });
         const data = await dataSnapshot(page);
+        const skin = await themeLook(page);
 
         assert.equal(await textOf(page, '#stat-teams'), String(data.teams), 'данные загрузились из подпапки');
         assert.equal(await page.$$eval('#standings-body tr', (rows) => rows.length), data.teams);
-        assert.equal(await page.$eval('body', (element) => getComputedStyle(element).backgroundColor), 'rgb(248, 249, 250)');
+        assert.equal(await page.$eval('body', (element) => getComputedStyle(element).backgroundColor), skin.body,
+            'стили применились и из подпапки');
 
         // Файла данных по адресу макета в этой подпапке нет — браузер сообщает об этом в консоли,
         // это ожидаемо: приложение берёт data.json от самого сайта. Проверяем отсутствие других проблем.
@@ -2050,9 +2084,15 @@ test('оформление «Афиша матча»: включение в ад
         theme: window.FTApp.theme.current()
     }));
 
+    // Оформление для всех зрителей лежит в данных: панель показывает именно его
     assert.equal(before.buttons, 2, 'в настройках два оформления: обычное и «Афиша матча»');
-    assert.equal(before.theme, 'classic', 'по умолчанию включён обычный вид');
-    assert.match(before.status, /Классическое/);
+    assert.equal(before.theme, original.settings.theme, 'показано оформление, выбранное для всех зрителей');
+    assert.match(before.status, THEME_LOOK[before.theme].status, 'подпись рассказывает про выбранное оформление');
+
+    // Оформление сайта хранится в данных и может быть любым: приводим его к обычному виду,
+    // чтобы дальше включить «Афишу» как в первый раз (иначе переключение — не изменение).
+    await clickInView(page, '#theme-publish [data-action="theme-publish"][data-theme="classic"]');
+    await page.waitForFunction(() => !document.body.classList.contains('theme-afisha'));
 
     // Включаем «Афишу» для всех зрителей
     await clickInView(page, '#theme-publish [data-action="theme-publish"][data-theme="afisha"]');
@@ -2074,7 +2114,12 @@ test('оформление «Афиша матча»: включение в ад
         const panel = document.querySelector('#page-home .panel');
         const title = panel.querySelector('.section-title');
         const badge = getComputedStyle(title, '::before');
-        const lastTile = document.querySelector('.stat-ribbon .stat-box:last-child');
+        const tiles = Array.from(document.querySelectorAll('.stat-ribbon .stat-box'));
+        const tileStyles = new Set(tiles.map((tile) => {
+            const style = getComputedStyle(tile);
+
+            return style.borderTopStyle + ' ' + style.borderTopLeftRadius;
+        }));
 
         return {
             sheet: Array.from(document.styleSheets).map((item) => item.href || '').join(' '),
@@ -2084,7 +2129,8 @@ test('оформление «Афиша матча»: включение в ад
             numberBorder: badge.borderTopStyle,
             numberPadding: badge.paddingLeft,
             heading: getComputedStyle(title).textTransform,
-            lastTileStyle: getComputedStyle(lastTile).borderTopStyle
+            tilesUniform: tileStyles.size === 1,
+            tileRadius: tiles.length ? getComputedStyle(tiles[0]).borderTopLeftRadius : ''
         };
     });
 
@@ -2096,7 +2142,8 @@ test('оформление «Афиша матча»: включение в ад
     assert.equal(look.numberBorder, 'solid', 'номер оформлен рамкой');
     assert.notEqual(look.numberPadding, '0px', 'номер не прилипает к заголовку');
     assert.equal(look.heading, 'uppercase', 'заголовки разделов — капителью');
-    assert.match(look.lastTileStyle, /dashed/, '«Завершено» оформлено как штамп: ' + look.lastTileStyle);
+    assert.equal(look.tilesUniform, true, 'плитки-счётчики одной формы: цветом выделяется только активная');
+    assert.equal(look.tileRadius, '18px', 'у плиток мягкие скругления: ' + look.tileRadius);
 
     // Публичные страницы: стиль работает и данные на месте
     for (const [hash, selector] of [['#/', '.match-card'], ['#/standings', '#standings-body tr'], ['#/teams', '#teams-grid .card']]) {

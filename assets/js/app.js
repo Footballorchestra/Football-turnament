@@ -2436,12 +2436,17 @@
         var diff = row ? (row.goalDiff > 0 ? '+' : '') + row.goalDiff : '0';
 
         box.innerHTML =
-            '<div class="flex items-center gap-3 mb-4">' +
+            '<div class="flex items-center gap-3 flex-wrap mb-4">' +
                 teamAvatar(team, { big: true }) +
                 '<div class="min-w-0">' +
-                    '<h2 class="font-bold text-lg sm:text-xl truncate">' + esc(team.name) + '</h2>' +
+                    '<h2 class="font-bold text-lg sm:text-xl break-words">' + esc(team.name) + '</h2>' +
                     '<p class="text-xs text-dark-600">Игроков в заявке: ' + (team.players || []).length + '</p>' +
                 '</div>' +
+                /* Возврат к списку команд: кнопка живёт справа от названия, внутри карточки,
+                   поэтому всегда на виду — и на тёмной шапке «Афиши», и на бумаге обычного вида.
+                   На узком экране длинное название не режем: кнопка переносится на строку ниже. */
+                '<button type="button" class="btn btn-sm btn-ghost ml-auto shrink-0" data-action="team-public-back">' +
+                    icon('back') + 'Все команды</button>' +
             '</div>' +
             '<div class="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-3">' +
                 statBox('Место', row ? row.place : '—', 'Место в турнирной таблице') +
