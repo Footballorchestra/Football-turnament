@@ -2363,41 +2363,89 @@ test('движение: анимации объявлены, а кнопка в 
 });
 
 /**
- * Движение: полоса света идёт по табло, и нота, над которой она проходит, «подпрыгивает» —
- * становится крупнее, ярче и качается шире, а когда полоса уходит, снова успокаивается.
- * За откликом следит скрипт: он читает ход полосы у её же слоя, поэтому вспышки идут в такт.
+ * Движение: полоса света идёт по табло, и нота, над которой она проходит, подпрыгивает —
+ * поднимается вверх и держится на высоте, пока свет на ней, — а когда полоса уходит,
+ * опускается на своё место. За откликом следит скрипт: он читает ход полосы у её же слоя,
+ * поэтому вспышки идут в такт.
  */
-test('движение: ноты откликаются на блик, идущий по табло', { skip }, async () => {
+test('движение: ноты подпрыгивают под бликом, идущим по табло', { skip }, async () => {
     const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
 
     await page.evaluate(() => window.FTApp.theme.preview('afisha'));
     await page.waitForFunction(() => document.body.classList.contains('theme-afisha'));
 
-    // Отклик в стилях: под бликом нота крупнее, выше и с большим махом
-    const look = await page.evaluate(() => {
+    /* Прыжок: держим полосу света ровно над нотой — тогда скрипт ставит класс, и видно,
+       что нота поднялась. Покачивание на время замера останавливаем, иначе оно мешало бы. */
+    const jump = await page.evaluate(async () => {
+        const band = document.querySelector('.hero-band');
         const note = document.querySelector('.hero-note-1');
-        const read = () => {
-            const style = getComputedStyle(note);
+        const sheen = document.getAnimations().filter((item) => item.animationName === 'af-sheen')[0];
+        const sway = note.getAnimations().filter((item) => item.animationName === 'af-note-sway')[0];
+        const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const top = () => note.getBoundingClientRect().top;
+        const shiftNow = () => {
+            const matrix = getComputedStyle(band, '::before').transform;
 
-            return {
-                pop: style.getPropertyValue('--note-pop').trim(),
-                swing: style.getPropertyValue('--note-swing').trim(),
-                lift: style.getPropertyValue('--note-lift').trim()
-            };
+            return parseFloat(matrix.slice(matrix.indexOf('(') + 1, -1).split(',')[4]) || 0;
         };
-        const calm = read();
 
-        note.classList.add('is-lit');
+        sway.pause();
+        sheen.pause();
 
-        const lit = read();
+        // Полосу уводим за левый край: ноты в покое, замер «обычного положения» честный
+        sheen.currentTime = 0;
+        await wait(700);
 
-        note.classList.remove('is-lit');
+        const calm = { top: top(), opacity: Number(getComputedStyle(note).opacity) };
 
-        return { calm: calm, lit: lit };
+        // Ищем момент цикла, когда полоса накрывает ноту
+        const bandBox = band.getBoundingClientRect();
+        const noteBox = note.getBoundingClientRect();
+        const middle = noteBox.left + noteBox.width / 2 - bandBox.left;
+        const width = parseFloat(getComputedStyle(band, '::before').width);
+        let hold = null;
+
+        for (let time = 0; time <= 6400 && hold === null; time += 120) {
+            sheen.currentTime = time;
+
+            if (middle >= shiftNow() && middle <= shiftNow() + width) {
+                hold = time;
+            }
+        }
+
+        let rise = null;
+
+        if (hold !== null) {
+            await wait(600); // скрипт замечает свет над нотой, прыжок успевает закончиться (переход 0.45 с)
+            rise = Math.round(calm.top - top());
+        }
+
+        const litStyle = getComputedStyle(note);
+        const lit = { translate: litStyle.translate, opacity: Number(litStyle.opacity) };
+
+        sheen.currentTime = 0; // полоса ушла — нота должна опуститься
+        await wait(700);
+
+        const back = Math.round(top() - calm.top);
+
+        sheen.play();
+        sway.play();
+
+        return {
+            hold: hold,
+            rise: rise,
+            back: back,
+            translate: lit.translate,
+            calmOpacity: calm.opacity,
+            litOpacity: lit.opacity
+        };
     });
 
-    assert.deepEqual(look.calm, { pop: '1', swing: '4deg', lift: '2px' }, 'в покое нота качается тихо');
-    assert.deepEqual(look.lit, { pop: '1.22', swing: '14deg', lift: '8px' }, 'под бликом нота подпрыгивает');
+    assert.notEqual(jump.hold, null, 'нашёлся момент, когда полоса света стоит над нотой');
+    assert.equal(jump.rise, 18, 'под бликом нота поднимается вверх на всю высоту прыжка');
+    assert.match(jump.translate, /-18px/, 'подъём задан свойством translate: ' + jump.translate);
+    assert.equal(jump.back, 0, 'когда полоса ушла, нота опускается на своё место');
+    assert.ok(jump.litOpacity > jump.calmOpacity, 'под светом нота ярче');
 
     /* Полосу света ведём руками: проверка не зависит от того, в какой момент открылась
        страница. Ноты должны вспыхивать по очереди — по мере того как полоса идёт над ними. */
@@ -2414,7 +2462,8 @@ test('движение: ноты откликаются на блик, идущ�
         const seen = [];
         const frame = () => new Promise((resolve) => { requestAnimationFrame(() => { setTimeout(resolve, 60); }); });
 
-        for (let time = 0; time <= 4200; time += 300) {
+        // Проход по табло занимает 42% цикла (см. af-sheen в src/theme-afisha.css)
+        for (let time = 0; time <= 6600; time += 300) {
             sheen.currentTime = time;
             await frame();
 
@@ -2431,7 +2480,7 @@ test('движение: ноты откликаются на блик, идущ�
     });
 
     assert.ok(lit, 'полоса света нашлась среди анимаций страницы');
-    assert.ok(lit.length >= 4, 'ноты вспыхивают, когда полоса идёт над ними: ' + lit.join(','));
+    assert.ok(lit.length >= 4, 'ноты подпрыгивают, когда полоса идёт над ними: ' + lit.join(','));
 
     // Со страницы ушли — отклик снят, ноты снова в покое
     await page.evaluate(() => window.FTApp.navigate('standings'));
@@ -2439,7 +2488,7 @@ test('движение: ноты откликаются на блик, идущ�
     assert.equal(await page.evaluate(() => document.querySelectorAll('.hero-note.is-lit').length), 0,
         'на другой странице ноты остаются в покое');
 
-    // Движение выключили — вспышек больше нет
+    // Движение выключили — прыжков больше нет
     await page.evaluate(() => {
         window.FTApp.navigate('home');
         document.getElementById('motion-toggle').click();
@@ -2448,10 +2497,64 @@ test('движение: ноты откликаются на блик, идущ�
     await new Promise((resolve) => setTimeout(resolve, 400));
 
     assert.equal(await page.evaluate(() => document.querySelectorAll('.hero-note.is-lit').length), 0,
-        'при «меньше движения» ноты не вспыхивают');
+        'при «меньше движения» ноты не подпрыгивают');
 
     assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), [],
         'нет ошибок консоли');
+    await page.close();
+});
+
+/**
+ * Телефон, «Афиша матча»: нот на табло столько же, сколько на компьютере, — они просто
+ * мельче и тише, чтобы не спорить с названием. Все они держатся внутри табло: табло узкое,
+ * и вылезший значок выглядел бы мусором поверх текста.
+ */
+test('телефон: в «Афише» видны все ноты табло', { skip }, async () => {
+    const { page, problems } = await openPage({ mobile: true, isolated: true });
+
+    await page.evaluate(() => window.FTApp.theme.preview('afisha'));
+    await page.waitForFunction(() => document.body.classList.contains('theme-afisha'));
+
+    // Движение выключаем: замеры не зависят от того, где сейчас полоса света и как качнулись ноты
+    await clickInView(page, '#motion-toggle');
+    await page.waitForFunction(() => document.documentElement.classList.contains('reduce-motion'));
+
+    const view = await page.evaluate(() => {
+        const band = document.querySelector('.hero-band').getBoundingClientRect();
+        const notes = Array.from(document.querySelectorAll('.hero-note')).map((note) => {
+            const box = note.getBoundingClientRect();
+            const style = getComputedStyle(note);
+
+            return {
+                // Ширина по стилю: рамка у повёрнутого значка чуть шире самого значка
+                size: Math.round(parseFloat(style.width)),
+                opacity: Number(style.opacity),
+                inside: box.left >= band.left - 4 && box.right <= band.right + 4 &&
+                    box.top >= band.top - 4 && box.bottom <= band.bottom + 4,
+                jump: style.getPropertyValue('--note-jump').trim()
+            };
+        });
+
+        return {
+            count: notes.length,
+            sizes: notes.map((note) => note.size),
+            opacities: notes.map((note) => note.opacity),
+            outside: notes.filter((note) => !note.inside).length,
+            jump: notes[0].jump,
+            sheenCycle: getComputedStyle(document.querySelector('.hero-band')).getPropertyValue('--sheen-cycle').trim()
+        };
+    });
+
+    assert.equal(view.count, 9, 'нот ровно столько же, сколько на компьютере');
+    assert.ok(view.sizes.every((size) => size >= 16 && size <= 26),
+        'на телефоне ноты мельче компьютерных: ' + view.sizes.join(', '));
+    assert.ok(view.opacities.every((value) => value >= 0.4 && value <= 0.6),
+        'на телефоне ноты тише: ' + view.opacities.join(', '));
+    assert.equal(view.outside, 0, 'ни одна нота не вылезает за табло');
+    assert.equal(view.jump, '12px', 'прыжок соразмерен мелким значкам');
+    assert.equal(view.sheenCycle, '12s', 'темп блика задаётся переменной');
+
+    assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), []);
     await page.close();
 });
 
