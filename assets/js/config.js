@@ -77,5 +77,6 @@ window.FT_CONFIG.storageKeys = Object.assign({
     publishedAt: 'ft.publishedAt',  // метка последней успешной публикации
     localBackup: 'ft.localBackup',  // копия данных перед заменой версией из репозитория
     localEdits: 'ft.localEdits',    // отметка «на устройстве есть неопубликованные правки»
-    splashSeen: 'ft.splashSeen'     // предстартовая заставка уже показана в этой сессии (sessionStorage)
+    splashSeen: 'ft.splashSeen',    // предстартовая заставка уже показана в этой сессии (sessionStorage)
+    buildReloaded: 'ft.buildReloaded' // версия сайта, под которую страница уже перезагружалась (sessionStorage)
 }, window.FT_CONFIG.storageKeys || {});

@@ -79,7 +79,12 @@ function createMockRepository(options) {
         state.requests.push({ method, url: target, headers: normalizedHeaders, body: body || null });
 
         if (isApi) {
-            if (auth !== 'Bearer ' + state.token) {
+            /* Чтение файла данных открыто всем (репозиторий публичный), поэтому
+               запрос без заголовка Authorization — это посетитель, а не админ.
+               Неверный токен при этом всё равно не принимаем. */
+            const anonymousGet = method === 'GET' && !auth;
+
+            if (!anonymousGet && auth !== 'Bearer ' + state.token) {
                 return response(401, { message: 'Bad credentials' });
             }
 

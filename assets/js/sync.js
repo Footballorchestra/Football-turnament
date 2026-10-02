@@ -306,13 +306,70 @@
             return response.json().catch(function () { return null; });
         }
 
-        /** Чтение данных: сначала raw-адрес репозитория, затем файл самого сайта. */
-        function pull(cacheBust) {
+        /** Содержимое файла данных из ответа Contents API: приходит в base64. */
+        function readApiData(payload) {
+            if (!payload || typeof payload.content !== 'string' || !payload.content.trim()) {
+                throw new Error('в ответе нет содержимого файла');
+            }
+
+            return normalizeRemoteData(JSON.parse(decodeBase64Utf8(payload.content)));
+        }
+
+        /** Готовый ответ файла данных: проверяем формат и запоминаем источник. */
+        function readRawData(payload) {
+            return normalizeRemoteData(payload);
+        }
+
+        /**
+         * Источники данных в порядке обращения.
+         *
+         * Обычное чтение: сначала «сырой» адрес репозитория (обновляется через
+         * несколько секунд после коммита), затем файл, отданный самим сайтом.
+         *
+         * Свежее чтение (options.fresh) начинается с Contents API: его кэш — одна
+         * минута, а raw и сам сайт отдаются с кэшем на 5–10 минут (кэш-адреса с ?v=
+         * эти серверы игнорируют), поэтому зритель мог видеть данные десятиминутной
+         * давности. Фоном API не спрашиваем: у него ограничение на число запросов
+         * с одного адреса, а фоновое обновление идёт каждую минуту.
+         */
+        function dataSources(cacheBust, fresh) {
+            var attempts = [];
+            var jsonInit = { cache: 'no-store', headers: { 'Accept': 'application/json' } };
+
+            if (fresh) {
+                attempts.push({
+                    source: 'api',
+                    url: contentsUrl(config) + '?ref=' + encodeURIComponent(config.branch),
+                    init: { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } },
+                    read: readApiData
+                });
+            }
+
+            attempts.push({
+                source: 'repository',
+                url: rawUrl(config, cacheBust),
+                init: jsonInit,
+                read: readRawData
+            });
+
+            attempts.push({
+                source: 'site',
+                url: localUrl(config, cacheBust),
+                init: jsonInit,
+                read: readRawData
+            });
+
+            return attempts;
+        }
+
+        /** Чтение данных турнира из репозитория. */
+        function pull(cacheBust, options) {
             if (!ready) {
                 return Promise.resolve({ ok: false, error: 'Не заданы репозиторий, ветка или путь к файлу данных' });
             }
 
-            var attempts = [rawUrl(config, cacheBust), localUrl(config, cacheBust)];
+            var opts = options || {};
+            var attempts = dataSources(cacheBust, Boolean(opts.fresh));
             var failures = [];
 
             function tryNext(index) {
@@ -325,7 +382,9 @@
                     };
                 }
 
-                return request(attempts[index], { cache: 'no-store', headers: { 'Accept': 'application/json' } })
+                var attempt = attempts[index];
+
+                return request(attempt.url, attempt.init)
                     .then(function (response) {
                         if (!response || !response.ok) {
                             throw new Error('HTTP ' + (response ? response.status : '?'));
@@ -334,7 +393,7 @@
                         return response.json();
                     })
                     .then(function (payload) {
-                        var normalized = normalizeRemoteData(payload);
+                        var normalized = attempt.read(payload);
 
                         if (!normalized.ok) {
                             throw new Error(normalized.error);
@@ -343,13 +402,13 @@
                         return {
                             ok: true,
                             data: normalized.data,
-                            source: index === 0 ? 'repository' : 'site',
-                            url: attempts[index],
+                            source: attempt.source,
+                            url: attempt.url,
                             repaired: normalized.repaired
                         };
                     })
                     .catch(function (error) {
-                        failures.push(attempts[index] + ' → ' + error.message);
+                        failures.push(attempt.url + ' → ' + error.message);
                         return tryNext(index + 1);
                     });
             }

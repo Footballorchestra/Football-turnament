@@ -1556,7 +1556,12 @@ test('посетитель видит данные из репозитория, 
     assert.match(app.id('standings-body').textContent, /Клуб из репозитория/);
     assert.match(app.freshness(), /Данные обновлены: 10 сентября 2026/, 'в подвале указана версия данных');
     assert.equal(app.storedData().teams.length, 5, 'копия сохранена локально (для офлайна)');
-    assert.equal(mock.state.requests.some((request) => request.url.includes('/mock-raw/')), true);
+
+    // Посетитель только открыл страницу: данные приходят из самого свежего источника —
+    // Contents API (у него кэш в минуту, у raw и файла сайта — 5–10 минут)
+    assert.equal(mock.state.requests.some((request) =>
+        request.url.includes('/mock-api/repos/') && request.url.includes('/contents/data.json')), true);
+    assert.equal(app.window.FTApp.sync.state.lastSource, 'api', 'источник данных — Contents API');
 });
 
 test('офлайн: показывается сохранённая копия, сайт продолжает работать', async () => {
@@ -2562,7 +2567,9 @@ test('автообновление: скрытая вкладка запросо
 
     await app.settle();
 
-    const pulls = () => mock.state.requests.filter((request) => request.url.includes('/mock-raw/')).length;
+    // Чтение данных из общего хранилища: и Contents API, и «сырой» адрес репозитория
+    const pulls = () => mock.state.requests.filter((request) =>
+        request.url.includes('/mock-raw/') || request.url.includes('/mock-api/repos/')).length;
     const before = pulls();
 
     // Вкладка скрыта: таймер срабатывает, но в репозиторий не ходим
@@ -2586,6 +2593,115 @@ test('автообновление: скрытая вкладка запросо
     assert.match(app.id('teams-grid').textContent, /Клуб после возврата/, 'обновилось сразу после возврата');
 
     app.stopAutoRefresh();
+});
+
+/* ------------------------------------------------------------------ */
+/* Новая версия сайта: страница обновляется сама                       */
+/* ------------------------------------------------------------------ */
+
+/** Версия файлов на открытой странице: берём из index.html, а не из числа в тесте. */
+const RUNNING_BUILD = Number(/app\.js\?v=(\d+)/.exec(readSource('index.html'))[1]);
+
+/** Так выглядит выложенная страница сайта с другим номером версии файлов. */
+function pageWithBuild(version) {
+    return '<!DOCTYPE html><html><head>' +
+        '<link rel="stylesheet" href="assets/css/tailwind.css?v=' + version + '">' +
+        '<script src="assets/js/app.js?v=' + version + '" defer></script>' +
+        '</head><body></body></html>';
+}
+
+/** «Сеть» для проверки версии: страница сайта отвечает, данные — нет. */
+function buildFetch(html) {
+    return (url) => {
+        if (String(url).indexOf('index.html') === 0) {
+            return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(html) });
+        }
+
+        return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) });
+    };
+}
+
+/** Запускает приложение с «выложенной» страницей сайта и подменённой перезагрузкой. */
+function bootWithBuild(html, options) {
+    const settings = options || {};
+    const app = boot({
+        mock: { fetch: buildFetch(html) },
+        seed: settings.seed,
+        sessionSeed: settings.sessionSeed
+    });
+    const reloads = [];
+
+    // Подменяем перезагрузку до первой проверки: она идёт по микротаскам,
+    // то есть уже после возврата из boot()
+    app.window.FTApp.build.reload(() => reloads.push(1));
+
+    app.reloads = reloads;
+    return app;
+}
+
+test('новая версия сайта: открытая страница перезагружается сама', async () => {
+    const app = bootWithBuild(pageWithBuild(RUNNING_BUILD + 1));
+
+    assert.equal(app.window.FTApp.build.state.running, RUNNING_BUILD, 'версия открытой страницы известна');
+
+    await app.settle();
+
+    assert.equal(app.window.FTApp.build.state.found, RUNNING_BUILD + 1, 'на сайте найдена новая версия');
+    assert.equal(app.window.FTApp.build.state.pending, RUNNING_BUILD + 1, 'перезагрузка решена');
+    assert.match(app.id('toast-container').textContent, /новая версия сайта/i, 'посетитель предупреждён');
+    assert.equal(app.reloads.length, 0, 'перезагрузка идёт с короткой паузой, а не мгновенно');
+
+    await app.wait(1500);
+
+    assert.equal(app.reloads.length, 1, 'страница перезагружена один раз');
+    assert.equal(app.window.FTApp.build.state.pending, 0, 'ожидание перезагрузки снято');
+    assert.equal(app.window.sessionStorage.getItem('ft.buildReloaded'), String(RUNNING_BUILD + 1),
+        'отметка сессии не даёт перезагружаться по кругу');
+
+    // Вторая проверка под ту же версию молчит: страница уже работает с новыми файлами
+    assert.equal(await app.window.FTApp.build.check(), false, 'второй перезагрузки не будет');
+    await app.wait(1500);
+    assert.equal(app.reloads.length, 1);
+});
+
+test('новая версия сайта: когда выкладывать нечего, страница не дёргается', async () => {
+    const app = bootWithBuild(pageWithBuild(RUNNING_BUILD));
+
+    await app.settle();
+
+    assert.equal(app.window.FTApp.build.state.found, RUNNING_BUILD, 'версия на сайте та же');
+    assert.equal(app.window.FTApp.build.state.pending, 0);
+
+    await app.wait(1500);
+
+    assert.equal(app.reloads.length, 0, 'перезагрузки нет');
+    assert.equal(app.id('toast-container').textContent.includes('новая версия'), false, 'и подсказки нет');
+});
+
+test('новая версия сайта: администратору и неопубликованным правкам перезагрузка не мешает', async () => {
+    const edits = bootWithBuild(pageWithBuild(RUNNING_BUILD + 1), {
+        seed: { [EDITS_KEY]: '2026-09-01T00:00:00.000Z' }
+    });
+
+    await edits.settle();
+    await edits.wait(1500);
+
+    assert.equal(edits.window.FTApp.build.state.pending, RUNNING_BUILD + 1, 'новая версия запомнена');
+    assert.equal(edits.reloads.length, 0, 'правки на устройстве не теряются');
+
+    // Правки опубликованы — перезагрузка сразу становится безопасной
+    edits.window.localStorage.removeItem(EDITS_KEY);
+    assert.equal(await edits.window.FTApp.build.check(), true, 'перезагрузка больше не откладывается');
+
+    const panel = bootWithBuild(pageWithBuild(RUNNING_BUILD + 1));
+
+    await panel.settle();
+    panel.navigate('admin');
+    panel.window.FTApp.build.state.pending = RUNNING_BUILD + 1;
+
+    assert.equal(await panel.window.FTApp.build.check(), false, 'в админке страница не перезагружается');
+    await panel.wait(1500);
+    assert.equal(panel.reloads.length, 0);
 });
 
 test('прямая ссылка на карточку игрока открывается при загрузке страницы', () => {

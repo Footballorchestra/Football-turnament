@@ -243,6 +243,54 @@ test('createClient.pull: без настроек репозитория запр
     assert.equal(fetchImpl.calls.length, 0);
 });
 
+test('createClient.pull: свежее чтение начинается с Contents API', async () => {
+    const remote = sampleData();
+    const apiUrl = 'https://api.github.com/repos/AndreyMinenkov/Football-turnament/contents/data.json?ref=main';
+
+    // У Contents API кэш — минута, у raw и файла сайта — 5–10 минут: когда
+    // посетитель только открыл страницу или вернулся во вкладку, спрашиваем API
+    const fromApi = await clientWith(fakeFetch([
+        { match: (url) => url.startsWith('https://api.github.com'), reply: () => jsonResponse(200, {
+            sha: 'sha-1',
+            content: S.encodeBase64Utf8(JSON.stringify(remote))
+        }) }
+    ])).pull(Date.now(), { fresh: true });
+
+    assert.equal(fromApi.ok, true);
+    assert.equal(fromApi.source, 'api');
+    assert.equal(fromApi.url, apiUrl);
+    assert.equal(fromApi.data.revision, remote.revision);
+
+    // API недоступен (нет связи или исчерпан лимит запросов) — идём дальше по источникам
+    const fallback = await clientWith(fakeFetch([
+        { match: (url) => url.startsWith('https://api.github.com'), reply: () => jsonResponse(403, {}) },
+        { match: (url) => url.includes('raw.githubusercontent.com'), reply: () => jsonResponse(200, remote) }
+    ])).pull(111, { fresh: true });
+
+    assert.equal(fallback.ok, true);
+    assert.equal(fallback.source, 'repository');
+
+    // Содержимое API может быть испорчено (обрезанный base64) — тоже идём дальше
+    const broken = await clientWith(fakeFetch([
+        { match: (url) => url.startsWith('https://api.github.com'), reply: () => jsonResponse(200, { content: 'не base64' }) },
+        { match: (url) => url.startsWith('data.json'), reply: () => jsonResponse(200, remote) }
+    ])).pull(111, { fresh: true });
+
+    assert.equal(broken.ok, true);
+    assert.equal(broken.source, 'site');
+
+    // Фоновое чтение API не тревожит: лимит запросов с одного адреса ограничен
+    const backgroundFetch = fakeFetch([
+        { match: (url) => url.startsWith('data.json'), reply: () => jsonResponse(200, remote) }
+    ]);
+    const backgroundResult = await clientWith(backgroundFetch).pull(111);
+
+    assert.equal(backgroundResult.source, 'site');
+    assert.equal(backgroundFetch.calls.some((call) => call.url.includes('api.github.com')), false,
+        'без флага fresh Contents API не запрашивается');
+    assert.equal(backgroundFetch.calls[0].url, 'https://raw.githubusercontent.com/AndreyMinenkov/Football-turnament/main/data.json?v=111');
+});
+
 test('createClient.checkAccess: токен, sha и расшифрованный документ', async () => {
     const remote = sampleData();
 

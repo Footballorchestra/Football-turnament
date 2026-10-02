@@ -855,6 +855,10 @@ test('синхронизация: посетитель видит данные �
     assert.equal(await settledText(visitor.page, '#stat-teams'), String(remote.teams.length));
     assert.match(await textOf(visitor.page, '#teams-grid'), /Клуб из репозитория/);
     assert.match(await textOf(visitor.page, '#data-freshness'), /Данные обновлены: 10 сентября 2026/);
+    assert.equal(await visitor.page.evaluate(() => window.FTApp.sync.state.lastSource), 'api',
+        'страница только открылась — данные берём из Contents API (кэш в минуту, а не 10 минут)');
+    assert.equal(await visitor.page.evaluate(() => window.sessionStorage.getItem('ft.buildReloaded')), null,
+        'версия файлов та же — перезагружать страницу незачем');
     assert.deepEqual(visitor.problems, []);
     assert.deepEqual(await visitor.page.evaluate(() => window.__cspViolations), []);
     await visitor.close();
@@ -928,6 +932,81 @@ test('синхронизация: посетитель видит данные �
 
     await otherPage.close();
     await otherContext.close();
+});
+
+test('новая версия сайта: открытая страница обновляется сама, но не по кругу', { skip }, async () => {
+    /*
+     * Так выглядит телефон, у которого вкладка открыта со вчерашнего дня: файлы в
+     * памяти старые, а на сайте уже выложены новые. Подменяем только ответ на
+     * разметку страницы — остальная сеть работает как обычно.
+     */
+    const nextVersion = 999;
+    const context = await createIsolatedContext();
+    const page = await context.newPage();
+    const problems = [];
+
+    page.on('pageerror', (error) => problems.push('Ошибка скрипта: ' + error.message));
+    page.on('console', (message) => {
+        if (message.type() === 'error') {
+            problems.push('Консоль: ' + message.text());
+        }
+    });
+
+    await page.evaluateOnNewDocument((config, version) => {
+        window.FT_CONFIG = config;
+
+        // Счётчик загрузок документа живёт в sessionStorage: при перезагрузке
+        // страница начинается заново, и обычная переменная сбросилась бы
+        window.sessionStorage.setItem('ft.probeLoads',
+            String(Number(window.sessionStorage.getItem('ft.probeLoads') || '0') + 1));
+
+        const realFetch = window.fetch;
+
+        window.fetch = (url, init) => {
+            if (String(url).indexOf('index.html') === 0) {
+                return Promise.resolve(new Response(
+                    '<!DOCTYPE html><html><head>' +
+                        '<script src="assets/js/app.js?v=' + version + '" defer></script>' +
+                    '</head><body></body></html>',
+                    { headers: { 'Content-Type': 'text/html' } }
+                ));
+            }
+
+            return realFetch(url, init);
+        };
+    }, SITE_CONFIG, nextVersion);
+
+    await gotoApp(page, mockBaseUrl + '/');
+
+    // Решение принимается после первых данных, перезагрузке предшествует короткая пауза
+    let view = null;
+
+    for (let attempt = 0; attempt < 48; attempt += 1) {
+        try {
+            view = await page.evaluate(() => ({
+                loads: Number(window.sessionStorage.getItem('ft.probeLoads') || '0'),
+                mark: window.sessionStorage.getItem('ft.buildReloaded'),
+                pending: window.FTApp.build.state.pending
+            }));
+
+            if (view.loads >= 2) {
+                break;
+            }
+        } catch (error) {
+            // Страница перезагружается прямо сейчас: следующая попытка — уже в новой
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+
+    assert.ok(view, 'после перезагрузки страница отвечает снова');
+    assert.equal(view.loads, 2, 'перезагрузка ровно одна: подменённая версия не гонит страницу по кругу');
+    assert.equal(view.mark, String(nextVersion), 'версия отмечена в сессии — второй перезагрузки не будет');
+    assert.equal(view.pending, 0, 'ожидание перезагрузки снято');
+    assert.deepEqual(problems, [], 'перезагрузка не сопровождается ошибками');
+
+    await page.close();
+    await context.close();
 });
 
 test('фото игрока: настоящее сжатие в браузере, загрузка в репозиторий и аватар в составе', { skip }, async () => {

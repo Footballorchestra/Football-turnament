@@ -24,6 +24,8 @@
         publishedAt: 'ft.publishedAt',
         localBackup: 'ft.localBackup',
         localEdits: 'ft.localEdits',
+        // Новая версия сайта, под которую страница уже перезагружалась (sessionStorage)
+        buildReloaded: 'ft.buildReloaded',
         // Примерка оформления: стиль, выбранный только на этом устройстве
         themePreview: 'ft.themePreview'
     };
@@ -108,6 +110,8 @@
         lastError: '',
         lastPullError: '',
         lastCommitUrl: '',
+        /** Откуда пришли последние данные: 'api', 'repository' или 'site'. */
+        lastSource: '',
         timer: null,
         refreshTimer: null,
         /** Идёт запрос данных из репозитория (второй одновременно не нужен). */
@@ -1344,7 +1348,7 @@
             throw error;
         };
 
-        return sync.client.pull(Date.now()).then(function (result) {
+        return sync.client.pull(Date.now(), { fresh: Boolean(opts.fresh) }).then(function (result) {
             if (!result.ok) {
                 sync.lastPullError = result.error;
                 sync.pullCompleted = true;
@@ -1359,6 +1363,7 @@
 
             sync.lastPullError = '';
             sync.pullCompleted = true;
+            sync.lastSource = result.source || '';
 
             // Данные уже совпадают — ничего не меняем
             if (S.documentsEqual(state.data, result.data)) {
@@ -1425,6 +1430,14 @@
                 toast('Данные загружены из репозитория (версия от ' + L.formatDateTime(result.data.updatedAt) + ')' +
                     (backupSaved ? '. Копия прежних данных сохранена' : ''), 'success');
             }
+
+            return result;
+        }).then(function (result) {
+            /* Заодно смотрим, не вышла ли новая версия сайта: тогда открытая
+               страница (например, на телефоне) обновится сама, и зритель получит
+               свежие файлы без ручного действия. Обещание нарочно не ждём: данные
+               уже показаны, проверка версии — фоновая. */
+            checkBuildVersion();
 
             return result;
         }).then(done, failed);
@@ -1580,7 +1593,7 @@
             }
 
             sync.lastAutoPullAt = now;
-            pullFromRepository({ auto: true });
+            pullFromRepository({ auto: true, fresh: immediate });
         }
 
         sync.refreshTimer = window.setInterval(function () {
@@ -1699,7 +1712,182 @@
     /** Ручное обновление данных из репозитория (кнопка «Забрать из репозитория» в админке). */
     function refreshDataFromRepository() {
         // Если данные отличаются, приложение само спросит подтверждение и сохранит копию
-        pullFromRepository({ verbose: true, force: true });
+        pullFromRepository({ verbose: true, force: true, fresh: true });
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Новая версия сайта: открытая страница обновляется сама              */
+    /* ------------------------------------------------------------------ */
+
+    /*
+     * Телефон держит страницу открытой сутками, а браузер не перечитывает её сам:
+     * посетитель так и остаётся на старых файлах и не видит ни новых разделов, ни
+     * переделанной афиши. Поэтому раз в несколько минут сайт спрашивает сам себя
+     * (index.html) номер версии файлов и, если он новее, спокойно перезагружает
+     * страницу — с подсказкой, чтобы перезагрузка не выглядела случайной.
+     *
+     * Проверка никому не мешает: она молчит в свёрнутой вкладке, не трогает
+     * администратора (незаполненная форма и неопубликованные правки не теряются),
+     * идёт не чаще раза в BUILD_CHECK_GAP и срабатывает один раз на версию —
+     * цикла перезагрузок быть не может.
+     */
+    var BUILD_CHECK_GAP = 5 * 60 * 1000;   // реже одной проверки в 5 минут не бывает
+    var BUILD_RELOAD_DELAY = 1200;         // пауза, чтобы посетитель успел увидеть подсказку
+    var BUILD_PATTERN = /assets\/js\/app\.js\?v=(\d+)/;
+
+    var build = {
+        running: 0,       // версия, с которой работает открытая страница
+        found: 0,         // версия, найденная на сайте (0 — новее не нашлось)
+        pending: 0,       // версия, к которой нужно перейти (0 — переход не нужен)
+        scheduled: false, // перезагрузка уже назначена
+        checkedAt: 0
+    };
+
+    /** Перезагрузка страницы: вынесена отдельно, чтобы автотесты могли её подменить. */
+    var reloadPage = function () {
+        window.location.reload();
+    };
+
+    /** Чтение отметки сессии: под какую версию страница уже перезагружалась. */
+    function readSessionValue(key) {
+        try {
+            var storage = getStorage('session');
+
+            return storage ? storage.getItem(key) : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function writeSessionValue(key, value) {
+        try {
+            var storage = getStorage('session');
+
+            if (storage) {
+                storage.setItem(key, String(value));
+            }
+        } catch (error) {
+            // приватный режим браузера — просто игнорируем
+        }
+    }
+
+    /** Версия сайта из адреса подключённого скрипта: assets/js/app.js?v=53 → 53. */
+    function runningBuildVersion() {
+        var script = document.querySelector('script[src*="assets/js/app.js"]');
+        var match = script ? BUILD_PATTERN.exec(script.getAttribute('src') || '') : null;
+
+        return match ? parseInt(match[1], 10) : 0;
+    }
+
+    /** Версия сайта в отданной странице: assets/js/app.js?v=54 → 54. */
+    function deployedBuildVersion(html) {
+        var match = BUILD_PATTERN.exec(String(html || ''));
+
+        return match ? parseInt(match[1], 10) : 0;
+    }
+
+    /**
+     * Можно ли перезагрузить страницу прямо сейчас, ничего не потеряв:
+     * посетитель смотрит сайт, ничего не заполняет и не оставит неопубликованных правок.
+     */
+    function canReloadForBuild() {
+        if (document.hidden) {
+            return false;
+        }
+
+        if (state.route === 'admin') {
+            return false;
+        }
+
+        if (hasUnpublishedEdits()) {
+            return false;
+        }
+
+        var active = document.activeElement;
+
+        return !(active && /^(input|textarea|select)$/i.test(active.tagName || ''));
+    }
+
+    /** Перезагрузка под новую версию: подсказка, короткая пауза, перезагрузка. */
+    function reloadForBuild(version) {
+        if (!version || build.scheduled) {
+            return false;
+        }
+
+        if (!canReloadForBuild()) {
+            // Версия остаётся найденной: вернёмся к ней, когда перезагрузка станет безопасной
+            return false;
+        }
+
+        /* Под одну и ту же версию перезагружаемся один раз: разметка может быть
+           уже новой, а файл — ещё старым, и без отметки страница зациклилась бы */
+        if (readSessionValue(KEYS.buildReloaded) === String(version)) {
+            build.pending = 0;
+            return false;
+        }
+
+        writeSessionValue(KEYS.buildReloaded, version);
+        build.scheduled = true;
+        toast('Вышла новая версия сайта — обновляем страницу', 'info');
+
+        window.setTimeout(function () {
+            build.scheduled = false;
+
+            /* За эти мгновения посетитель мог уйти в админку или начать
+               заполнять форму — тогда перезагрузку откладываем до следующей проверки */
+            if (!canReloadForBuild()) {
+                return;
+            }
+
+            build.pending = 0;
+            reloadPage();
+        }, BUILD_RELOAD_DELAY);
+
+        return true;
+    }
+
+    /**
+     * Проверка версии сайта. Возвращает обещание с ответом «перезагружаемся ли»:
+     * так проверку удобно вызывать и после загрузки данных, и автотестами.
+     */
+    function checkBuildVersion() {
+        if (!build.running) {
+            build.running = runningBuildVersion();
+        }
+
+        // Новая версия уже найдена, но перезагрузиться помешали (админка, правки,
+        // свёрнутая вкладка) — пробуем снова, как только это станет безопасно
+        if (build.pending) {
+            return Promise.resolve(reloadForBuild(build.pending));
+        }
+
+        if (!build.running || Date.now() - build.checkedAt < BUILD_CHECK_GAP) {
+            return Promise.resolve(false);
+        }
+
+        build.checkedAt = Date.now();
+
+        return window.fetch('index.html', { cache: 'no-store', headers: { 'Accept': 'text/html' } })
+            .then(function (response) {
+                return response && response.ok && typeof response.text === 'function' ? response.text() : '';
+            })
+            .then(function (html) {
+                var version = deployedBuildVersion(html);
+
+                build.found = version;
+
+                if (version <= build.running) {
+                    return false;
+                }
+
+                build.pending = version;
+
+                return reloadForBuild(version);
+            })
+            .catch(function () {
+                // Нет сети или страница недоступна — попробуем при следующей проверке
+                return false;
+            });
     }
 
     /* ================================================================== */
@@ -5767,8 +5955,10 @@
         fillSyncInputs();
         renderSyncStatus();
 
-        // Подтягиваем актуальные данные турнира из репозитория
-        pullFromRepository();
+        // Подтягиваем актуальные данные турнира из репозитория: страница только что
+        // открылась, поэтому данные берём из самого свежего источника (Contents API)
+        build.running = runningBuildVersion();
+        pullFromRepository({ fresh: true });
         startRefreshTimer();
 
         /* Публичный API: нужен автотестам и удобен для отладки из консоли браузера */
@@ -5817,6 +6007,18 @@
                 isDirty: isDirty,
                 status: renderSyncStatus,
                 state: sync
+            },
+            /* Новая версия сайта: состояние, проверка и подмена перезагрузки для тестов */
+            build: {
+                state: build,
+                check: checkBuildVersion,
+                reload: function (impl) {
+                    if (typeof impl === 'function') {
+                        reloadPage = impl;
+                    }
+
+                    return reloadPage;
+                }
             }
         };
     }
