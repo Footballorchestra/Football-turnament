@@ -1689,9 +1689,8 @@
     /* ================================================================== */
 
     /**
-     * Плитки-счётчики постоянной шапки сайта: команды, матчи, игроки, завершённые.
-     * Шапка видна на всех публичных страницах, поэтому числа обновляются при любой
-     * перерисовке данных, а не только при открытии главной.
+     * Плитки-счётчики на главной: команды, матчи, игроки, завершённые.
+     * Числа обновляются при любой перерисовке данных, а не только при открытии главной.
      */
     function renderSiteHead() {
         var stats = L.getStats(state.data);
@@ -3784,31 +3783,24 @@
         return '#/' + page.route;
     }
 
-    /** Показывает кнопку «Назад», если есть куда возвращаться. */
+    /** Показывает кнопку «Назад» в шапке, если есть куда возвращаться. */
     function renderBackButton() {
-        var row = $('back-row');
-        var label = $('back-target');
+        var button = $('back-button');
 
-        if (!row) {
+        if (!button) {
             return;
         }
 
         var previous = state.history.length ? state.history[state.history.length - 1] : null;
 
-        row.hidden = !previous;
+        button.hidden = !previous;
 
-        if (label) {
-            label.textContent = previous ? '— вернуться на «' + pageTitle(previous) + '»' : '';
-        }
+        var title = previous
+            ? 'Вернуться на страницу «' + pageTitle(previous) + '»'
+            : 'Возвращаться пока некуда';
 
-        var button = row.querySelector('[data-action="go-back"]');
-
-        if (button) {
-            var title = previous ? 'Вернуться на страницу «' + pageTitle(previous) + '»' : 'Нечего возвращать';
-
-            button.setAttribute('title', title);
-            button.setAttribute('aria-label', title);
-        }
+        button.setAttribute('title', title);
+        button.setAttribute('aria-label', title);
     }
 
     /** Запоминает страницу, с которой уходим (детальные страницы внутри раздела не считаются). */
@@ -3937,12 +3929,13 @@
             }
         });
 
-        /* Постоянная шапка сайта (название и плитки-счётчики) в админке не нужна:
-           там своя рабочая область, поэтому блок прячется. */
+        /* Табло с названием турнира и плитки-счётчики показываем только на главной:
+           на остальных страницах контент начинается сразу сверху — без прокрутки.
+           В админке блок тоже скрыт (там своя рабочая область). */
         var siteHead = $('site-head');
 
         if (siteHead) {
-            siteHead.hidden = target === 'admin';
+            siteHead.hidden = target !== 'home';
         }
 
         syncStatTiles();

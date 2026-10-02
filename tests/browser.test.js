@@ -1044,19 +1044,19 @@ test('страница команды: из турнирной таблицы в
 test('кнопка «Назад» возвращает на предыдущую страницу', { skip }, async () => {
     const { page, problems } = await openPage();
     // На старте возвращаться некуда
-    assert.equal(await sectionVisible(page, 'back-row'), false, 'кнопка скрыта');
+    assert.equal(await sectionVisible(page, 'back-button'), false, 'кнопка скрыта');
 
     // Таблица → команда: кнопка знает, куда вернуться
     await page.click('[data-nav="standings"]');
-    assert.equal(await sectionVisible(page, 'back-row'), true, 'кнопка появилась');
-    assert.match(await textOf(page, '#back-target'), /Главная/);
+    assert.equal(await sectionVisible(page, 'back-button'), true, 'кнопка появилась');
+    assert.match(await page.$eval('#back-button', (el) => el.getAttribute('aria-label') || ''), /Главная/);
 
     const teamId = await page.$eval('#standings-body tr[data-action="team-public-open"]',
         (row) => row.getAttribute('data-id'));
 
     await clickInView(page, '#standings-body tr[data-action="team-public-open"][data-id="' + teamId + '"]');
     assert.equal(await sectionVisible(page, 'team-detail-view'), true, 'открылась страница команды');
-    assert.match(await textOf(page, '#back-target'), /Таблица/);
+    assert.match(await page.$eval('#back-button', (el) => el.getAttribute('aria-label') || ''), /Таблица/);
 
     await clickInView(page, '[data-action="go-back"]');
     assert.equal(await sectionVisible(page, 'page-standings'), true, 'вернулись в турнирную таблицу');
@@ -1065,7 +1065,7 @@ test('кнопка «Назад» возвращает на предыдущую
     // И ещё раз — на главную: история пуста, кнопка снова скрыта
     await clickInView(page, '[data-action="go-back"]');
     assert.equal(await sectionVisible(page, 'page-home'), true, 'вернулись на главную');
-    assert.equal(await sectionVisible(page, 'back-row'), false, 'история пуста — кнопки нет');
+    assert.equal(await sectionVisible(page, 'back-button'), false, 'история пуста — кнопки нет');
 
     assert.deepEqual(problems, [], 'нет ошибок консоли и сбоев загрузки');
     await page.close();
@@ -1688,6 +1688,9 @@ test('счётчики на главной и сортировка таблиц 
     await clickInView(page, '#stat-players');
     await page.waitForFunction(() => document.querySelector('.page-section.active').id === 'page-allplayers');
 
+    // На внутренних страницах табло и плитки скрыты: контент начинается сразу сверху
+    assert.equal(await page.$eval('#site-head', (el) => el.hidden), true, 'табло скрыто на внутренней странице');
+
     const view = await page.evaluate(() => ({
         hash: window.location.hash,
         title: document.querySelector('#page-allplayers .section-title').textContent.trim(),
@@ -1729,6 +1732,7 @@ test('счётчики на главной и сортировка таблиц 
 
     // Счётчик «Завершено» открывает матчи с фильтром «завершённые»
     await clickWhenReady(page, '[data-nav="home"]');
+    await page.waitForFunction(() => document.getElementById('site-head').hidden === false);
     await clickInView(page, '#stat-finished');
     await page.waitForFunction(() => document.querySelector('.page-section.active').id === 'page-matches');
 

@@ -47,11 +47,11 @@
 
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=45">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=46">
     <!-- Второй стиль «Афиша матча». Файл подключён всегда, но применяется только тогда,
          когда администратор включил этот стиль в панели: все правила внутри ограничены
          классом theme-afisha на <body> (см. applyTheme в assets/js/app.js). -->
-    <link rel="stylesheet" href="assets/css/theme-afisha.css?v=45">
+    <link rel="stylesheet" href="assets/css/theme-afisha.css?v=46">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -214,13 +214,24 @@
     <header class="bg-white border-b sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4">
             <div class="flex justify-between items-center h-16 gap-4">
-                <button type="button" class="flex items-center gap-3 text-left" data-action="navigate" data-page="home">
-                    <span class="team-badge badge-color-1">FT</span>
-                    <span>
-                        <span class="block font-bold text-base sm:text-lg leading-tight">ЧЕМПИОНАТ СРЕДИ АРТИСТОВ</span>
-                        <span class="block text-xs sm:text-sm text-dark-600">по футболу 2026-2027</span>
-                    </span>
-                </button>
+                <div class="flex items-center gap-2 min-w-0">
+                    <!-- Возврат на предыдущую страницу: маленькая стрелка у названия сайта.
+                         Показывается только когда есть куда возвращаться (см. renderBackButton
+                         в assets/js/app.js). Куда именно вернёмся — в подсказке title, поэтому
+                         кнопка не мозолит глаза и не занимает место в контенте. -->
+                    <button type="button" class="back-button" id="back-button" data-action="go-back" hidden
+                            aria-label="Вернуться на предыдущую страницу">
+                        <svg class="icon" aria-hidden="true"><use href="#i-back"></use></svg>
+                    </button>
+                    <button type="button" class="flex items-center gap-2 sm:gap-3 text-left min-w-0"
+                            data-action="navigate" data-page="home">
+                        <span class="team-badge badge-color-1">FT</span>
+                        <span class="min-w-0">
+                            <span class="block font-bold text-sm sm:text-lg leading-tight">ЧЕМПИОНАТ СРЕДИ АРТИСТОВ</span>
+                            <span class="block text-xs sm:text-sm text-dark-600">по футболу 2026-2027</span>
+                        </span>
+                    </button>
+                </div>
 
                 <!-- Полное меню показываем с 1024px: на 768–1023px пять пунктов
                      не помещаются и шапка вылезала за край экрана -->
@@ -271,19 +282,9 @@
         <!-- Сообщение о восстановлении данных после сбоя -->
         <div id="data-warning" class="banner banner-warning mb-6" hidden></div>
 
-        <!-- Возврат на предыдущую страницу: кнопка появляется, когда есть куда возвращаться -->
-        <div id="back-row" class="mb-4" hidden>
-            <div class="flex items-center gap-2 flex-wrap">
-                <button type="button" class="btn btn-sm btn-ghost" data-action="go-back">
-                    <svg class="icon" aria-hidden="true"><use href="#i-back"></use></svg>Назад
-                </button>
-                <span id="back-target" class="text-xs text-dark-500"></span>
-            </div>
-        </div>
-
-        <!-- Постоянная шапка сайта: название турнира и плитки-счётчики. Блок виден на всех
-             публичных страницах, а содержимое каждой страницы строится под ним (в админке
-             блок скрывается: там своя рабочая область). Так счётчики-переходы всегда под рукой. -->
+        <!-- Табло с названием турнира и плитки-счётчики — только на главной. На остальных
+             страницах контент начинается сразу сверху, поэтому после перехода не нужно
+             прокручивать (в админке блок тоже скрыт: там своя рабочая область). -->
         <div id="site-head">
             <div class="card mb-6 overflow-hidden hero-card">
                 <div class="hero-band bg-gradient-to-r from-primary-700 to-primary-900 p-6 sm:p-8 text-white">
@@ -913,12 +914,12 @@
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
     <!-- На GitHub Pages заголовки ответа задать нельзя, поэтому страница сама проверяет,
          не встроена ли она в чужой iframe. Скрипт идёт первым, до кода приложения. -->
-    <script src="assets/js/frame-guard.js?v=45" defer></script>
-    <script src="assets/js/config.js?v=45" defer></script>
-    <script src="assets/js/splash.js?v=45" defer></script>
-    <script src="assets/js/logic.js?v=45" defer></script>
-    <script src="assets/js/sync.js?v=45" defer></script>
-    <script src="assets/js/photo.js?v=45" defer></script>
-    <script src="assets/js/app.js?v=45" defer></script>
+    <script src="assets/js/frame-guard.js?v=46" defer></script>
+    <script src="assets/js/config.js?v=46" defer></script>
+    <script src="assets/js/splash.js?v=46" defer></script>
+    <script src="assets/js/logic.js?v=46" defer></script>
+    <script src="assets/js/sync.js?v=46" defer></script>
+    <script src="assets/js/photo.js?v=46" defer></script>
+    <script src="assets/js/app.js?v=46" defer></script>
 </body>
 </html>

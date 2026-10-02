@@ -569,24 +569,24 @@ test('кнопка «Назад» возвращает на предыдущую
     const app = boot();
 
     // На старте возвращаться некуда — кнопки не видно
-    assert.equal(app.id('back-row').hidden, true, 'кнопка скрыта, пока история пуста');
+    assert.equal(app.id('back-button').hidden, true, 'кнопка скрыта, пока история пуста');
 
     // Главная → Таблица: кнопка появилась и ведёт на «Главную»
     app.navigate('standings');
-    assert.equal(app.id('back-row').hidden, false, 'кнопка показана');
-    assert.match(app.id('back-target').textContent, /Главная/);
+    assert.equal(app.id('back-button').hidden, false, 'кнопка показана');
+    assert.match(app.id('back-button').getAttribute('aria-label'), /Главная/);
 
     app.click(app.button('go-back'));
     assert.equal(app.activeSection(), 'page-home');
     assert.equal(app.window.location.hash, '#/home');
-    assert.equal(app.id('back-row').hidden, true, 'вернулись к началу — история пуста');
+    assert.equal(app.id('back-button').hidden, true, 'вернулись к началу — история пуста');
 
     // Таблица → команда: «Назад» возвращает в таблицу, а не в список команд
     app.navigate('standings');
     app.click(app.id('standings-body').querySelector('tr[data-action="team-public-open"][data-id="1"]'));
 
     assert.equal(app.id('team-detail-view').hidden, false, 'открылась страница команды');
-    assert.match(app.id('back-target').textContent, /Таблица/);
+    assert.match(app.id('back-button').getAttribute('aria-label'), /Таблица/);
 
     app.click(app.button('go-back'));
 
@@ -600,7 +600,7 @@ test('кнопка «Назад» возвращает на предыдущую
 
     app.click(app.id('match-detail').querySelector('a.match-detail-team'));
     assert.equal(app.id('team-detail-view').hidden, false, 'открылась страница команды');
-    assert.match(app.id('back-target').textContent, /Матчи/);
+    assert.match(app.id('back-button').getAttribute('aria-label'), /Матчи/);
 
     app.click(app.button('go-back'));
     assert.equal(app.id('match-detail-view').hidden, false, 'вернулись к матчу');
@@ -611,11 +611,11 @@ test('кнопка «Назад» возвращает на предыдущую
 
     // Переходы внутри раздела (список ⇄ деталь) новую страницу не создают
     app.navigate('matches');
-    assert.match(app.id('back-target').textContent, /Главная/);
+    assert.match(app.id('back-button').getAttribute('aria-label'), /Главная/);
 
     app.click(app.id('matches-list').querySelector('.match-card[data-id="1"]'));
     assert.equal(app.id('match-detail-view').hidden, false);
-    assert.match(app.id('back-target').textContent, /Главная/, 'детальный результат — не новая страница');
+    assert.match(app.id('back-button').getAttribute('aria-label'), /Главная/, 'детальный результат — не новая страница');
 
     app.click(app.button('go-back'));
     assert.equal(app.activeSection(), 'page-home', 'и возвращает на главную');
@@ -2003,7 +2003,7 @@ test('карточка игрока: имя кликабельно, видны �
     assert.ok(card().querySelector('a.team-link'), 'название команды — ссылка на её страницу');
 
     // Кнопка «Назад» возвращает туда, откуда пришли
-    assert.match(app.id('back-target').textContent, /Команды/);
+    assert.match(app.id('back-button').getAttribute('aria-label'), /Команды/);
     app.click(app.button('go-back'));
     assert.equal(app.activeSection(), 'page-teams');
 
@@ -2729,14 +2729,19 @@ test('счётчики на главной кликабельны и откры�
     assert.equal(tile('stat-teams').tagName, 'BUTTON', 'плитки — кнопки, работают и с клавиатуры');
     assert.equal(tile('stat-players').getAttribute('data-page'), 'allplayers');
 
+    // Табло и плитки — только на главной: на других страницах контент начинается сверху
+    assert.equal(app.id('site-head').hidden, false, 'на главной табло и счётчики видны');
+
     // «Команд» → список команд
     app.click(tile('stat-teams'));
 
     assert.equal(app.activeSection(), 'page-teams');
     assert.equal(app.window.location.hash, '#/teams');
+    assert.equal(app.id('site-head').hidden, true, 'на внутренней странице табло скрыто');
 
     // «Матчей» → все матчи
     app.navigate('home');
+    assert.equal(app.id('site-head').hidden, false, 'вернулись на главную — табло снова видно');
     app.click(tile('stat-matches'));
 
     assert.equal(app.activeSection(), 'page-matches');

@@ -131,11 +131,17 @@ body.theme-afisha #mobile-menu .nav-link.active {
     color: #f0d79a;
 }
 
-/* Кнопка «Назад» лежит прямо на фотографии — держим её на светлой подложке */
-body.theme-afisha #back-row:not([hidden]) {
-    background: rgba(253, 251, 246, 0.95);
-    border: 1px solid var(--af-line);
-    box-shadow: var(--af-shadow);
+/* Стрелка «Назад» стоит на тёмной шапке сайта — держим её светлой */
+body.theme-afisha .back-button {
+    background: transparent;
+    border-color: var(--af-brass-soft);
+    color: #d9d3c5;
+}
+
+body.theme-afisha .back-button:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: var(--af-brass);
+    color: #fff;
 }
 
 body.theme-afisha .site-footer {
