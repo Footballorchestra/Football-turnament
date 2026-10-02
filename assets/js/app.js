@@ -1701,10 +1701,70 @@
     /** Длительности движения, мс: отклик, обычное появление, спокойные переходы. */
     var MOTION = { quick: 160, normal: 240, slow: 420 };
 
-    /** Системная настройка «меньше движения» (в старых браузерах считаем, что её нет). */
-    function prefersReducedMotion() {
+    /** Ключ выбора движения на этом устройстве: 'on' | 'off' | пусто (как в системе). */
+    var MOTION_KEY = 'ft.motion';
+
+    /** Явный выбор владельца: 'on' / 'off' / '' (пусто — слушаем систему). */
+    function storedMotion() {
+        var value = readStoredValue(MOTION_KEY);
+
+        return value === 'on' || value === 'off' ? value : '';
+    }
+
+    /**
+     * Проигрывать ли движение. По умолчанию смотрим системную настройку «меньше движения»,
+     * но кнопка «Движение» в подвале перебивает её: владелец может включить анимации
+     * даже там, где система их выключает.
+     */
+    function reduceMotion() {
+        var stored = storedMotion();
+
+        if (stored === 'on') {
+            return false;
+        }
+
+        if (stored === 'off') {
+            return true;
+        }
+
         return typeof window.matchMedia === 'function' &&
             window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    /** Ставит класс reduce-motion на <html>: по нему стили выключают анимации. */
+    function applyMotion() {
+        if (document.documentElement) {
+            document.documentElement.classList.toggle('reduce-motion', reduceMotion());
+        }
+    }
+
+    /** Кнопка «Движение» в подвале: показывает состояние и подсказывает, что сделает. */
+    function renderMotionControl() {
+        var button = $('motion-toggle');
+
+        if (!button) {
+            return;
+        }
+
+        var quiet = reduceMotion();
+
+        button.textContent = quiet ? 'Движение: выключено' : 'Движение: включено';
+        button.setAttribute('aria-pressed', quiet ? 'false' : 'true');
+        button.setAttribute('title', quiet
+            ? 'Включить анимации: сейчас они выключены (системная настройка «уменьшить движение» или выбор на этом устройстве)'
+            : 'Выключить анимации на этом устройстве');
+    }
+
+    /** Переключает движение: выбор сохраняется только на этом устройстве. */
+    function toggleMotion() {
+        var next = reduceMotion() ? 'on' : 'off';
+
+        writeStoredValue(MOTION_KEY, next);
+        applyMotion();
+        renderMotionControl();
+        toast(next === 'on'
+            ? 'Анимации включены на этом устройстве'
+            : 'Анимации выключены: сайт будет показываться без движения', 'info');
     }
 
     /**
@@ -1714,16 +1774,15 @@
      * и тесты читают готовый результат.
      */
     function canAnimate(element) {
-        return Boolean(element) && element.offsetParent !== null && !prefersReducedMotion();
+        return Boolean(element) && element.offsetParent !== null && !reduceMotion();
     }
 
     /** Можно ли проигрывать движение вообще (для полноэкранных слоёв вроде просмотра фото). */
     function motionAllowed() {
-        return !prefersReducedMotion();
+        return !reduceMotion();
     }
 
-    /**
-     * «Набирает» число до нового значения: первое число на главной едет от нуля,
+    /** «Набирает» число до нового значения: первое число на главной едет от нуля,
      * дальше — от прежнего (например, 3 → 4 после нового результата).
      * Без движения (в jsdom, при «меньше движения» или на скрытом блоке) ставит сразу.
      * Финальное значение ещё и подстраховывается таймером: в фоновой вкладке
@@ -1754,7 +1813,7 @@
             return;
         }
 
-        var duration = 520;
+        var duration = 700;
         var begun = null;
 
         window.setTimeout(finish, duration + 150);
@@ -1783,12 +1842,55 @@
         window.requestAnimationFrame(frame);
     }
 
+    /** Заставка ещё видна: числа наберём, как только она уйдёт. */
+    var countingWait = false;
+
+    /** Вызывает действие, когда заставка ушла (или её нет вовсе). */
+    function whenSplashGone(callback) {
+        var splash = $('splash');
+
+        if (!splash || splash.hidden) {
+            callback();
+            return;
+        }
+
+        var timer = window.setInterval(function () {
+            if (splash.hidden) {
+                window.clearInterval(timer);
+                callback();
+            }
+        }, 100);
+
+        // Страховка: если заставку почему-то не закрыли, счётчики всё равно появятся
+        window.setTimeout(function () {
+            window.clearInterval(timer);
+            callback();
+        }, 9000);
+    }
+
     /**
      * Плитки-счётчики на главной: команды, матчи, игроки, завершённые.
      * Числа обновляются при любой перерисовке данных, а не только при открытии главной.
+     * Пока видна заставка, набор чисел не начинаем: за её время счёт всё равно никто
+     * не увидит, а к моменту открытия сайта он был бы уже закончен.
      */
     function renderSiteHead() {
         var stats = L.getStats(state.data);
+        var splash = $('splash');
+
+        // Пока ждём заставку, числа не трогаем: их наберёт отложенный вызов
+        if (countingWait) {
+            return;
+        }
+
+        if (splash && !splash.hidden && canAnimate($('stat-teams'))) {
+            countingWait = true;
+            whenSplashGone(function () {
+                countingWait = false;
+                renderSiteHead();
+            });
+            return;
+        }
 
         countUp($('stat-teams'), stats.teams);
         countUp($('stat-matches'), stats.matches);
@@ -4932,6 +5034,8 @@
             applyRoute(element.getAttribute('data-page') || 'home', { matchId: null, teamId: null });
         } else if (action === 'go-back') {
             goBack();
+        } else if (action === 'motion-toggle') {
+            toggleMotion();
         } else if (action === 'toggle-menu') {
             var menu = $('mobile-menu');
 
@@ -5254,7 +5358,9 @@
         }
 
         bindEvents();
+        applyMotion(); // класс reduce-motion ставим до первой отрисовки
         renderAll();
+        renderMotionControl();
 
         var route = parseHash();
 

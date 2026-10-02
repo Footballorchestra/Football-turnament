@@ -160,28 +160,28 @@
         /* Появление раздела при переходе: мягкий подъём вместо мгновенной подмены.
            Класс active ставится при переходе, поэтому фоновое обновление данных
            ничего не «переигрывает». */
-        animation: ft-page-in 0.3s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+        animation: ft-page-in 0.32s cubic-bezier(0.2, 0.7, 0.3, 1) both;
     }
 
     /* Появление карточек списков и миниатюр фотографий. Классы ft-stagger и ft-rise
        ставит playStagger (assets/js/app.js) только на время перехода в раздел. */
     .ft-stagger > * {
-        animation: ft-item-in 0.28s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+        animation: ft-item-in 0.34s cubic-bezier(0.2, 0.7, 0.3, 1) both;
     }
 
-    .ft-stagger > *:nth-child(2) { animation-delay: 40ms; }
-    .ft-stagger > *:nth-child(3) { animation-delay: 80ms; }
-    .ft-stagger > *:nth-child(4) { animation-delay: 120ms; }
-    .ft-stagger > *:nth-child(5) { animation-delay: 160ms; }
-    .ft-stagger > *:nth-child(n + 6) { animation-delay: 200ms; }
+    .ft-stagger > *:nth-child(2) { animation-delay: 50ms; }
+    .ft-stagger > *:nth-child(3) { animation-delay: 100ms; }
+    .ft-stagger > *:nth-child(4) { animation-delay: 150ms; }
+    .ft-stagger > *:nth-child(5) { animation-delay: 200ms; }
+    .ft-stagger > *:nth-child(n + 6) { animation-delay: 250ms; }
 
     .ft-rise .team-gallery-item {
-        animation: ft-photo-in 0.36s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+        animation: ft-photo-in 0.4s cubic-bezier(0.2, 0.7, 0.3, 1) both;
     }
 
-    .ft-rise .team-gallery-item:nth-child(2) { animation-delay: 70ms; }
-    .ft-rise .team-gallery-item:nth-child(3) { animation-delay: 140ms; }
-    .ft-rise .team-gallery-item:nth-child(n + 4) { animation-delay: 210ms; }
+    .ft-rise .team-gallery-item:nth-child(2) { animation-delay: 80ms; }
+    .ft-rise .team-gallery-item:nth-child(3) { animation-delay: 160ms; }
+    .ft-rise .team-gallery-item:nth-child(n + 4) { animation-delay: 240ms; }
 
     /* --- Базовые блоки --- */
     .card {
@@ -1967,45 +1967,47 @@
     to { opacity: 1; transform: none; }
 }
 
-/* Появление раздела целиком: мягкий подъём на 6px */
+/* Появление раздела целиком: мягкий подъём на 8px */
 @keyframes ft-page-in {
-    from { opacity: 0; transform: translateY(6px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: none; }
 }
 
-/* Появление карточки в списке: подъём снизу, друг за другом */
+/* Появление карточки в списке: заметный подъём снизу, друг за другом */
 @keyframes ft-item-in {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(14px); }
     to { opacity: 1; transform: none; }
 }
 
 /* Появление миниатюры фотографии: лёгкое «проявление» */
 @keyframes ft-photo-in {
-    from { opacity: 0; transform: scale(0.96); }
+    from { opacity: 0; transform: scale(0.94); }
     to { opacity: 1; transform: none; }
 }
 
-/* Уважение к настройке «меньше анимации» */
-@media (prefers-reduced-motion: reduce) {
-    html {
-        scroll-behavior: auto;
-    }
+/*
+ * «Меньше движения». Класс reduce-motion ставит приложение на <html>: по системной
+ * настройке «уменьшить движение» или по кнопке «Движение» в подвале. Так оформление
+ * остаётся управляемым — анимации можно и выключить, и включить обратно.
+ */
+:root.reduce-motion {
+    scroll-behavior: auto;
+}
 
-    .toast {
-        animation: none;
-    }
+.reduce-motion .toast {
+    animation: none;
+}
 
-    /* Полоска заставки без анимации, сама заставка уходит как обычно */
-    .splash-progress::after {
-        animation: none;
-    }
+/* Полоска заставки без анимации, сама заставка уходит как обычно */
+.reduce-motion .splash-progress::after {
+    animation: none;
+}
 
-    /* Появление контента отключается: разделы и карточки показываются сразу */
-    .page-section.active,
-    .ft-stagger > *,
-    .ft-rise .team-gallery-item {
-        animation: none;
-    }
+/* Появление контента отключается: разделы и карточки показываются сразу */
+.reduce-motion .page-section.active,
+.reduce-motion .ft-stagger > *,
+.reduce-motion .ft-rise .team-gallery-item {
+    animation: none;
 }
 
 /* ==================================================================== */

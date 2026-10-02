@@ -309,14 +309,34 @@ function textOf(page, selector) {
 }
 
 /**
- * Значение плитки-счётчика после того, как оно «успокоилось»: на главной числа
- * набираются от нуля (до ~0,7 с с учётом страховочного таймера), поэтому читаем
- * не сразу, а когда анимация заведомо закончилась.
+ * Значение плитки-счётчика после того, как оно «успокоилось»: числа набираются
+ * (причём начинаются после заставки), поэтому читаем не сразу, а когда значение
+ * перестанет меняться.
  */
 async function settledText(page, selector) {
-    await new Promise((resolve) => setTimeout(resolve, 750));
+    await new Promise((resolve) => setTimeout(resolve, 400));
 
-    return textOf(page, selector);
+    let previous = await textOf(page, selector);
+    let stable = 0;
+
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 60));
+
+        const value = await textOf(page, selector);
+
+        if (value === previous) {
+            stable += 1;
+
+            if (stable >= 3) {
+                return value;
+            }
+        } else {
+            stable = 0;
+            previous = value;
+        }
+    }
+
+    return previous;
 }
 
 function clickAction(page, selector) {
@@ -2237,10 +2257,10 @@ test('оформление «Афиша матча»: включение в ад
 });
 
 /**
- * Движение: покачивание нот, латунный блик по табло и зерно бумаги объявлены стилями,
- * а системная настройка «меньше движения» их выключает — как и появление контента.
+ * Движение: покачивание нот, латунный блик и зерно бумаги объявлены стилями, а кнопка
+ * «Движение» в подвале выключает и включает анимации на устройстве.
  */
-test('движение: анимации объявлены, а при «меньше движения» выключаются', { skip }, async () => {
+test('движение: анимации объявлены, а кнопка в подвале их выключает и включает', { skip }, async () => {
     const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
 
     await page.evaluate(() => window.FTApp.theme.preview('afisha'));
@@ -2255,25 +2275,41 @@ test('движение: анимации объявлены, а при «мен�
             noteAnimation: getComputedStyle(note).animationName,
             noteTransform: getComputedStyle(note).transform,
             sheenAnimation: getComputedStyle(band, '::before').animationName,
-            grain: grain.indexOf('svg+xml') !== -1
+            grain: grain.indexOf('svg+xml') !== -1,
+            quiet: document.documentElement.classList.contains('reduce-motion'),
+            button: document.getElementById('motion-toggle').textContent
         };
     });
 
+    assert.equal(look.quiet, false, 'по умолчанию движение включено');
     assert.equal(look.noteAnimation, 'af-note-sway', 'ноты на табло покачиваются');
     assert.notEqual(look.noteTransform, 'none', 'у каждой ноты остался свой наклон');
     assert.equal(look.sheenAnimation, 'af-sheen', 'по табло идёт латунный блик');
     assert.equal(look.grain, true, 'на фоне «Афиши» есть зерно бумаги');
+    assert.match(look.button, /включено/);
 
-    // Системная настройка «меньше движения» выключает анимации
-    await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+    // Кнопка в подвале выключает движение — и всё замирает
+    await clickInView(page, '#motion-toggle');
+    await page.waitForFunction(() => document.documentElement.classList.contains('reduce-motion'));
 
     const quiet = await page.evaluate(() => ({
         note: getComputedStyle(document.querySelector('.hero-note-1')).animationName,
-        sheen: getComputedStyle(document.querySelector('.hero-band'), '::before').animationName
+        sheen: getComputedStyle(document.querySelector('.hero-band'), '::before').animationName,
+        section: getComputedStyle(document.querySelector('.page-section.active')).animationName,
+        button: document.getElementById('motion-toggle').textContent
     }));
 
-    assert.equal(quiet.note, 'none', 'при «меньше движения» ноты не качаются');
-    assert.equal(quiet.sheen, 'none', 'и латунный блик не идёт');
+    assert.equal(quiet.note, 'none', 'ноты перестали качаться');
+    assert.equal(quiet.sheen, 'none', 'латунный блик остановился');
+    assert.equal(quiet.section, 'none', 'разделы показываются без анимации');
+    assert.match(quiet.button, /выключено/);
+
+    // И включает обратно
+    await clickInView(page, '#motion-toggle');
+    await page.waitForFunction(() => !document.documentElement.classList.contains('reduce-motion'));
+
+    assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.hero-note-1')).animationName),
+        'af-note-sway', 'движение вернулось');
 
     assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), [],
         'нет ошибок консоли (в том числе CSP на зерно бумаги)');
