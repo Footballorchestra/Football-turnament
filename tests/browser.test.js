@@ -701,6 +701,52 @@ test('мобильное меню открывается и закрываетс
     await page.close();
 });
 
+/**
+ * Телефон, страница «Все игроки»: столбец «Команда» скрыт целиком — и в шапке, и в ячейках, —
+ * а команда выводится строкой под именем игрока. Освободившееся место отдано имени: раньше
+ * заголовок «Команда» оставался в шапке без класса .col-optional, держал свои 86 пикселей и
+ * сжимал имя до переноса каждого слова на отдельную строку — фамилия с именем вставали столбиком.
+ */
+test('телефон: в таблице «Все игроки» имя игрока читается в строку', { skip }, async () => {
+    const { page, problems } = await openPage({ mobile: true, isolated: true });
+
+    await page.evaluate(() => { window.location.hash = '#/allplayers'; });
+    await page.waitForFunction(() => document.querySelectorAll('#all-players-body tr').length > 5);
+
+    const view = await page.evaluate(() => {
+        const table = document.querySelector('#page-allplayers table');
+        const rows = Array.from(document.querySelectorAll('#all-players-body tr'));
+
+        return {
+            headers: Array.from(document.querySelectorAll('#all-players-head th')).map((cell) => ({
+                title: cell.textContent.replace(/[↕↑↓]/g, '').trim(),
+                width: Math.round(cell.getBoundingClientRect().width)
+            })),
+            names: rows.map((row) => {
+                const name = row.querySelector('.player-name');
+                const box = name.getBoundingClientRect();
+
+                return name.textContent + ' — строк ' +
+                    Math.round(box.height / parseFloat(getComputedStyle(name).lineHeight));
+            }),
+            teamsUnderNames: rows.filter((row) => row.querySelector('.row-detail').textContent.trim()).length,
+            overflow: Math.round(table.getBoundingClientRect().width - table.parentElement.clientWidth)
+        };
+    });
+
+    const team = view.headers.filter((cell) => cell.title === 'Команда')[0];
+
+    assert.equal(team.width, 0, 'столбец «Команда» скрыт в шапке так же, как в ячейках');
+    assert.deepEqual(view.headers.filter((cell) => cell.width > 0).map((cell) => cell.title),
+        ['Игрок', 'Г', 'Ж', 'К'], 'на телефоне остаются имя игрока, голы и карточки');
+    assert.ok(view.names.every((name) => name.endsWith('строк 1')), 'имена не переносятся: ' + view.names.join('; '));
+    assert.equal(view.teamsUnderNames, view.names.length, 'команда выводится под именем игрока');
+    assert.equal(view.overflow, 0, 'таблица не вылезает за край экрана');
+
+    assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), []);
+    await page.close();
+});
+
 test('сайт работает из подпапки — как на GitHub Pages для репозитория', { skip }, async () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'ft-pages-'));
     fs.symlinkSync(ROOT, path.join(tempRoot, 'repo'), 'dir');
@@ -2313,6 +2359,99 @@ test('движение: анимации объявлены, а кнопка в 
 
     assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), [],
         'нет ошибок консоли (в том числе CSP на зерно бумаги)');
+    await page.close();
+});
+
+/**
+ * Движение: полоса света идёт по табло, и нота, над которой она проходит, «подпрыгивает» —
+ * становится крупнее, ярче и качается шире, а когда полоса уходит, снова успокаивается.
+ * За откликом следит скрипт: он читает ход полосы у её же слоя, поэтому вспышки идут в такт.
+ */
+test('движение: ноты откликаются на блик, идущий по табло', { skip }, async () => {
+    const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
+
+    await page.evaluate(() => window.FTApp.theme.preview('afisha'));
+    await page.waitForFunction(() => document.body.classList.contains('theme-afisha'));
+
+    // Отклик в стилях: под бликом нота крупнее, выше и с большим махом
+    const look = await page.evaluate(() => {
+        const note = document.querySelector('.hero-note-1');
+        const read = () => {
+            const style = getComputedStyle(note);
+
+            return {
+                pop: style.getPropertyValue('--note-pop').trim(),
+                swing: style.getPropertyValue('--note-swing').trim(),
+                lift: style.getPropertyValue('--note-lift').trim()
+            };
+        };
+        const calm = read();
+
+        note.classList.add('is-lit');
+
+        const lit = read();
+
+        note.classList.remove('is-lit');
+
+        return { calm: calm, lit: lit };
+    });
+
+    assert.deepEqual(look.calm, { pop: '1', swing: '4deg', lift: '2px' }, 'в покое нота качается тихо');
+    assert.deepEqual(look.lit, { pop: '1.22', swing: '14deg', lift: '8px' }, 'под бликом нота подпрыгивает');
+
+    /* Полосу света ведём руками: проверка не зависит от того, в какой момент открылась
+       страница. Ноты должны вспыхивать по очереди — по мере того как полоса идёт над ними. */
+    const lit = await page.evaluate(async () => {
+        const sheen = document.getAnimations().filter((item) => item.animationName === 'af-sheen')[0];
+        const notes = Array.from(document.querySelectorAll('.hero-note'));
+
+        if (!sheen) {
+            return null;
+        }
+
+        sheen.pause();
+
+        const seen = [];
+        const frame = () => new Promise((resolve) => { requestAnimationFrame(() => { setTimeout(resolve, 60); }); });
+
+        for (let time = 0; time <= 4200; time += 300) {
+            sheen.currentTime = time;
+            await frame();
+
+            notes.forEach((note, index) => {
+                if (note.classList.contains('is-lit') && seen.indexOf(index + 1) === -1) {
+                    seen.push(index + 1);
+                }
+            });
+        }
+
+        sheen.play();
+
+        return seen;
+    });
+
+    assert.ok(lit, 'полоса света нашлась среди анимаций страницы');
+    assert.ok(lit.length >= 4, 'ноты вспыхивают, когда полоса идёт над ними: ' + lit.join(','));
+
+    // Со страницы ушли — отклик снят, ноты снова в покое
+    await page.evaluate(() => window.FTApp.navigate('standings'));
+
+    assert.equal(await page.evaluate(() => document.querySelectorAll('.hero-note.is-lit').length), 0,
+        'на другой странице ноты остаются в покое');
+
+    // Движение выключили — вспышек больше нет
+    await page.evaluate(() => {
+        window.FTApp.navigate('home');
+        document.getElementById('motion-toggle').click();
+    });
+    await page.waitForFunction(() => document.documentElement.classList.contains('reduce-motion'));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    assert.equal(await page.evaluate(() => document.querySelectorAll('.hero-note.is-lit').length), 0,
+        'при «меньше движения» ноты не вспыхивают');
+
+    assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), [],
+        'нет ошибок консоли');
     await page.close();
 });
 

@@ -1162,6 +1162,13 @@
         body.classList.toggle('theme-afisha', theme === 'afisha');
         body.setAttribute('data-theme', theme);
 
+        /* Блик и отклик нот есть только в «Афише»: в другом оформлении слежение снимаем */
+        if (theme === 'afisha') {
+            startNoteSheen();
+        } else {
+            stopNoteSheen();
+        }
+
         // Цвет адресной строки на телефоне подстраивается под оформление
         var meta = document.querySelector('meta[name="theme-color"]');
 
@@ -1762,6 +1769,14 @@
         writeStoredValue(MOTION_KEY, next);
         applyMotion();
         renderMotionControl();
+
+        /* Слежение за бликом живёт по тому же выбору: выключили движение — ноты замерли */
+        if (reduceMotion()) {
+            stopNoteSheen();
+        } else {
+            startNoteSheen();
+        }
+
         toast(next === 'on'
             ? 'Анимации включены на этом устройстве'
             : 'Анимации выключены: сайт будет показываться без движения', 'info');
@@ -1780,6 +1795,109 @@
     /** Можно ли проигрывать движение вообще (для полноэкранных слоёв вроде просмотра фото). */
     function motionAllowed() {
         return !reduceMotion();
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Блик по табло: ноты откликаются, когда полоса света идёт над ними    */
+    /* ------------------------------------------------------------------ */
+
+    /* Ширина полосы света в долях табло — та же, что в af-sheen (src/theme-afisha.css).
+       Нужна только как запас: обычно браузер отдаёт готовую ширину слоя в пикселях. */
+    var SHEEN_WIDTH = 0.46;
+
+    /* Отклик сверяем ~30 раз в секунду: чаще незачем, глаз разницы не видит */
+    var SHEEN_STEP = 33;
+
+    var sheenFrame = null;
+    var sheenCheckedAt = 0;
+
+    /** Ноты табло (на телефоне часть из них скрыта стилями). */
+    function heroNotes() {
+        return qsa('.hero-note');
+    }
+
+    /** Снимает отклик: ноты возвращаются в покой. */
+    function stopNoteSheen() {
+        if (sheenFrame !== null) {
+            window.cancelAnimationFrame(sheenFrame);
+            sheenFrame = null;
+        }
+
+        heroNotes().forEach(function (note) {
+            note.classList.remove('is-lit');
+        });
+    }
+
+    /**
+     * Следит за бликом на табло: пока полоса света идёт над нотой, та подпрыгивает
+     * и качается шире (стиль .hero-note.is-lit), а как только полоса ушла — успокаивается.
+     * Место полосы читаем у готового слоя, который двигает CSS-анимация: так отклик идёт
+     * ровно в такт и не нужен второй набор таймингов, который со временем разъехался бы.
+     */
+    function watchNoteSheen(time) {
+        var hero = document.querySelector('.hero-band');
+
+        if (!hero || !motionAllowed() || document.hidden || hero.offsetParent === null ||
+                activeTheme() !== 'afisha') {
+            sheenFrame = null;
+            return;
+        }
+
+        sheenFrame = window.requestAnimationFrame(watchNoteSheen);
+
+        if (time - sheenCheckedAt < SHEEN_STEP) {
+            return;
+        }
+
+        sheenCheckedAt = time;
+
+        var layer = window.getComputedStyle(hero, '::before');
+
+        /* Блика нет — откликаться не на что. Так ноты не «залипнут» крупными и яркими,
+           если полоса почему-то не двигается (например, анимации сняты стилями темы). */
+        var runs = layer.animationName !== 'none' && layer.animationName !== '';
+        var shift = 0;
+        var matrix = layer.transform;
+
+        // matrix(a, b, c, d, e, f): e — насколько полоса сдвинута по горизонтали
+        if (matrix && matrix.indexOf('matrix') === 0) {
+            shift = parseFloat(matrix.slice(matrix.indexOf('(') + 1, -1).split(',')[4]) || 0;
+        }
+
+        var box = hero.getBoundingClientRect();
+        var width = parseFloat(layer.width) || box.width * SHEEN_WIDTH;
+        var from = box.left + shift;
+        var to = from + width;
+
+        heroNotes().forEach(function (note) {
+            /* Место ноты — по её рамке: у SVG нет offsetLeft/offsetWidth, а покачивание
+               сдвигает рамку на считаные пиксели, для полосы шириной в пол-табло это ничто */
+            var noteBox = note.getBoundingClientRect();
+
+            if (!noteBox.width) {
+                note.classList.remove('is-lit'); // нота скрыта на этом экране
+                return;
+            }
+
+            var middle = noteBox.left + noteBox.width / 2;
+
+            note.classList.toggle('is-lit', runs && middle >= from && middle <= to);
+        });
+    }
+
+    /** Включает слежение за бликом; повторный вызов ничего не меняет. */
+    function startNoteSheen() {
+        if (sheenFrame !== null || !motionAllowed() || document.hidden || activeTheme() !== 'afisha') {
+            return;
+        }
+
+        // jsdom и скрытое табло: показывать нечего — кадры не запрашиваем
+        if (!canAnimate(document.querySelector('.hero-band'))) {
+            return;
+        }
+
+        sheenCheckedAt = 0;
+        sheenFrame = window.requestAnimationFrame(watchNoteSheen);
     }
 
     /** «Набирает» число до нового значения: первое число на главной едет от нуля,
@@ -2381,7 +2499,9 @@
         if (head) {
             head.innerHTML = '<tr>' +
                 sortHeader('allPlayers', 'player', 'Игрок') +
-                sortHeader('allPlayers', 'teamName', 'Команда') +
+                // На телефоне столбец «Команда» скрыт (см. .col-optional в src/input.css)
+                // вместе с ячейками — иначе заголовок держит место и сжимает имя игрока
+                sortHeader('allPlayers', 'teamName', 'Команда', { className: 'col-optional' }) +
                 sortHeader('allPlayers', 'goals', 'Г', { className: 'num', title: 'Забитые голы' }) +
                 sortHeader('allPlayers', 'yellow', 'Ж', { className: 'num', title: 'Жёлтые карточки' }) +
                 sortHeader('allPlayers', 'red', 'К', { className: 'num', title: 'Красные карточки' }) +
@@ -4370,6 +4490,14 @@
 
         renderBackButton();
         playStagger();
+
+        /* Блик по табло и отклик нот — только на главной: там сам табло и есть.
+           Уходим на другую страницу — снимаем отклик, ноты остаются чистыми. */
+        if (target === 'home') {
+            startNoteSheen();
+        } else {
+            stopNoteSheen();
+        }
     }
 
     function prepareAdminPage() {
@@ -5322,6 +5450,16 @@
                 playerIndex: parsed.playerIndex,
                 replace: true
             });
+        });
+
+        /* В фоновой вкладке кадры не идут: слежение за бликом останавливаем, а при
+           возвращении запускаем снова — иначе отклик замерзал бы на полуслове. */
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) {
+                stopNoteSheen();
+            } else if (state.route === 'home') {
+                startNoteSheen();
+            }
         });
     }
 

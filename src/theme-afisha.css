@@ -438,8 +438,14 @@ body.theme-afisha .hero-note {
     --note-angle: 0deg;
     --note-speed: 5.6s;
     --note-delay: 0s;
-    transform: rotate(var(--note-angle));
+    --note-swing: 4deg;
+    --note-lift: 2px;
+    --note-drift: 2px;
+    --note-pop: 1;
+    transform: rotate(var(--note-angle)) scale(var(--note-pop));
     animation: af-note-sway var(--note-speed) ease-in-out var(--note-delay) infinite;
+    /* Вспышка под бликом и возврат в покой — плавно, сам мах анимация меняет сразу */
+    transition: opacity 0.25s ease, color 0.25s ease;
 }
 
 body.theme-afisha .hero-note-1 {
@@ -540,10 +546,37 @@ body.theme-afisha .hero-note-9 {
     --note-delay: -3.4s;
 }
 
-/* Покачивание вокруг своего наклона: ±4° и лёгкий подъём-опускание */
+/*
+ * Покачивание вокруг своего наклона: размах, подъём, дрейф и «подскок» задаются переменными,
+ * поэтому на телефоне (ноты мелкие) движение можно сделать заметнее, а под бликом — крупнее.
+ */
 @keyframes af-note-sway {
-    0%, 100% { transform: rotate(calc(var(--note-angle) - 4deg)) translateY(-2px); }
-    50% { transform: rotate(calc(var(--note-angle) + 4deg)) translateY(2px); }
+    0%, 100% {
+        transform: rotate(calc(var(--note-angle) - var(--note-swing)))
+            translate(calc(-1 * var(--note-drift)), calc(-1 * var(--note-lift)))
+            scale(var(--note-pop));
+    }
+    50% {
+        transform: rotate(calc(var(--note-angle) + var(--note-swing)))
+            translate(var(--note-drift), var(--note-lift))
+            scale(var(--note-pop));
+    }
+}
+
+/*
+ * Нота, над которой идёт полоса света: «подпрыгивает» — сразу становится крупнее и ярче,
+ * а мах, подъём и дрейф подрастают, поэтому дальше она качается шире. Класс is-lit ставит
+ * и снимает скрипт (watchNoteSheen в assets/js/app.js): он следит за ходом блика и сверяет
+ * его с местом ноты. Полоса уходит — нота снова в покое: переменные возвращаются к обычным,
+ * а яркость гаснет по transition выше.
+ */
+body.theme-afisha .hero-note.is-lit {
+    --note-swing: 14deg;
+    --note-lift: 8px;
+    --note-drift: 9px;
+    --note-pop: 1.22;
+    opacity: 1;
+    color: #f7e3ad;
 }
 
 @media (max-width: 767px) {
@@ -551,40 +584,46 @@ body.theme-afisha .hero-note-9 {
         display: none;
     }
 
+    /* На телефоне места мало: ноты некрупные, но ярче и с большим махом —
+       движение задаётся в пикселях, поэтому заметно даже у небольших значков,
+       а под текстом они лежат как водяной знак и чтению не мешают. */
     body.theme-afisha .hero-note-3,
     body.theme-afisha .hero-note-5,
     body.theme-afisha .hero-note-6,
     body.theme-afisha .hero-note-7 {
         display: block;
-        opacity: 0.3;
+        opacity: 0.5;
+        --note-swing: 8deg;
+        --note-lift: 3px;
+        --note-drift: 4px;
     }
 
     body.theme-afisha .hero-note-3 {
-        top: 5%;
-        right: 5%;
-        width: 26px;
-        height: 26px;
-    }
-
-    body.theme-afisha .hero-note-5 {
-        top: 58%;
-        right: 12%;
+        top: 4%;
+        right: 4%;
         width: 28px;
         height: 28px;
     }
 
+    body.theme-afisha .hero-note-5 {
+        top: 56%;
+        right: 8%;
+        width: 30px;
+        height: 30px;
+    }
+
     body.theme-afisha .hero-note-6 {
-        top: 72%;
-        right: 40%;
-        width: 34px;
-        height: 34px;
+        top: 76%;
+        right: 42%;
+        width: 36px;
+        height: 36px;
     }
 
     body.theme-afisha .hero-note-7 {
-        top: 74%;
-        right: 5%;
-        width: 26px;
-        height: 26px;
+        top: 78%;
+        right: 4%;
+        width: 28px;
+        height: 28px;
     }
 }
 
