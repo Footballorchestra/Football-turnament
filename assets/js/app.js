@@ -2063,16 +2063,59 @@
     /* Отсчёт до ближайшего матча                                          */
     /* ------------------------------------------------------------------ */
 
-    /* Раз в 20 секунд достаточно: на билетах видны минуты, и «через 20 минут»
-       не должен отставать от часов. Кадры запрашиваем только пока главная
-       открыта и вкладка видима — как у блика по табло. */
+    /* Раз в 20 секунд достаточно для отсчёта словами: «через 20 минут» не должен
+       отставать от часов. Посекундное табло афиши требует шага в секунду.
+       Кадры запрашиваем только пока главная открыта и вкладка видима — как у блика по табло. */
     var COUNTDOWN_STEP = 20000;
+    var COUNTDOWN_TICK = 1000;
     var countdownFrame = null;
     var countdownCheckedAt = 0;
 
+    /** Шаг обновления: посекундный отсчёт афиши — секунда, отсчёт словами — 20 секунд. */
+    function countdownStep() {
+        return qsa('[data-countdown-block].is-parts').length ? COUNTDOWN_TICK : COUNTDOWN_STEP;
+    }
+
+    /** Двузначное число для табло: «7» → «07». */
+    function twoDigits(value) {
+        return (value < 10 ? '0' : '') + value;
+    }
+
     /**
-     * Обновляет отсчёты на странице (элементы data-countdown) и прячет пустые:
-     * в прошлое не показываем ничего — вместо выдуманного статуса видна дата.
+     * Разметка посекундного отсчёта: значение и подпись — отдельными плитками.
+     * Плитка дней показывается, только пока сутки остались: меньше суток — табло
+     * читается как «часы · минуты · секунды».
+     */
+    function countdownPartsHtml(parts) {
+        var tiles = parts.days > 0
+            ? [{
+                part: 'days',
+                value: String(parts.days),
+                unit: L.pluralWord(parts.days, 'день', 'дня', 'дней')
+            }]
+            : [];
+
+        tiles.push({ part: 'hours', value: twoDigits(parts.hours), unit: 'часов' });
+        tiles.push({ part: 'minutes', value: twoDigits(parts.minutes), unit: 'минут' });
+        tiles.push({ part: 'seconds', value: twoDigits(parts.seconds), unit: 'секунд' });
+
+        return tiles.map(function (tile) {
+            return '<span class="countdown-part" data-part="' + tile.part + '">' +
+                '<span class="countdown-value">' + tile.value + '</span>' +
+                '<span class="countdown-unit">' + esc(tile.unit) + '</span>' +
+            '</span>';
+        }).join('');
+    }
+
+    /**
+     * Обновляет отсчёты на странице и прячет пустые: в прошлое не показываем
+     * ничего — вместо выдуманного статуса видна дата.
+     *
+     * Два вида отсчёта:
+     * — [data-countdown] — коротко словами («через 4 дня»): на билетах и в списках;
+     * — [data-countdown-block] — табло афиши на главной: плитки «дни · часы · минуты ·
+     *   секунды», пока известно время начала. Без времени секунды отсчитывать не от
+     *   чего, поэтому табло уступает место словам — точность не выдумывается.
      */
     function renderCountdowns() {
         var now = new Date();
@@ -2087,12 +2130,26 @@
 
             element.classList.toggle('is-empty', !label);
         });
+
+        qsa('[data-countdown-block]').forEach(function (element) {
+            var match = findMatch(element.getAttribute('data-id'));
+            var parts = match ? L.countdownParts(match, now) : null;
+            var label = match ? L.countdownLabel(match, now) : '';
+            var html = parts ? countdownPartsHtml(parts) : esc(label);
+
+            if (element.innerHTML !== html) {
+                element.innerHTML = html;
+            }
+
+            element.classList.toggle('is-parts', Boolean(parts));
+            element.classList.toggle('is-empty', !parts && !label);
+        });
     }
 
     function watchCountdowns(time) {
         countdownFrame = window.requestAnimationFrame(watchCountdowns);
 
-        if (time - countdownCheckedAt < COUNTDOWN_STEP) {
+        if (time - countdownCheckedAt < countdownStep()) {
             return;
         }
 
@@ -2247,15 +2304,20 @@
     }
 
     /**
-     * Афиша ближайшего матча на главной: крупно команды, дата с временем и живой
-     * отсчёт до начала. Когда турнир доигран, та же афиша показывает последний
-     * матч со счётом — главная не остаётся пустой.
+     * Афиша ближайшего матча на главной — табло, а не билет: дата со статусом,
+     * посекундный отсчёт до начала, команды и дисквалификации — под названием
+     * своей команды, чтобы сразу было видно, кого теряет каждая из них.
+     * Отсчёт (data-countdown-block) ведёт app.js: пока время начала не назначено,
+     * плитки уступают место короткой строке словами («через 4 дня»).
+     * Когда турнир доигран, та же афиша показывает последний матч со счётом —
+     * главная не остаётся пустой.
      */
     function nextMatchCard(match) {
         var teamA = L.findTeam(state.data.teams, match.teamA);
         var teamB = L.findTeam(state.data.teams, match.teamB);
         var marksA = teamMarks(match, match.teamA);
         var marksB = teamMarks(match, match.teamB);
+        var bans = L.matchSuspensions(state.data, match.id);
         var middle = match.finished
             ? '<span class="score-display">' + match.scoreA + ' : ' + match.scoreB + '</span>'
             : '<span class="next-match-vs">против</span>';
@@ -2263,24 +2325,53 @@
         return '' +
             '<article class="match-card next-match-card ' + (match.finished ? 'finished' : 'upcoming') + '"' +
                 ' data-action="match-public-open" data-id="' + match.id + '" title="Подробности матча">' +
-                '<p class="next-match-countdown is-empty" data-countdown data-id="' + L.toInt(match.id) + '"></p>' +
+                '<div class="next-match-when">' +
+                    matchWhenLine(match, false) +
+                    statusPill(match) +
+                '</div>' +
+                '<div class="next-match-countdown is-empty" data-countdown-block data-id="' +
+                    L.toInt(match.id) + '"></div>' +
                 '<div class="next-match-line">' +
                     '<div class="next-match-side">' +
                         teamLink(teamA, teamA ? teamA.name : 'Команда удалена', false, false) +
                         (marksA ? '<div class="match-side-marks">' + marksA + '</div>' : '') +
+                        nextMatchBans(teamBans(bans, match.teamA), match) +
                     '</div>' +
                     '<div class="next-match-middle">' + middle + '</div>' +
                     '<div class="next-match-side next-match-side-away">' +
                         teamLink(teamB, teamB ? teamB.name : 'Команда удалена', true, false) +
                         (marksB ? '<div class="match-side-marks match-side-marks-away">' + marksB + '</div>' : '') +
+                        nextMatchBans(teamBans(bans, match.teamB), match) +
                     '</div>' +
                 '</div>' +
-                '<div class="next-match-when">' +
-                    matchWhenLine(match, false) +
-                    statusPill(match) +
-                '</div>' +
-                matchBanLine(match) +
             '</article>';
+    }
+
+    /** Дисквалифицированные игроки указанной команды: в афише стоят под её названием. */
+    function teamBans(entries, teamId) {
+        var id = L.toInt(teamId);
+
+        return entries.filter(function (entry) {
+            return entry.teamId === id;
+        });
+    }
+
+    /**
+     * Кто из игроков команды пропускает этот матч: имя с подсказкой о причине карточки.
+     * Если дисквалификаций нет, строки нет вовсе — афиша не пугает зря.
+     */
+    function nextMatchBans(entries, match) {
+        if (!entries.length) {
+            return '';
+        }
+
+        var what = match.finished ? 'Пропустил матч: ' : 'Пропустит матч: ';
+
+        return '<div class="next-match-bans">' + entries.map(function (entry) {
+            return '<span class="next-match-ban" title="' + esc(what + banReasonText(entry)) + '">' +
+                icon('card-red') + esc(entry.player) +
+            '</span>';
+        }).join('') + '</div>';
     }
 
 

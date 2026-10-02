@@ -490,8 +490,19 @@
     }
 
     /* --- Афиша ближайшего матча на главной ---
-       Тот же билет, но крупнее: команды заметны сразу, а отсчёт до начала
-       стоит отдельной строкой над ними. Отсчёт ставит app.js (data-countdown). */
+       Табло, а не билет: дата со статусом, посекундный отсчёт плитками, команды
+       и дисквалификации под названием своей команды. Отсчёт ведёт app.js
+       (data-countdown-block); пока времени начала нет, плитки уступают место
+       короткой строке словами («через 4 дня»). */
+    .next-match-card .next-match-when {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        font-size: 0.75rem;
+        color: #5f6368;
+    }
+
     .next-match-card .next-match-line {
         display: flex;
         align-items: center;
@@ -530,11 +541,12 @@
         color: #5f6368;
     }
 
+    /* Отсчёт словами: пока у матча нет времени начала, секунды отсчитывать не от чего */
     .next-match-card .next-match-countdown {
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-        margin-bottom: 0.75rem;
+        margin: 0.75rem 0;
         padding: 0.25rem 0.65rem;
         border-radius: 9999px;
         background: #e8f5e9;
@@ -544,7 +556,7 @@
     }
 
     /* Точка перед отсчётом вместо отдельной иконки: видно, что это живое значение */
-    .next-match-card .next-match-countdown::before {
+    .next-match-card .next-match-countdown:not(.is-parts)::before {
         content: '';
         width: 0.45rem;
         height: 0.45rem;
@@ -553,14 +565,68 @@
         opacity: 0.75;
     }
 
-    .next-match-card .next-match-when {
+    /* Табло отсчёта: дни (пока остались), часы, минуты и секунды — плитками,
+       каждое значение отдельно и со своей подписью */
+    .next-match-card .next-match-countdown.is-parts {
         display: flex;
         flex-wrap: wrap;
+        gap: 0.375rem;
+        margin: 0.875rem 0;
+        padding: 0;
+        background: none;
+        border-radius: 0;
+        font-weight: 700;
+    }
+
+    .next-match-card .countdown-part {
+        display: flex;
+        flex-direction: column;
         align-items: center;
-        gap: 0.5rem 0.75rem;
-        margin-top: 0.75rem;
-        font-size: 0.75rem;
-        color: #5f6368;
+        min-width: 3.5rem;
+        padding: 0.375rem 0.5rem;
+        border-radius: 8px;
+        background: #e8f5e9;
+        color: #1b5e20;
+        line-height: 1.15;
+    }
+
+    .next-match-card .countdown-value {
+        font-size: 1.25rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .next-match-card .countdown-unit {
+        font-size: 0.625rem;
+        font-weight: 500;
+        color: #2e7d32;
+    }
+
+    /* --- Дисквалификации в афише: игрок стоит под названием своей команды --- */
+    .next-match-card .next-match-bans {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.125rem;
+        margin-top: 0.375rem;
+        font-size: 0.6875rem;
+        font-weight: 500;
+        color: #b3261e;
+    }
+
+    .next-match-card .next-match-side-away .next-match-bans {
+        align-items: flex-end;
+    }
+
+    .next-match-card .next-match-ban {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+    }
+
+    .next-match-card .next-match-ban .icon {
+        width: 0.85rem;
+        height: 0.85rem;
+        flex: none;
     }
 
     /* --- Отсчёт в обычном билете: маленькая отметка рядом с датой --- */
@@ -2317,7 +2383,29 @@
     .next-match-card .next-match-countdown {
         font-size: 0.75rem;
         padding: 0.2rem 0.5rem;
-        margin-bottom: 0.6rem;
+        margin: 0.6rem 0;
+    }
+
+    /* На телефоне плитки отсчёта компактнее, но остаются в одну строку */
+    .next-match-card .next-match-countdown.is-parts {
+        padding: 0;
+        gap: 0.25rem;
+    }
+
+    .next-match-card .countdown-part {
+        min-width: 2.9rem;
+        padding: 0.3rem 0.375rem;
+    }
+
+    .next-match-card .countdown-value {
+        font-size: 1.0625rem;
+    }
+
+    /* Команды встали друг под друга — дисквалификации тоже по центру */
+    .next-match-card .next-match-bans,
+    .next-match-card .next-match-side-away .next-match-bans {
+        align-items: center;
+        text-align: center;
     }
 
     /* В карточке матча на телефоне названия команд важнее бейджей:

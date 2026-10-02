@@ -781,6 +781,28 @@ body.theme-afisha .next-match-card .next-match-countdown {
     color: #1c1608;
 }
 
+/* Посекундное табло: латунью светится каждая плитка, а не общий фон.
+   Дни, часы, минуты и секунды читаются как цифры на вывеске у входа. */
+body.theme-afisha .next-match-card .next-match-countdown.is-parts {
+    background: none;
+    color: #f6f3ec;
+}
+
+body.theme-afisha .next-match-card .countdown-part {
+    background: linear-gradient(155deg, #d9b75f, #a8802c);
+    color: #1c1608;
+    box-shadow: 0 0 0 1px rgba(28, 22, 8, 0.35);
+}
+
+body.theme-afisha .next-match-card .countdown-unit {
+    color: rgba(28, 22, 8, 0.72);
+}
+
+/* Дисквалификации на тёмном табло — тлеющий красный вместо кирпича на бумаге */
+body.theme-afisha .next-match-card .next-match-bans {
+    color: #f0a9a2;
+}
+
 /* Отметка статуса на тёмном табло — как латунная наклейка */
 body.theme-afisha .next-match-card .status-pill.upcoming {
     background: rgba(217, 183, 95, 0.22);

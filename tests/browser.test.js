@@ -2195,15 +2195,27 @@ test('главная: ближайший матч с отсчётом до на�
         const card = document.querySelector('#next-match .match-card');
         const countdown = card.querySelector('.next-match-countdown');
         const box = countdown.getBoundingClientRect();
+        const tiles = Array.from(countdown.querySelectorAll('.countdown-part'));
 
         return {
             id: card.getAttribute('data-id'),
             title: document.getElementById('next-match-title').textContent.trim(),
-            countdown: countdown.textContent.trim(),
+            countdown: countdown.textContent.replace(/\s+/g, ' ').trim(),
+            parts: tiles.map((tile) => tile.getAttribute('data-part')),
+            values: tiles.map((tile) => tile.querySelector('.countdown-value').textContent.trim()),
+            units: tiles.map((tile) => tile.querySelector('.countdown-unit').textContent.trim()),
+            seconds: countdown.querySelector('[data-part="seconds"] .countdown-value').textContent.trim(),
             shown: box.width > 0 && box.height > 0,
             width: Math.round(box.width),
             when: card.querySelector('.next-match-when').textContent.replace(/\s+/g, ' ').trim(),
             teams: Array.from(card.querySelectorAll('.team-name')).map((element) => element.textContent.trim()),
+            stacked: (() => {
+                // Блоки главной стоят друг под другом, а не рядом: второй ниже первого
+                const above = document.querySelector('#next-match').closest('.card').getBoundingClientRect();
+                const below = document.querySelector('#upcoming-matches').closest('.card').getBoundingClientRect();
+
+                return below.top >= above.bottom - 1 && Math.abs(below.left - above.left) < 1;
+            })(),
             list: Array.from(document.querySelectorAll('#upcoming-matches .match-card')).map((element) => ({
                 id: element.getAttribute('data-id'),
                 countdown: element.querySelector('.match-countdown').textContent.trim()
@@ -2214,13 +2226,26 @@ test('главная: ближайший матч с отсчётом до на�
 
     assert.equal(view.title, 'Ближайший матч');
     assert.equal(view.id, '2', 'афиша показывает ближайший по расписанию матч');
-    assert.equal(view.countdown, 'завтра в 19:30', 'отсчёт до начала матча: ' + view.countdown);
+    assert.deepEqual(view.parts.slice(-3), ['hours', 'minutes', 'seconds'],
+        'часы, минуты и секунды — отдельными плитками: ' + view.parts.join(' · '));
+    assert.equal(view.parts[0], view.parts.length === 4 ? 'days' : 'hours',
+        'плитка дней показывается, пока сутки остались');
+    assert.deepEqual(view.units.slice(-3), ['часов', 'минут', 'секунд']);
+    view.values.forEach((value) => assert.match(value, /^\d{1,2}$/, 'значение плитки: ' + value));
     assert.ok(view.shown, 'отсчёт отрисован стилями: ' + view.width + 'px');
     assert.match(view.when, /19:30/, 'время начала видно в строке даты: ' + view.when);
     assert.deepEqual(view.teams, ['ФК МГСО', 'Ветераны МГК']);
     assert.deepEqual(view.list, [{ id: '3', countdown: 'через 4 дня' }],
         'остальные матчи — со своим коротким отсчётом');
     assert.equal(view.overflow, 0, 'на телефоне страница не выходит за экран');
+    assert.ok(view.stacked, 'блоки главной стоят друг под другом на всю ширину');
+
+    // Секунды идут сами: счётчик живой, а не застывший
+    await new Promise((resolve) => setTimeout(resolve, 1400));
+
+    const secondsAfter = await textOf(page, '#next-match [data-part="seconds"] .countdown-value');
+
+    assert.notEqual(secondsAfter, view.seconds, 'посекундный отсчёт обновляется сам');
 
     assert.deepEqual(problems, [], 'нет ошибок консоли и сбоев загрузки');
     await close();

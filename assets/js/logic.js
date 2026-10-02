@@ -402,6 +402,46 @@
     }
 
     /**
+     * Отсчёт до начала матча по частям: дни, часы, минуты и секунды — для табло
+     * на главной, где счёт идёт посекундно.
+     *
+     * Возвращает null, когда счётчика быть не должно: матч сыгран, дата или время
+     * начала неизвестны, начало уже прошло. Без времени начала секунды отсчитывать
+     * не от чего — получилась бы выдуманная точность до полуночи; в этом случае
+     * текст отсчёта берётся из countdownLabel («через 4 дня»).
+     *
+     * days — целые сутки, оставшиеся до начала: когда их не осталось, плитка дней
+     * не показывается и табло читается как «часы · минуты · секунды».
+     * now передаётся явно, чтобы отсчёт можно было проверить.
+     */
+    function countdownParts(match, now) {
+        if (isFinished(match) || !normalizeMatchTime(match.time)) {
+            return null;
+        }
+
+        var start = matchStart(match);
+
+        if (!start) {
+            return null;
+        }
+
+        var current = (now instanceof Date && !Number.isNaN(now.getTime())) ? now : new Date();
+        var total = Math.floor((start.getTime() - current.getTime()) / 1000);
+
+        if (total < 0) {
+            return null;
+        }
+
+        return {
+            days: Math.floor(total / 86400),
+            hours: Math.floor(total / 3600) % 24,
+            minutes: Math.floor(total / 60) % 60,
+            seconds: total % 60,
+            total: total
+        };
+    }
+
+    /**
      * Форматирование даты без зависимости от локали браузера.
      * style: 'short' → «10 сент.», 'long' → «10 сентября 2026», 'numeric' → «10.09.2026».
      */
@@ -2699,6 +2739,7 @@
         normalizeMatchTime: normalizeMatchTime,
         matchStart: matchStart,
         countdownLabel: countdownLabel,
+        countdownParts: countdownParts,
         formatMatchWhen: formatMatchWhen,
         pluralWord: pluralWord,
         validateMatchInput: validateMatchInput,

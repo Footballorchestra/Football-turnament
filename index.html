@@ -47,11 +47,11 @@
 
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=52">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=53">
     <!-- Второй стиль «Афиша матча». Файл подключён всегда, но применяется только тогда,
          когда администратор включил этот стиль в панели: все правила внутри ограничены
          классом theme-afisha на <body> (см. applyTheme в assets/js/app.js). -->
-    <link rel="stylesheet" href="assets/css/theme-afisha.css?v=52">
+    <link rel="stylesheet" href="assets/css/theme-afisha.css?v=53">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -335,8 +335,8 @@
 
         <!-- ============================ ГЛАВНАЯ ============================ -->
         <section id="page-home" class="page-section active">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Ближайший матч: афиша с живым отсчётом до начала. Когда все матчи
+            <div class="grid grid-cols-1 gap-6">
+                <!-- Ближайший матч: афиша с живым табло до начала. Когда все матчи
                      сыграны, app.js меняет заголовок на «Последний матч» и показывает
                      результат — главная не остаётся пустой. -->
                 <div class="card panel panel-next">
@@ -351,7 +351,7 @@
                     <div id="next-match" class="p-4"></div>
                 </div>
 
-                <!-- Следующие матчи: ближайший уже показан слева, здесь — остальные.
+                <!-- Следующие матчи: ближайший уже показан выше, здесь — остальные.
                      Результаты отдельного блока не требуют: они в один клик по плитке
                      «Завершено» над этим блоком. -->
                 <div class="card panel panel-upcoming">
@@ -933,12 +933,12 @@
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
     <!-- На GitHub Pages заголовки ответа задать нельзя, поэтому страница сама проверяет,
          не встроена ли она в чужой iframe. Скрипт идёт первым, до кода приложения. -->
-    <script src="assets/js/frame-guard.js?v=52" defer></script>
-    <script src="assets/js/config.js?v=52" defer></script>
-    <script src="assets/js/splash.js?v=52" defer></script>
-    <script src="assets/js/logic.js?v=52" defer></script>
-    <script src="assets/js/sync.js?v=52" defer></script>
-    <script src="assets/js/photo.js?v=52" defer></script>
-    <script src="assets/js/app.js?v=52" defer></script>
+    <script src="assets/js/frame-guard.js?v=53" defer></script>
+    <script src="assets/js/config.js?v=53" defer></script>
+    <script src="assets/js/splash.js?v=53" defer></script>
+    <script src="assets/js/logic.js?v=53" defer></script>
+    <script src="assets/js/sync.js?v=53" defer></script>
+    <script src="assets/js/photo.js?v=53" defer></script>
+    <script src="assets/js/app.js?v=53" defer></script>
 </body>
 </html>

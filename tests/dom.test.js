@@ -185,7 +185,8 @@ test('главная страница: активна только она, ст�
     assert.equal(app.id('stat-players').textContent, '9');
     assert.equal(app.id('stat-finished').textContent, '2');
 
-    // Слева — афиша ближайшего из предстоящих матчей: команды, дата с временем и отсчёт
+    // Ближайший из предстоящих матчей — отдельным блоком выше расписания:
+    // команды, дата с временем и посекундное табло до начала
     const featured = app.id('next-match').querySelector('.match-card.next-match-card');
 
     assert.ok(featured, 'афиша ближайшего матча показана');
@@ -196,11 +197,28 @@ test('главная страница: активна только она, ст�
 
     const match = app.storedData().matches.find((item) => item.id === 3);
     const countdown = featured.querySelector('.next-match-countdown');
+    const parts = L.countdownParts(match, new Date());
 
-    assert.equal(countdown.textContent, L.countdownLabel(match, new Date()), 'отсчёт совпадает с датой матча');
+    assert.ok(parts, 'до матча со временем начала идёт посекундный отсчёт');
+    assert.ok(countdown.classList.contains('is-parts'), 'отсчёт показан плитками, а не строкой');
     assert.equal(countdown.classList.contains('is-empty'), false, 'отсчёт не пустой');
 
-    // Справа — остальные предстоящие матчи: афиша слева не повторяется
+    const tiles = Array.from(countdown.querySelectorAll('.countdown-part'));
+
+    // Дни показываются, только пока сутки остались; часы, минуты и секунды — всегда
+    assert.ok(tiles.length === 4 || tiles.length === 3, 'плиток отсчёта: ' + tiles.length);
+    assert.deepEqual(tiles.slice(-3).map((tile) => tile.getAttribute('data-part')),
+        ['hours', 'minutes', 'seconds'], 'часы, минуты и секунды — отдельными плитками');
+    assert.equal(tiles[0].getAttribute('data-part'), tiles.length === 4 ? 'days' : 'hours',
+        'дни идут отдельной плиткой и исчезают, когда остались только часы');
+    tiles.forEach((tile) => {
+        assert.match(tile.querySelector('.countdown-value').textContent, /^\d{1,2}$/,
+            'значение плитки — число: ' + tile.textContent);
+        assert.match(tile.querySelector('.countdown-unit').textContent, /^(день|дня|дней|часов|минут|секунд)$/,
+            'у плитки есть подпись: ' + tile.textContent);
+    });
+
+    // Ниже — остальные предстоящие матчи: афиша не повторяется
     const upcoming = app.id('upcoming-matches').querySelectorAll('.match-card');
 
     assert.equal(upcoming.length, 1, 'в списке только следующий матч');
@@ -233,14 +251,34 @@ test('главная: когда все матчи сыграны, блоки п
 
     assert.equal(featured.getAttribute('data-id'), '4', 'показан самый поздний матч');
     assert.match(featured.textContent, /1 : 1/, 'счёт последнего матча виден');
-    assert.equal(featured.querySelector('.next-match-countdown').classList.contains('is-empty'), true,
-        'у сыгранного матча отсчёта нет');
 
-    // В списке справа — остальные результаты (сам последний матч уже показан слева)
+    const countdown = featured.querySelector('.next-match-countdown');
+
+    assert.equal(countdown.classList.contains('is-empty'), true, 'у сыгранного матча отсчёта нет');
+    assert.equal(countdown.querySelectorAll('.countdown-part').length, 0, 'плиток отсчёта тоже нет');
+
+    // В списке ниже — остальные результаты (сам последний матч уже показан выше)
     const results = app.id('upcoming-matches').querySelectorAll('.match-card');
 
     assert.deepEqual(Array.from(results).map((card) => card.getAttribute('data-id')), ['3', '2', '1']);
     assert.equal(app.id('stat-finished').textContent, '4');
+});
+
+test('главная: без времени начала табло уступает место отсчёту словами', () => {
+    const seeded = remoteData();
+    const next = seeded.matches.filter((match) => !match.finished)[0];
+
+    // Времени начала нет — посекундный счёт считал бы секунды до полуночи,
+    // то есть выдумывал бы точность, которой в данных нет
+    next.time = '';
+
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+    const countdown = app.id('next-match').querySelector('.next-match-countdown');
+
+    assert.equal(countdown.classList.contains('is-parts'), false, 'плиток посекундного счёта нет');
+    assert.equal(countdown.classList.contains('is-empty'), false, 'отсчёт словами показан');
+    assert.equal(countdown.textContent, L.countdownLabel(next, new Date()), 'отсчёт совпадает с датой матча');
+    assert.match(countdown.textContent, /^через \d+ (день|дня|дней)$/);
 });
 
 test('навигация: переключение страниц, подсветка меню и хэш-адреса', () => {
@@ -1133,6 +1171,25 @@ test('дисциплина: лимит жёлтых карточек превр�
     assert.match(line.textContent, /\(Спартак\)/);
     assert.equal(line.querySelector('.ban-name').getAttribute('title'),
         '4-я жёлтая карточка, получена ' + L.formatDate(app.storedData().matches[0].date, 'numeric'));
+
+    // Главная: тот же игрок в табло ближайшего матча — под названием своей команды
+    app.navigate('home');
+
+    const afisha = app.id('next-match').querySelector('.match-card');
+
+    assert.equal(afisha.getAttribute('data-id'), '3', 'в афише тот же ближайший матч');
+    assert.equal(afisha.querySelectorAll('.next-match-bans').length, 1, 'строка дисквалификации одна');
+
+    const lostA = afisha.querySelector('.next-match-side .next-match-bans');
+
+    assert.ok(lostA, 'дисквалификация стоит под названием теряющей игрока команды');
+    assert.match(lostA.textContent, /Иванов А\./);
+    assert.equal(lostA.querySelectorAll('.next-match-ban').length, 1);
+    assert.equal(lostA.querySelector('.next-match-ban').getAttribute('title'),
+        'Пропустит матч: 4-я жёлтая карточка, получена ' + L.formatDate(app.storedData().matches[0].date, 'numeric'));
+    assert.equal(afisha.querySelector('.next-match-side-away .next-match-bans'), null,
+        'у второй команды потерь нет — строки нет');
+    assert.equal(afisha.querySelector('.match-bans'), null, 'в афише нет второй, общей строки «Пропустят матч»');
 
     // Детальный результат: блок «Дисквалификации» с причиной и правилом
     app.click(card(3));

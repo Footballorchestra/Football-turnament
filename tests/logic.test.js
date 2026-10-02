@@ -213,6 +213,40 @@ test('countdownLabel: отсчёт до матча словами', () => {
     assert.equal(countdown('2026-10-13', ''), 'через 11 дней');
 });
 
+test('countdownParts: дни и отдельно часы, минуты и секунды', () => {
+    const now = new Date(2026, 9, 2, 12, 0, 0);
+    const parts = (date, time) => L.countdownParts({ date, time }, now);
+
+    // До матча больше суток: дни идут отдельной величиной, часы/минуты/секунды — своими
+    assert.deepEqual(parts('2026-10-06', '19:30'),
+        { days: 4, hours: 7, minutes: 30, seconds: 0, total: 4 * 86400 + 7 * 3600 + 30 * 60 });
+    assert.deepEqual(parts('2026-10-03', '19:30'),
+        { days: 1, hours: 7, minutes: 30, seconds: 0, total: 86400 + 7 * 3600 + 30 * 60 });
+
+    // Остались только часы: дни не показываются вовсе
+    assert.deepEqual(parts('2026-10-02', '13:05'),
+        { days: 0, hours: 1, minutes: 5, seconds: 0, total: 3900 });
+    assert.deepEqual(parts('2026-10-02', '12:03'),
+        { days: 0, hours: 0, minutes: 3, seconds: 0, total: 180 });
+    assert.deepEqual(parts('2026-10-02', '12:00'),
+        { days: 0, hours: 0, minutes: 0, seconds: 0, total: 0 }, 'матч начинается прямо сейчас');
+
+    // Секунды берутся из остатка, а не округляются: «через полминуты» — 30 секунд
+    const halfMinute = L.countdownParts({ date: '2026-10-02', time: '12:00' },
+        new Date(2026, 9, 2, 11, 59, 30));
+
+    assert.deepEqual(halfMinute, { days: 0, hours: 0, minutes: 0, seconds: 30, total: 30 });
+
+    // Времени начала нет: секунды отсчитывать не от чего — счётчик слов на месте
+    assert.equal(parts('2026-10-06', ''), null);
+    assert.equal(parts('', '19:30'), null);
+    assert.equal(parts('2026-10-02', '11:00'), null, 'время начала уже прошло');
+    assert.equal(parts('2026-10-01', '19:30'), null, 'матч вчера');
+
+    // Сыгранный матч — считать не до чего, даже если счёт внесли заранее
+    assert.equal(L.countdownParts({ date: '2026-10-06', time: '19:30', finished: true, scoreA: 1, scoreB: 0 }, now), null);
+});
+
 test('adminPasswordMatches: сравнение пароля', () => {
     assert.equal(L.adminPasswordMatches('admin'), true);
     assert.equal(L.adminPasswordMatches('admin '), false);
