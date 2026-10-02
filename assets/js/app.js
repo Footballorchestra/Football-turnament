@@ -67,6 +67,12 @@
         photoPreviews: {},
         /** Сколько раз пытались догрузить картинку: путь → число попыток. */
         photoRetries: {},
+        /** Снимок счётов матчей: нужен, чтобы подсветить только что изменившийся результат. */
+        matchScores: null,
+        /** Матчи со свежим результатом: у них загорается «лампа» в оформлении «Афиша матча». */
+        freshMatchIds: null,
+        /** Таймер снятия класса появления контента (см. playStagger). */
+        staggerTimer: null,
         /** Игрок, чьё фото сейчас загружается: { teamId, index } (null — никто). */
         photoBusy: null,
         /* Турнирная таблица: компактный вид (без горизонтальной прокрутки).
@@ -1688,6 +1694,95 @@
     /* Публичные страницы                                                 */
     /* ================================================================== */
 
+    /* ------------------------------------------------------------------ */
+    /* Движение: единый «язык» анимаций и уважение к настройке системы      */
+    /* ------------------------------------------------------------------ */
+
+    /** Длительности движения, мс: отклик, обычное появление, спокойные переходы. */
+    var MOTION = { quick: 160, normal: 240, slow: 420 };
+
+    /** Системная настройка «меньше движения» (в старых браузерах считаем, что её нет). */
+    function prefersReducedMotion() {
+        return typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    /**
+     * Можно ли проигрывать движение у элемента: он действительно показан на странице
+     * и пользователь не просил уменьшить анимацию. В jsdom разметки нет (offsetParent
+     * всегда пуст), поэтому там ничего не анимируется — значения ставятся сразу,
+     * и тесты читают готовый результат.
+     */
+    function canAnimate(element) {
+        return Boolean(element) && element.offsetParent !== null && !prefersReducedMotion();
+    }
+
+    /** Можно ли проигрывать движение вообще (для полноэкранных слоёв вроде просмотра фото). */
+    function motionAllowed() {
+        return !prefersReducedMotion();
+    }
+
+    /**
+     * «Набирает» число до нового значения: первое число на главной едет от нуля,
+     * дальше — от прежнего (например, 3 → 4 после нового результата).
+     * Без движения (в jsdom, при «меньше движения» или на скрытом блоке) ставит сразу.
+     * Финальное значение ещё и подстраховывается таймером: в фоновой вкладке
+     * requestAnimationFrame не вызывается, и число не должно «застрять» на старом.
+     */
+    var countToken = 0;
+
+    function countUp(element, value) {
+        if (!element) {
+            return;
+        }
+
+        var target = Number(value) || 0;
+        var from = Number(element.textContent);
+        var start = isFinite(from) ? from : 0;
+        var token = ++countToken;
+
+        element.countUpToken = token;
+
+        function finish() {
+            if (element.countUpToken === token) {
+                element.textContent = String(target);
+            }
+        }
+
+        if (!canAnimate(element) || start === target || typeof window.requestAnimationFrame !== 'function') {
+            finish();
+            return;
+        }
+
+        var duration = 520;
+        var begun = null;
+
+        window.setTimeout(finish, duration + 150);
+
+        function frame(time) {
+            if (element.countUpToken !== token) {
+                return;
+            }
+
+            if (begun === null) {
+                begun = time;
+            }
+
+            var progress = Math.min(1, (time - begun) / duration);
+
+            if (progress < 1) {
+                var eased = 1 - Math.pow(1 - progress, 3);
+
+                element.textContent = String(Math.round(start + (target - start) * eased));
+                window.requestAnimationFrame(frame);
+            } else {
+                finish();
+            }
+        }
+
+        window.requestAnimationFrame(frame);
+    }
+
     /**
      * Плитки-счётчики на главной: команды, матчи, игроки, завершённые.
      * Числа обновляются при любой перерисовке данных, а не только при открытии главной.
@@ -1695,10 +1790,10 @@
     function renderSiteHead() {
         var stats = L.getStats(state.data);
 
-        $('stat-teams').textContent = stats.teams;
-        $('stat-matches').textContent = stats.matches;
-        $('stat-players').textContent = stats.players;
-        $('stat-finished').textContent = stats.finished;
+        countUp($('stat-teams'), stats.teams);
+        countUp($('stat-matches'), stats.matches);
+        countUp($('stat-players'), stats.players);
+        countUp($('stat-finished'), stats.finished);
     }
 
     function renderHome() {
@@ -1751,6 +1846,38 @@
      * Голы и карточки показываются под названием той команды, которая их получила:
      * у хозяев — слева, у гостей — справа. Так сразу видно, чей это гол или карточка.
      */
+    /** Отпечаток счёта матча: пусто — матч ещё не сыгран. */
+    function matchScoreKey(match) {
+        return match.finished ? match.scoreA + ':' + match.scoreB : '';
+    }
+
+    /**
+     * Сравнивает счёты всех матчей с прошлой отрисовкой и запоминает новые.
+     * Возвращает матчи, у которых счёт только что появился или изменился, —
+     * у них на карточке загорится «лампа» (см. markFreshMatches в matchCard и стили «Афиши»).
+     */
+    function changedMatchIds() {
+        var previous = state.matchScores;
+        var next = {};
+        var changed = null;
+
+        state.data.matches.forEach(function (match) {
+            var id = String(match.id);
+            var key = matchScoreKey(match);
+
+            next[id] = key;
+
+            if (previous && key && previous[id] !== key) {
+                changed = changed || {};
+                changed[id] = true;
+            }
+        });
+
+        state.matchScores = next;
+
+        return changed;
+    }
+
     function matchCard(match) {
         var teamA = L.findTeam(state.data.teams, match.teamA);
         var teamB = L.findTeam(state.data.teams, match.teamB);
@@ -1759,9 +1886,10 @@
             : '<span class="text-dark-500 text-sm">против</span>';
         var marksA = teamMarks(match, match.teamA);
         var marksB = teamMarks(match, match.teamB);
+        var fresh = state.freshMatchIds && state.freshMatchIds[String(match.id)] ? ' is-fresh' : '';
 
         return '' +
-            '<article class="match-card ' + (match.finished ? 'finished' : 'upcoming') + '"' +
+            '<article class="match-card ' + (match.finished ? 'finished' : 'upcoming') + fresh + '"' +
                 ' data-action="match-public-open" data-id="' + match.id + '" title="Подробности матча">' +
                 '<div class="flex items-center gap-2 sm:gap-3">' +
                     '<div class="flex-1 min-w-0">' +
@@ -2609,8 +2737,8 @@
         });
     }
 
-    /** Открывает фотографию команды на весь экран. */
-    function openTeamImageViewer(teamId, index) {
+    /** Открывает фотографию команды на весь экран (зумом из миниатюры, если можно). */
+    function openTeamImageViewer(teamId, index, source) {
         var images = teamImageUrls(teamId);
         var number = L.toInt(index);
 
@@ -2618,10 +2746,16 @@
             return;
         }
 
+        // Место миниатюры запоминаем до открытия: из него «вырастает» фото
+        var from = source && typeof source.getBoundingClientRect === 'function'
+            ? source.getBoundingClientRect()
+            : null;
+
         state.imageViewer = { teamId: L.toInt(teamId), index: number };
         state.imageViewerFocus = document.activeElement;
 
         renderImageViewer();
+        zoomViewerFrom(from);
 
         var close = document.querySelector('#image-viewer [data-action="image-close"]');
 
@@ -2630,17 +2764,108 @@
         }
     }
 
+    /**
+     * Просмотр «вырастает» из миниатюры: фото начинается там, где стоял снимок,
+     * и плавно занимает полный размер; затемнение проявляется вместе с ним.
+     * Картинка берётся из кэша, но декодируется не мгновенно, поэтому до старта
+     * зума фото не показываем — иначе оно мелькнёт в полном размере.
+     * Если движение отключено или что-то не готово — просто показываем как есть.
+     */
+    function zoomViewerFrom(from) {
+        var photo = $('image-viewer-photo');
+
+        if (!from || !from.width || !photo || typeof photo.animate !== 'function' || !motionAllowed()) {
+            return;
+        }
+
+        var started = false;
+
+        function show() {
+            photo.style.opacity = '';
+        }
+
+        function start() {
+            if (started) {
+                return;
+            }
+
+            started = true;
+            show();
+
+            var to = photo.getBoundingClientRect();
+
+            if (!to.width || !to.height) {
+                return;
+            }
+
+            var scale = from.width / to.width;
+            var dx = (from.left + from.width / 2) - (to.left + to.width / 2);
+            var dy = (from.top + from.height / 2) - (to.top + to.height / 2);
+
+            photo.animate([
+                { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + scale + ')', opacity: 0.4 },
+                { transform: 'none', opacity: 1 }
+            ], { duration: MOTION.slow, easing: 'cubic-bezier(.2,.7,.3,1)' });
+
+            var backdrop = document.querySelector('#image-viewer .image-viewer-backdrop');
+
+            if (backdrop && typeof backdrop.animate === 'function') {
+                backdrop.animate([{ opacity: 0 }, { opacity: 1 }], { duration: MOTION.normal, easing: 'ease-out' });
+            }
+        }
+
+        photo.style.opacity = '0';
+        window.setTimeout(show, MOTION.slow + 200); // страховка: фото покажется в любом случае
+
+        if (photo.complete && photo.naturalWidth) {
+            start();
+            return;
+        }
+
+        if (typeof photo.decode === 'function') {
+            photo.decode().then(start).catch(show);
+            return;
+        }
+
+        photo.addEventListener('load', start, { once: true });
+    }
+
     /** Закрывает просмотр фотографии и возвращает фокус на страницу. */
     function closeTeamImageViewer() {
         var previous = state.imageViewerFocus;
+        var box = $('image-viewer');
+        var photo = $('image-viewer-photo');
+        var done = false;
+
+        function finish() {
+            if (done) {
+                return;
+            }
+
+            done = true;
+            renderImageViewer();
+
+            if (previous && typeof previous.focus === 'function' && document.contains(previous)) {
+                previous.focus();
+            }
+        }
 
         state.imageViewer = null;
         state.imageViewerFocus = null;
-        renderImageViewer();
 
-        if (previous && typeof previous.focus === 'function' && document.contains(previous)) {
-            previous.focus();
+        // Сначала коротко даём фото уйти, и только потом прячем слой
+        if (box && !box.hidden && photo && typeof photo.animate === 'function' && motionAllowed()) {
+            photo.animate([
+                { transform: 'none', opacity: 1 },
+                { transform: 'scale(0.94)', opacity: 0 }
+            ], { duration: MOTION.quick, easing: 'ease-in' }).onfinish = finish;
+
+            // Страховка: если анимацию прервали, слой всё равно закрывается
+            window.setTimeout(finish, MOTION.quick + 240);
+            return;
         }
+
+        finish();
     }
 
     /** Листает фотографии по кругу (если их несколько). */
@@ -2655,6 +2880,25 @@
 
         state.imageViewer.index = ((state.imageViewer.index + delta) % count + count) % count;
         renderImageViewer();
+        slideViewerPhoto(delta);
+    }
+
+    /** Новое фото въезжает со стороны, в которую листаем. */
+    function slideViewerPhoto(delta) {
+        var photo = $('image-viewer-photo');
+
+        if (!photo || typeof photo.animate !== 'function' || !motionAllowed()) {
+            return;
+        }
+
+        if (!photo.complete || !photo.naturalWidth) {
+            return;
+        }
+
+        photo.animate([
+            { transform: 'translateX(' + (delta > 0 ? 48 : -48) + 'px)', opacity: 0 },
+            { transform: 'none', opacity: 1 }
+        ], { duration: MOTION.normal, easing: 'cubic-bezier(.2,.7,.3,1)' });
     }
 
     /** Строка игрока в публичном составе: голы, жёлтая и красная карточки. */
@@ -2768,6 +3012,8 @@
         // Оформление (класс theme-afisha на <body>) применяем первым:
         // от него зависят стили всех блоков ниже
         applyTheme();
+        // Свежий результат: счёт, изменившийся с прошлой отрисовки, подсветим «лампой»
+        state.freshMatchIds = changedMatchIds();
         renderSiteHead();
         renderHome();
         renderStandings();
@@ -3865,6 +4111,50 @@
         });
     }
 
+    /**
+     * Появление контента при переходе в раздел: карточки списков мягко въезжают снизу
+     * друг за другом, миниатюры фотографий проявляются. Классы живут только во время
+     * перехода и потом снимаются, поэтому фоновое обновление данных ничего не «переигрывает».
+     */
+    var STAGGER_CONTAINERS = ['latest-results', 'upcoming-matches', 'matches-list', 'teams-grid'];
+
+    function playStagger() {
+        var section = document.querySelector('.page-section.active');
+
+        if (!canAnimate(section)) {
+            return;
+        }
+
+        STAGGER_CONTAINERS.forEach(function (id) {
+            var box = $(id);
+
+            if (box && box.offsetParent !== null) {
+                box.classList.remove('ft-stagger');
+                void box.offsetWidth; // перезапуск анимации, даже если класс стоял только что
+                box.classList.add('ft-stagger');
+            }
+        });
+
+        section.classList.add('ft-rise');
+
+        if (state.staggerTimer) {
+            window.clearTimeout(state.staggerTimer);
+        }
+
+        state.staggerTimer = window.setTimeout(function () {
+            STAGGER_CONTAINERS.forEach(function (id) {
+                var box = $(id);
+
+                if (box) {
+                    box.classList.remove('ft-stagger');
+                }
+            });
+
+            section.classList.remove('ft-rise');
+            state.staggerTimer = null;
+        }, 900);
+    }
+
     /** Переключение страницы: активная секция, подсветка меню (в т.ч. мобильного), хэш. */
     function applyRoute(route, options) {
         var opts = options || {};
@@ -3977,6 +4267,7 @@
         }
 
         renderBackButton();
+        playStagger();
     }
 
     function prepareAdminPage() {
@@ -4701,7 +4992,7 @@
         } else if (action === 'squad-toggle') {
             toggleTeamSquad(teamId);
         } else if (action === 'image-open') {
-            openTeamImageViewer(teamId, index);
+            openTeamImageViewer(teamId, index, element);
         } else if (action === 'image-close') {
             closeTeamImageViewer();
         } else if (action === 'image-prev') {

@@ -308,6 +308,17 @@ function textOf(page, selector) {
     return page.$eval(selector, (element) => element.textContent.trim());
 }
 
+/**
+ * Значение плитки-счётчика после того, как оно «успокоилось»: на главной числа
+ * набираются от нуля (до ~0,7 с с учётом страховочного таймера), поэтому читаем
+ * не сразу, а когда анимация заведомо закончилась.
+ */
+async function settledText(page, selector) {
+    await new Promise((resolve) => setTimeout(resolve, 750));
+
+    return textOf(page, selector);
+}
+
 function clickAction(page, selector) {
     return page.click(selector);
 }
@@ -345,8 +356,8 @@ test('страница открывается без ошибок: стили, �
     const { page, problems } = await openPage();
 
     const data = await dataSnapshot(page);
-    assert.equal(await textOf(page, '#stat-teams'), String(data.teams));
-    assert.equal(await textOf(page, '#stat-matches'), String(data.matches));
+    assert.equal(await settledText(page, '#stat-teams'), String(data.teams));
+    assert.equal(await settledText(page, '#stat-matches'), String(data.matches));
 
     // Стили из собранного Tailwind применились (фон зависит от оформления сайта)
     const skin = await themeLook(page);
@@ -522,8 +533,8 @@ test('админ-панель целиком в браузере: вход, ко
     await page.waitForFunction((expected) => {
         return document.querySelectorAll('#admin-teams-list [data-action="team-open"]').length === expected;
     }, {}, before.teams + 1);
-    assert.equal(await textOf(page, '#stat-teams'), String(before.teams + 1));
-    assert.equal(await textOf(page, '#stat-matches'), String(before.matches));
+    assert.equal(await settledText(page, '#stat-teams'), String(before.teams + 1));
+    assert.equal(await settledText(page, '#stat-matches'), String(before.matches));
 
     // Дубликат отклоняется
     await page.type('#new-team-name', 'зенит');
@@ -637,8 +648,8 @@ test('админ-панель целиком в браузере: вход, ко
 
     // Данные переживают перезагрузку страницы
     await reloadApp(page);
-    assert.equal(await textOf(page, '#stat-teams'), String(before.teams + 1));
-    assert.equal(await textOf(page, '#stat-finished'), String(before.finished + 1));
+    assert.equal(await settledText(page, '#stat-teams'), String(before.teams + 1));
+    assert.equal(await settledText(page, '#stat-finished'), String(before.finished + 1));
 
     // Выход из админки
     await page.click('[data-nav="admin"]');
@@ -696,7 +707,7 @@ test('сайт работает из подпапки — как на GitHub Pag
         const data = await dataSnapshot(page);
         const skin = await themeLook(page);
 
-        assert.equal(await textOf(page, '#stat-teams'), String(data.teams), 'данные загрузились из подпапки');
+        assert.equal(await settledText(page, '#stat-teams'), String(data.teams), 'данные загрузились из подпапки');
         assert.equal(await page.$$eval('#standings-body tr', (rows) => rows.length), data.teams);
         assert.equal(await page.$eval('body', (element) => getComputedStyle(element).backgroundColor), skin.body,
             'стили применились и из подпапки');
@@ -775,7 +786,7 @@ test('синхронизация: посетитель видит данные �
     // 1. Посетитель открывает сайт с другого устройства — данные приходят из репозитория
     const visitor = await openPage({ url: mockBaseUrl + '/', isolated: true });
 
-    assert.equal(await textOf(visitor.page, '#stat-teams'), String(remote.teams.length));
+    assert.equal(await settledText(visitor.page, '#stat-teams'), String(remote.teams.length));
     assert.match(await textOf(visitor.page, '#teams-grid'), /Клуб из репозитория/);
     assert.match(await textOf(visitor.page, '#data-freshness'), /Данные обновлены: 10 сентября 2026/);
     assert.deepEqual(visitor.problems, []);
@@ -834,7 +845,7 @@ test('синхронизация: посетитель видит данные �
 
     await gotoApp(otherPage, mockBaseUrl + '/');
 
-    assert.equal(await textOf(otherPage, '#stat-teams'), String(remote.teams.length + 1), 'другое устройство получило опубликованные данные');
+    assert.equal(await settledText(otherPage, '#stat-teams'), String(remote.teams.length + 1), 'другое устройство получило опубликованные данные');
     assert.match(await textOf(otherPage, '#teams-grid'), /Опубликовано из админки/);
 
     // Время в подвале — это момент публикации из репозитория, а не «сейчас» на этом устройстве.
@@ -1510,13 +1521,13 @@ test('автообновление: страница зрителя сама п�
     await page.waitForFunction(() => document.getElementById('toast-container').textContent.includes('автоматически'));
 
     const view = await page.evaluate(() => ({
-        freshness: document.getElementById('data-freshness').textContent,
-        teams: document.getElementById('stat-teams').textContent
+        freshness: document.getElementById('data-freshness').textContent
     }));
+    const teamsCounter = await settledText(page, '#stat-teams');
 
     assert.match(view.freshness, /Данные обновлены: 21 сентября 2026/);
     assert.match(view.freshness, /обновляется автоматически/, 'в подвале видно, что обновление автоматическое');
-    assert.equal(view.teams, String(updated.teams.length), 'счётчики пересчитаны');
+    assert.equal(teamsCounter, String(updated.teams.length), 'счётчики пересчитаны');
 
     // Возвращаем данные макета для других тестов
     mockRepository.changeExternally(remote);
@@ -1640,6 +1651,14 @@ test('фотографии команды: загрузка из админки,
         const image = document.getElementById('image-viewer-photo');
 
         return !viewer.hidden && !!image && image.complete && image.naturalWidth > 0;
+    });
+
+    // Зум из миниатюры закончился: меряем уже «осевшее» фото, а не увеличенное на ходу
+    await page.waitForFunction(() => {
+        const image = document.getElementById('image-viewer-photo');
+
+        return typeof image.getAnimations === 'function' &&
+            image.getAnimations().every((animation) => animation.playState === 'finished');
     });
 
     const viewer = await page.evaluate(() => {
@@ -2216,3 +2235,48 @@ test('оформление «Афиша матча»: включение в ад
     // Репозиторий возвращаем в исходное состояние
     mockRepository.changeExternally(original);
 });
+
+/**
+ * Движение: покачивание нот, латунный блик по табло и зерно бумаги объявлены стилями,
+ * а системная настройка «меньше движения» их выключает — как и появление контента.
+ */
+test('движение: анимации объявлены, а при «меньше движения» выключаются', { skip }, async () => {
+    const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
+
+    await page.evaluate(() => window.FTApp.theme.preview('afisha'));
+    await page.waitForFunction(() => document.body.classList.contains('theme-afisha'));
+
+    const look = await page.evaluate(() => {
+        const note = document.querySelector('.hero-note-1');
+        const band = document.querySelector('.hero-band');
+        const grain = getComputedStyle(document.body, '::after').backgroundImage;
+
+        return {
+            noteAnimation: getComputedStyle(note).animationName,
+            noteTransform: getComputedStyle(note).transform,
+            sheenAnimation: getComputedStyle(band, '::before').animationName,
+            grain: grain.indexOf('svg+xml') !== -1
+        };
+    });
+
+    assert.equal(look.noteAnimation, 'af-note-sway', 'ноты на табло покачиваются');
+    assert.notEqual(look.noteTransform, 'none', 'у каждой ноты остался свой наклон');
+    assert.equal(look.sheenAnimation, 'af-sheen', 'по табло идёт латунный блик');
+    assert.equal(look.grain, true, 'на фоне «Афиши» есть зерно бумаги');
+
+    // Системная настройка «меньше движения» выключает анимации
+    await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'reduce' }]);
+
+    const quiet = await page.evaluate(() => ({
+        note: getComputedStyle(document.querySelector('.hero-note-1')).animationName,
+        sheen: getComputedStyle(document.querySelector('.hero-band'), '::before').animationName
+    }));
+
+    assert.equal(quiet.note, 'none', 'при «меньше движения» ноты не качаются');
+    assert.equal(quiet.sheen, 'none', 'и латунный блик не идёт');
+
+    assert.deepEqual(problems.filter((item) => !item.includes('Failed to load resource')), [],
+        'нет ошибок консоли (в том числе CSP на зерно бумаги)');
+    await page.close();
+});
+

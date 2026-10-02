@@ -77,6 +77,22 @@ body.theme-afisha main {
     overflow-x: clip;
 }
 
+/*
+ * Зерно бумаги: едва заметный шум поверх фона, чтобы светлая подложка выглядела как
+ * бумага, а не как ровная заливка. Шум рисуется SVG прямо в CSS — без картинок,
+ * внешних запросов и интернета.
+ */
+body.theme-afisha::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    opacity: 0.32;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23grain)' opacity='0.16'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+}
+
 /* ------------------------------------------------------------------ */
 /* 2. Шапка и подвал                                                   */
 /* ------------------------------------------------------------------ */
@@ -231,13 +247,36 @@ body.theme-afisha .page-section:not(.admin-panel) .panel > .card-header .section
  * та, чей раздел открыт сейчас. Никаких «особых» первой и последней плитки нет.
  */
 body.theme-afisha .stat-ribbon .stat-box {
+    position: relative;
+    overflow: hidden;
     background: var(--af-paper);
     border: 1px solid var(--af-line);
     border-radius: var(--af-radius);
     box-shadow: var(--af-shadow);
     text-align: left;
     padding: 1rem 1.1rem;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    transition: border-color 0.24s ease, box-shadow 0.24s ease, color 0.24s ease;
+}
+
+/*
+ * Тёмное табло активной плитки — отдельным слоем: градиент нельзя плавно сменить
+ * на заливку, поэтому подложка проявляется, а не «щёлкает».
+ */
+body.theme-afisha .stat-ribbon .stat-box::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background-image: linear-gradient(150deg, var(--af-night) 0%, var(--af-night-2) 100%);
+    opacity: 0;
+    transition: opacity 0.26s ease;
+    pointer-events: none;
+}
+
+body.theme-afisha .stat-ribbon .stat-value,
+body.theme-afisha .stat-ribbon .stat-label {
+    position: relative;
+    z-index: 1;
 }
 
 body.theme-afisha .stat-ribbon .stat-box:hover,
@@ -251,9 +290,12 @@ body.theme-afisha .stat-ribbon .stat-box-link:focus-visible {
 
 /* Активная плитка — открытый сейчас раздел: тёмное табло с золотыми цифрами */
 body.theme-afisha .stat-ribbon .stat-box.active {
-    background: linear-gradient(150deg, var(--af-night) 0%, var(--af-night-2) 100%);
     border-color: var(--af-brass);
     box-shadow: 0 12px 26px -18px rgba(9, 15, 26, 0.9);
+}
+
+body.theme-afisha .stat-ribbon .stat-box.active::before {
+    opacity: 1;
 }
 
 body.theme-afisha .stat-ribbon .stat-box.active .stat-value {
@@ -323,6 +365,33 @@ body.theme-afisha .hero-band::after {
     pointer-events: none;
 }
 
+/*
+ * Латунный блик: раз в несколько секунд по табло медленно проходит полоса света.
+ * Слой лежит под текстом — дети табло позиционированы и потому рисуются поверх него.
+ */
+body.theme-afisha .hero-band::before {
+    content: '';
+    position: absolute;
+    top: -60%;
+    bottom: -60%;
+    left: 0;
+    width: 38%;
+    background-image: linear-gradient(100deg,
+            rgba(240, 215, 154, 0) 0%,
+            rgba(240, 215, 154, 0.10) 45%,
+            rgba(240, 215, 154, 0.17) 50%,
+            rgba(240, 215, 154, 0.10) 55%,
+            rgba(240, 215, 154, 0) 100%);
+    transform: translateX(-120%) rotate(12deg);
+    animation: af-sheen 9.5s ease-in-out infinite;
+    pointer-events: none;
+}
+
+@keyframes af-sheen {
+    0%, 16% { transform: translateX(-120%) rotate(12deg); }
+    64%, 100% { transform: translateX(320%) rotate(12deg); }
+}
+
 /* Заголовок афиши: капитель и короткая золотая линия под подписью */
 body.theme-afisha .hero-title {
     text-transform: uppercase;
@@ -354,12 +423,22 @@ body.theme-afisha .hero-notes {
     pointer-events: none;
 }
 
+/*
+ * Ноты едва покачиваются: у каждой свой наклон, скорость и задержка, поэтому движение
+ * выходит вразнобой и не выглядит механическим. Наклон задаётся переменной — так кадры
+ * анимации могут добавлять к нему небольшой угол.
+ */
 body.theme-afisha .hero-note {
     position: absolute;
     width: 34px;
     height: 34px;
     color: var(--af-brass);
     opacity: 0.5;
+    --note-angle: 0deg;
+    --note-speed: 7.5s;
+    --note-delay: 0s;
+    transform: rotate(var(--note-angle));
+    animation: af-note-sway var(--note-speed) ease-in-out var(--note-delay) infinite;
 }
 
 body.theme-afisha .hero-note-1 {
@@ -367,7 +446,9 @@ body.theme-afisha .hero-note-1 {
     right: 30%;
     width: 42px;
     height: 42px;
-    transform: rotate(-14deg);
+    --note-angle: -14deg;
+    --note-speed: 7.4s;
+    --note-delay: -1.1s;
 }
 
 body.theme-afisha .hero-note-2 {
@@ -375,7 +456,9 @@ body.theme-afisha .hero-note-2 {
     right: 16%;
     width: 48px;
     height: 48px;
-    transform: rotate(10deg);
+    --note-angle: 10deg;
+    --note-speed: 8.2s;
+    --note-delay: -3.6s;
 }
 
 body.theme-afisha .hero-note-3 {
@@ -385,7 +468,9 @@ body.theme-afisha .hero-note-3 {
     height: 30px;
     color: #f0e6d2;
     opacity: 0.4;
-    transform: rotate(18deg);
+    --note-angle: 18deg;
+    --note-speed: 6.8s;
+    --note-delay: -2.2s;
 }
 
 body.theme-afisha .hero-note-4 {
@@ -395,7 +480,9 @@ body.theme-afisha .hero-note-4 {
     height: 54px;
     color: #f0e6d2;
     opacity: 0.42;
-    transform: rotate(-6deg);
+    --note-angle: -6deg;
+    --note-speed: 9s;
+    --note-delay: -4.4s;
 }
 
 body.theme-afisha .hero-note-5 {
@@ -403,7 +490,9 @@ body.theme-afisha .hero-note-5 {
     right: 34%;
     width: 34px;
     height: 34px;
-    transform: rotate(-22deg);
+    --note-angle: -22deg;
+    --note-speed: 7.8s;
+    --note-delay: -0.7s;
 }
 
 body.theme-afisha .hero-note-6 {
@@ -411,7 +500,9 @@ body.theme-afisha .hero-note-6 {
     right: 22%;
     width: 44px;
     height: 44px;
-    transform: rotate(7deg);
+    --note-angle: 7deg;
+    --note-speed: 8.6s;
+    --note-delay: -5.1s;
 }
 
 body.theme-afisha .hero-note-7 {
@@ -420,7 +511,9 @@ body.theme-afisha .hero-note-7 {
     width: 30px;
     height: 30px;
     opacity: 0.42;
-    transform: rotate(14deg);
+    --note-angle: 14deg;
+    --note-speed: 7.1s;
+    --note-delay: -2.9s;
 }
 
 body.theme-afisha .hero-note-8 {
@@ -430,7 +523,9 @@ body.theme-afisha .hero-note-8 {
     height: 26px;
     color: #f0e6d2;
     opacity: 0.32;
-    transform: rotate(-10deg);
+    --note-angle: -10deg;
+    --note-speed: 8.9s;
+    --note-delay: -6.3s;
 }
 
 body.theme-afisha .hero-note-9 {
@@ -439,7 +534,15 @@ body.theme-afisha .hero-note-9 {
     width: 34px;
     height: 34px;
     opacity: 0.36;
-    transform: rotate(20deg);
+    --note-angle: 20deg;
+    --note-speed: 7.6s;
+    --note-delay: -3.4s;
+}
+
+/* Покачивание вокруг своего наклона: ±1,5° — заметно, только если присмотреться */
+@keyframes af-note-sway {
+    0%, 100% { transform: rotate(calc(var(--note-angle) - 1.5deg)); }
+    50% { transform: rotate(calc(var(--note-angle) + 1.5deg)); }
 }
 
 @media (max-width: 767px) {
@@ -567,6 +670,24 @@ body.theme-afisha .score-display {
     border-radius: 10px;
     box-shadow: inset 0 0 0 1px rgba(240, 215, 154, 0.5);
     font-variant-numeric: tabular-nums;
+}
+
+/*
+ * «Лампа» у свежего результата: счёт, изменившийся с прошлой отрисовки, коротко
+ * мигает латунным светом — видно, что только что прилетел новый результат.
+ * Класс is-fresh ставит matchCard (assets/js/app.js).
+ */
+body.theme-afisha .match-card.is-fresh .score-display {
+    animation: af-lamp 1.6s ease-in-out 3;
+}
+
+@keyframes af-lamp {
+    0%, 100% {
+        box-shadow: inset 0 0 0 1px rgba(240, 215, 154, 0.5);
+    }
+    50% {
+        box-shadow: inset 0 0 0 1px rgba(240, 215, 154, 0.95), 0 0 16px 2px rgba(240, 215, 154, 0.55);
+    }
 }
 
 body.theme-afisha .page-section:not(.admin-panel) .match-card > div.mt-2 {
@@ -851,10 +972,19 @@ body.theme-afisha .page-section:not(.admin-panel) .empty-state {
     font-style: italic;
 }
 
-/* Уважаем настройку «меньше движения»: наклоны и переходы отключаются */
+/* Уважаем настройку «меньше движения»: наклоны, покачивания и блики отключаются */
 @media (prefers-reduced-motion: reduce) {
-    body.theme-afisha .team-gallery-item,
-    body.theme-afisha .stat-ribbon .stat-box:last-child {
+    body.theme-afisha .team-gallery-item {
         transform: none;
+    }
+
+    body.theme-afisha .hero-note,
+    body.theme-afisha .hero-band::before,
+    body.theme-afisha .match-card.is-fresh .score-display {
+        animation: none;
+    }
+
+    body.theme-afisha .hero-band::before {
+        opacity: 0;
     }
 }

@@ -2385,6 +2385,38 @@ test('автообновление: зритель видит новые дан�
     app.stopAutoRefresh();
 });
 
+/**
+ * Свежий результат: если счёт матча изменился с прошлой отрисовки, карточка получает
+ * класс is-fresh — в оформлении «Афиша матча» у такого счёта загорается «лампа».
+ */
+test('свежий результат: изменившийся счёт помечается «лампой»', async () => {
+    const mock = createMockRepository({ data: remoteData() });
+    const app = boot({ mock, refreshIntervalMs: 40, autoPublishDelayMs: 10000 });
+
+    await app.settle();
+
+    assert.equal(app.$$('.match-card.is-fresh').length, 0, 'при первой отрисовке лампы не горят');
+
+    // Администратор с другого устройства поправил счёт уже сыгранного матча
+    const updated = remoteData();
+    const played = updated.matches.filter((match) => match.finished)[0];
+
+    updated.revision = 42;
+    updated.updatedAt = '2026-09-20T12:00:00.000Z';
+    played.scoreA += 1;
+    mock.changeExternally(updated);
+
+    await app.wait(140);
+
+    const card = app.id('latest-results').querySelector('.match-card[data-id="' + played.id + '"]');
+
+    assert.ok(card, 'матч с изменившимся счётом виден в последних результатах');
+    assert.equal(card.classList.contains('is-fresh'), true, 'у свежего счёта горит «лампа»');
+    assert.equal(app.$$('#latest-results .match-card.is-fresh').length, 1, 'лампа только у изменившегося матча');
+
+    app.stopAutoRefresh();
+});
+
 test('автообновление: скрытая вкладка запросов не делает, а возвращение во вкладку обновляет сразу', async () => {
     const mock = createMockRepository({ data: remoteData() });
     const app = boot({ mock, refreshIntervalMs: 40, autoPublishDelayMs: 10000 });
@@ -2914,8 +2946,11 @@ test('заставка: при первом входе показан фон с 
     // Пока заставка видна, страница не прокручивается
     assert.ok(app.document.body.classList.contains('splash-open'), 'прокрутка заблокирована');
 
-    // Заставка уходит сама: splashMs (400) + время плавного исчезновения (400)
-    await app.wait(900);
+    // Заставка уходит сама: splashMs (400) + время плавного исчезновения (400).
+    // Ждём с запасом и опросом: под нагрузкой таймеры срабатывают чуть позже.
+    for (let attempt = 0; attempt < 40 && !app.id('splash').hidden; attempt += 1) {
+        await app.wait(50);
+    }
 
     assert.equal(app.id('splash').hidden, true, 'заставка скрылась сама');
     assert.equal(app.window.FTSplash.isVisible(), false);
