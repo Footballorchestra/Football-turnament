@@ -2148,6 +2148,87 @@ test('дисквалификации: жёлтые карточки превра
 });
 
 /**
+ * Главная страница в браузере: ближайший матч со временем начала и живой отсчёт.
+ * Данные подставляются свои — матчи идут от сегодняшнего дня, а в рабочем
+ * data.json время у матчей пока не указано. В конце репозиторий возвращается
+ * в исходное состояние.
+ */
+test('главная: ближайший матч с отсчётом до начала', { skip }, async () => {
+    const original = JSON.parse(fs.readFileSync(path.join(ROOT, 'data.json'), 'utf8'));
+    const day = (offset) => {
+        const date = new Date();
+
+        date.setDate(date.getDate() + offset);
+
+        return date.getFullYear() + '-' +
+            String(date.getMonth() + 1).padStart(2, '0') + '-' +
+            String(date.getDate()).padStart(2, '0');
+    };
+
+    mockRepository.changeExternally({
+        version: 12,
+        revision: 950,
+        updatedAt: new Date().toISOString(),
+        teams: [
+            { id: 1, name: 'Ветераны МГК', players: ['Шорохов Александр'] },
+            { id: 2, name: 'ФК МГСО', players: ['Сергеев Валентин'] }
+        ],
+        matches: [
+            { id: 1, teamA: 1, teamB: 2, scoreA: 2, scoreB: 1, date: day(-5), time: '19:30', finished: true, events: [] },
+            { id: 2, teamA: 2, teamB: 1, scoreA: null, scoreB: null, date: day(1), time: '19:30', finished: false, events: [] },
+            { id: 3, teamA: 1, teamB: 2, scoreA: null, scoreB: null, date: day(4), finished: false, events: [] }
+        ],
+        photos: {},
+        teamPhotos: {},
+        teamImages: {},
+        playerInfo: {},
+        settings: { yellowLimit: 4, yellowPeriodDays: 0, theme: 'classic' }
+    });
+
+    const { page, problems, close } = await openPage({
+        url: mockBaseUrl + '/', isolated: true, mobile: true
+    });
+
+    await page.waitForFunction(() => Boolean(document.querySelector('#next-match .match-card')));
+
+    const view = await page.evaluate(() => {
+        const card = document.querySelector('#next-match .match-card');
+        const countdown = card.querySelector('.next-match-countdown');
+        const box = countdown.getBoundingClientRect();
+
+        return {
+            id: card.getAttribute('data-id'),
+            title: document.getElementById('next-match-title').textContent.trim(),
+            countdown: countdown.textContent.trim(),
+            shown: box.width > 0 && box.height > 0,
+            width: Math.round(box.width),
+            when: card.querySelector('.next-match-when').textContent.replace(/\s+/g, ' ').trim(),
+            teams: Array.from(card.querySelectorAll('.team-name')).map((element) => element.textContent.trim()),
+            list: Array.from(document.querySelectorAll('#upcoming-matches .match-card')).map((element) => ({
+                id: element.getAttribute('data-id'),
+                countdown: element.querySelector('.match-countdown').textContent.trim()
+            })),
+            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+        };
+    });
+
+    assert.equal(view.title, 'Ближайший матч');
+    assert.equal(view.id, '2', 'афиша показывает ближайший по расписанию матч');
+    assert.equal(view.countdown, 'завтра в 19:30', 'отсчёт до начала матча: ' + view.countdown);
+    assert.ok(view.shown, 'отсчёт отрисован стилями: ' + view.width + 'px');
+    assert.match(view.when, /19:30/, 'время начала видно в строке даты: ' + view.when);
+    assert.deepEqual(view.teams, ['ФК МГСО', 'Ветераны МГК']);
+    assert.deepEqual(view.list, [{ id: '3', countdown: 'через 4 дня' }],
+        'остальные матчи — со своим коротким отсчётом');
+    assert.equal(view.overflow, 0, 'на телефоне страница не выходит за экран');
+
+    assert.deepEqual(problems, [], 'нет ошибок консоли и сбоев загрузки');
+    await close();
+
+    mockRepository.changeExternally(original);
+});
+
+/**
  * Второй стиль «Афиша матча»: администратор включает его кнопкой в настройках,
  * стиль применяется сразу, уезжает в данные турнира (значит, его видят все зрители)
  * и ничего не ломает на узких экранах: страница не шире экрана, блоки не «уезжают».

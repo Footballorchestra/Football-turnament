@@ -94,6 +94,16 @@
 
     /** Демонстрационный набор данных (первый запуск и сброс). */
     function createDefaultData() {
+        // Даты демонстрационных матчей считаем от сегодняшнего дня: свежая установка
+        // сразу показывает живое расписание («матч через 3 дня»), а не даты из прошлого.
+        var dayFromToday = function (offset) {
+            var date = new Date();
+
+            date.setDate(date.getDate() + offset);
+
+            return toISODate(date);
+        };
+
         return {
             version: CONFIG.dataVersion,
             revision: 1,
@@ -125,10 +135,10 @@
                 { id: 4, name: 'ЦСКА', players: ['Михайлов М.', 'Новиков Н.'] }
             ],
             matches: [
-                { id: 1, teamA: 1, teamB: 2, scoreA: 2, scoreB: 1, date: '2026-09-10', finished: true },
-                { id: 2, teamA: 3, teamB: 4, scoreA: 1, scoreB: 1, date: '2026-09-11', finished: true },
-                { id: 3, teamA: 1, teamB: 3, scoreA: null, scoreB: null, date: '2026-09-20', finished: false },
-                { id: 4, teamA: 2, teamB: 4, scoreA: null, scoreB: null, date: '2026-09-21', finished: false }
+                { id: 1, teamA: 1, teamB: 2, scoreA: 2, scoreB: 1, date: dayFromToday(-7), time: '19:30', finished: true },
+                { id: 2, teamA: 3, teamB: 4, scoreA: 1, scoreB: 1, date: dayFromToday(-6), finished: true },
+                { id: 3, teamA: 1, teamB: 3, scoreA: null, scoreB: null, date: dayFromToday(3), time: '19:30', finished: false },
+                { id: 4, teamA: 2, teamB: 4, scoreA: null, scoreB: null, date: dayFromToday(4), finished: false }
             ]
         };
     }
@@ -247,6 +257,149 @@
 
     var MONTHS_SHORT = ['янв.', 'февр.', 'мар.', 'апр.', 'мая', 'июн.', 'июл.', 'авг.', 'сент.', 'окт.', 'нояб.', 'дек.'];
     var MONTHS_LONG = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+
+    /* ------------------------------------------------------------------ */
+    /* Время матча и отсчёт до начала                                      */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Время начала матча в виде «ЧЧ:ММ».
+     * Пустая строка — время не назначено: для любительского турнира это обычное
+     * дело (известен только день), поэтому поле необязательное.
+     * Принимаем «19:30», «9:5» и «19:30:00» (значение поля времени в браузере)
+     * и приводим к одному виду.
+     */
+    function normalizeMatchTime(value) {
+        if (typeof value !== 'string') {
+            return '';
+        }
+
+        var parsed = /^(\d{1,2}):(\d{1,2})(?::\d{2})?$/.exec(value.trim());
+
+        if (!parsed) {
+            return '';
+        }
+
+        var hours = parseInt(parsed[1], 10);
+        var minutes = parseInt(parsed[2], 10);
+
+        if (hours > 23 || minutes > 59) {
+            return '';
+        }
+
+        return pad2(hours) + ':' + pad2(minutes);
+    }
+
+    /**
+     * Момент начала матча: дата плюс время (локальное время устройства).
+     * Время не указано — считаем началом дня, иначе матч «сегодня» выглядел бы
+     * уже начавшимся. Если дата неизвестна — null.
+     */
+    function matchStart(match) {
+        if (!isPlainObject(match)) {
+            return null;
+        }
+
+        var date = parseISODate(match.date);
+
+        if (!date) {
+            return null;
+        }
+
+        var time = normalizeMatchTime(match.time);
+        var parts = time ? time.split(':') : [];
+
+        date.setHours(parts.length ? parseInt(parts[0], 10) : 0, parts.length ? parseInt(parts[1], 10) : 0, 0, 0);
+
+        return date;
+    }
+
+    /** Начало суток — чтобы считать «через сколько календарных дней» матч. */
+    function dayStart(date) {
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+    }
+
+    /** «6 октября 2026, 19:30» — дата и время матча. Времени нет — только дата. */
+    function formatMatchWhen(match, style) {
+        var source = isPlainObject(match) ? match : {};
+        var time = normalizeMatchTime(source.time);
+
+        return formatDate(source.date, style) + (time ? ', ' + time : '');
+    }
+
+    /** «час», «часа», «часов» */
+    function hoursWord(count) {
+        return pluralWord(count, 'час', 'часа', 'часов');
+    }
+
+    /** «минуту», «минуты», «минут» */
+    function minutesWord(count) {
+        return pluralWord(count, 'минуту', 'минуты', 'минут');
+    }
+
+    /**
+     * Отсчёт до начала матча словами: «через 4 дня», «завтра в 19:30»,
+     * «сегодня в 19:30», «сегодня», «через 3 часа», «через 25 минут».
+     *
+     * Пустая строка — матч уже сыгран, дата в прошлом, время начала прошло или
+     * дата неизвестна: тогда показываем обычную дату, ничего не выдумывая.
+     * В день матча счёт идёт по времени, в остальные дни — по календарным дням,
+     * иначе «завтра в 9:00» читалось бы как «через 15 часов».
+     * now передаётся явно, чтобы отсчёт можно было проверить.
+     */
+    function countdownLabel(match, now) {
+        // Сыгранный матч (счёт уже есть) — отсчитывать не до чего, даже если
+        // результат внесли заранее: показываем только дату
+        if (isFinished(match)) {
+            return '';
+        }
+
+        var start = matchStart(match);
+
+        if (!start) {
+            return '';
+        }
+
+        var current = (now instanceof Date && !Number.isNaN(now.getTime())) ? now : new Date();
+        var diff = start.getTime() - current.getTime();
+        var days = Math.round((dayStart(start).getTime() - dayStart(current).getTime()) / 86400000);
+        var time = normalizeMatchTime(match.time);
+
+        if (days > 1) {
+            return 'через ' + days + ' ' + daysWord(days);
+        }
+
+        if (days === 1) {
+            return 'завтра' + (time ? ' в ' + time : '');
+        }
+
+        // Дата в прошлом: сколько именно дней назад — уже не новость, показываем дату
+        if (days < 0) {
+            return '';
+        }
+
+        // Время не назначено: известно только то, что матч сегодня
+        if (!time) {
+            return 'сегодня';
+        }
+
+        // Время начала уже прошло, а счёта ещё нет — отсчитывать не до чего
+        if (diff < 0) {
+            return '';
+        }
+
+        var minutes = Math.floor(diff / 60000);
+
+        if (minutes < 1) {
+            return 'вот-вот начнётся';
+        }
+
+        if (minutes < 60) {
+            return 'через ' + minutes + ' ' + minutesWord(minutes);
+        }
+
+        return 'через ' + Math.floor(minutes / 60) + ' ' + hoursWord(Math.floor(minutes / 60));
+    }
 
     /**
      * Форматирование даты без зависимости от локали браузера.
@@ -433,6 +586,8 @@
         var teamA = toInt(source.teamA);
         var teamB = toInt(source.teamB);
         var date = String(source.date === null || source.date === undefined ? '' : source.date).trim();
+        var rawTime = String(source.time === null || source.time === undefined ? '' : source.time).trim();
+        var time = normalizeMatchTime(rawTime);
 
         if (teamA === null || teamIds.indexOf(teamA) === -1) {
             return { ok: false, error: 'Выберите первую команду' };
@@ -448,6 +603,11 @@
 
         if (!parseISODate(date)) {
             return { ok: false, error: 'Укажите дату матча' };
+        }
+
+        // Время необязательно: без него матч просто «на этот день».
+        if (rawTime && !time) {
+            return { ok: false, error: 'Время матча указывается как ЧЧ:ММ' };
         }
 
         var scoreA = normalizeScore(source.scoreA);
@@ -471,6 +631,7 @@
                 teamA: teamA,
                 teamB: teamB,
                 date: date,
+                time: time,
                 scoreA: finished ? scoreA : null,
                 scoreB: finished ? scoreB : null,
                 finished: finished
@@ -492,7 +653,11 @@
             Number.isInteger(match.scoreA) && Number.isInteger(match.scoreB);
     }
 
-    /** Сортировка матчей по дате. order: 'asc' | 'desc'; матчи без даты всегда в конце. */
+    /**
+     * Сортировка матчей по дате и времени. order: 'asc' | 'desc';
+     * матчи без даты всегда в конце. В один день порядок задаёт время начала:
+     * расписание дня читается сверху вниз, как в программке.
+     */
     function sortMatches(matches, order) {
         var direction = order === 'asc' ? 1 : -1;
 
@@ -511,11 +676,25 @@
                 return (keyA - keyB) * direction;
             }
 
+            if (!missingA) {
+                // Время не указано — считаем началом дня
+                var timeA = normalizeMatchTime(a.time) || '00:00';
+                var timeB = normalizeMatchTime(b.time) || '00:00';
+
+                if (timeA !== timeB) {
+                    return (timeA < timeB ? -1 : 1) * direction;
+                }
+            }
+
             return toInt(a.id) - toInt(b.id);
         });
     }
 
-    /** Фильтр матчей для публичного списка: 'all' | 'finished' | 'upcoming'. */
+    /**
+     * Фильтр матчей для публичного списка: 'all' | 'finished' | 'upcoming'.
+     * Предстоящие читаются как расписание — ближайший матч первым,
+     * поэтому для них порядок прямой (остальные — от новых к старым).
+     */
     function selectMatches(matches, filter) {
         var list = (matches || []).filter(function (match) {
             if (filter === 'finished') {
@@ -529,7 +708,7 @@
             return true;
         });
 
-        return sortMatches(list, 'desc');
+        return sortMatches(list, filter === 'upcoming' ? 'asc' : 'desc');
     }
 
     /**
@@ -1873,20 +2052,28 @@
         return { ok: true, value: { yellowLimit: limit, yellowPeriodDays: days } };
     }
 
-    /** «день», «дня» или «дней» — для периода действия карточек. */
-    function daysWord(count) {
+    /**
+     * Русское окончание по числу: 1 день, 2 дня, 5 дней.
+     * Исключение — 11…14: у них всегда третья форма (11 дней, 12 часов).
+     */
+    function pluralWord(count, one, few, many) {
         var value = Math.abs(toInt(count) || 0) % 100;
         var last = value % 10;
 
         if (value > 10 && value < 20) {
-            return 'дней';
+            return many;
         }
 
         if (last === 1) {
-            return 'день';
+            return one;
         }
 
-        return (last >= 2 && last <= 4) ? 'дня' : 'дней';
+        return (last >= 2 && last <= 4) ? few : many;
+    }
+
+    /** «день», «дня» или «дней» — для периода действия карточек. */
+    function daysWord(count) {
+        return pluralWord(count, 'день', 'дня', 'дней');
     }
 
     /** Период словами: «за весь турнир» или «за 30 дней». */
@@ -2218,6 +2405,12 @@
                 repaired = true;
             }
 
+            // Время необязательно; непонятную строку теряем и помечаем как исправление
+            var time = normalizeMatchTime(match.time);
+            if (!time && match.time !== undefined && match.time !== null && String(match.time).trim() !== '') {
+                repaired = true;
+            }
+
             var scoreA = normalizeScore(match.scoreA);
             var scoreB = normalizeScore(match.scoreB);
             var bothScoresValid = Number.isInteger(scoreA) && Number.isInteger(scoreB);
@@ -2247,6 +2440,7 @@
                 scoreA: scoreA,
                 scoreB: scoreB,
                 date: date,
+                time: time,
                 finished: bothScoresValid,
                 events: events.events
             });
@@ -2502,6 +2696,11 @@
         validateTeamName: validateTeamName,
         validatePlayerName: validatePlayerName,
         normalizeScore: normalizeScore,
+        normalizeMatchTime: normalizeMatchTime,
+        matchStart: matchStart,
+        countdownLabel: countdownLabel,
+        formatMatchWhen: formatMatchWhen,
+        pluralWord: pluralWord,
         validateMatchInput: validateMatchInput,
         adminPasswordMatches: adminPasswordMatches,
         isFinished: isFinished,

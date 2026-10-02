@@ -838,12 +838,17 @@
         }, 5000);
     }
 
-    function setFieldError(elementId, message) {
+    /** Подставляет текст в элемент по id (если такой элемент есть на странице). */
+    function setText(elementId, text) {
         var element = $(elementId);
 
         if (element) {
-            element.textContent = message || '';
+            element.textContent = text;
         }
+    }
+
+    function setFieldError(elementId, message) {
+        setText(elementId, message || '');
     }
 
     function showDataBanner(reason) {
@@ -2016,17 +2021,106 @@
         countUp($('stat-finished'), stats.finished);
     }
 
+    /**
+     * Главная страница: афиша ближайшего матча с отсчётом до начала и список
+     * следующих матчей. «Последние результаты» отдельным блоком не выводятся —
+     * они в один клик по плитке «Завершено». Когда предстоящих матчей нет
+     * (турнир доигран), блоки сами переключаются на последний матч и итоги,
+     * чтобы главная не пустовала.
+     */
     function renderHome() {
-        var finished = L.sortMatches(state.data.matches.filter(L.isFinished), 'desc');
-        var upcoming = L.sortMatches(state.data.matches.filter(function (match) {
-            return !L.isFinished(match);
-        }), 'asc');
+        var groups = L.groupMatchesForAdmin(state.data.matches);
+        var next = groups.upcoming.length ? groups.upcoming[0] : null;
+        var featured = next || groups.finished[0] || null;
+        var rest = next
+            ? groups.upcoming.slice(1, 1 + CONFIG.recentMatches)
+            : groups.finished.slice(1, 1 + CONFIG.recentMatches);
+        var nextBox = $('next-match');
+        var upcomingBox = $('upcoming-matches');
 
-        $('latest-results').innerHTML = finished.slice(0, CONFIG.recentMatches).map(matchCard).join('') ||
-            '<p class="empty-state">Завершённых матчей пока нет</p>';
+        if (!nextBox || !upcomingBox) {
+            return;
+        }
 
-        $('upcoming-matches').innerHTML = upcoming.slice(0, CONFIG.recentMatches).map(matchCard).join('') ||
-            '<p class="empty-state">Предстоящих матчей нет</p>';
+        setText('next-match-title', next ? 'Ближайший матч' : 'Последний матч');
+        setText('upcoming-title', next ? 'Предстоящие матчи' : 'Последние результаты');
+        setText('next-match-link', next ? 'Расписание' : 'Все матчи');
+
+        nextBox.innerHTML = featured
+            ? nextMatchCard(featured)
+            : '<p class="empty-state">Матчей пока нет — расписание появится здесь</p>';
+
+        upcomingBox.innerHTML = rest.length
+            ? rest.map(matchCard).join('')
+            : '<p class="empty-state">' + (next
+                ? 'Больше матчей пока не назначено'
+                : 'Завершённых матчей пока нет') + '</p>';
+
+        renderCountdowns();
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Отсчёт до ближайшего матча                                          */
+    /* ------------------------------------------------------------------ */
+
+    /* Раз в 20 секунд достаточно: на билетах видны минуты, и «через 20 минут»
+       не должен отставать от часов. Кадры запрашиваем только пока главная
+       открыта и вкладка видима — как у блика по табло. */
+    var COUNTDOWN_STEP = 20000;
+    var countdownFrame = null;
+    var countdownCheckedAt = 0;
+
+    /**
+     * Обновляет отсчёты на странице (элементы data-countdown) и прячет пустые:
+     * в прошлое не показываем ничего — вместо выдуманного статуса видна дата.
+     */
+    function renderCountdowns() {
+        var now = new Date();
+
+        qsa('[data-countdown]').forEach(function (element) {
+            var match = findMatch(element.getAttribute('data-id'));
+            var label = match ? L.countdownLabel(match, now) : '';
+
+            if (element.textContent !== label) {
+                element.textContent = label;
+            }
+
+            element.classList.toggle('is-empty', !label);
+        });
+    }
+
+    function watchCountdowns(time) {
+        countdownFrame = window.requestAnimationFrame(watchCountdowns);
+
+        if (time - countdownCheckedAt < COUNTDOWN_STEP) {
+            return;
+        }
+
+        countdownCheckedAt = time;
+        renderCountdowns();
+    }
+
+    /** Включает живое обновление отсчёта; повторный вызов ничего не меняет. */
+    function startCountdowns() {
+        var box = $('next-match');
+
+        // Отсчёт — это данные, а не украшение: он идёт и при «меньше движения».
+        // Но в фоновой вкладке и в jsdom (нет вёрстки) кадры не запрашиваем.
+        if (countdownFrame !== null || document.hidden || !box || box.offsetParent === null) {
+            return;
+        }
+
+        countdownCheckedAt = 0;
+        countdownFrame = window.requestAnimationFrame(watchCountdowns);
+    }
+
+    function stopCountdowns() {
+        if (countdownFrame === null) {
+            return;
+        }
+
+        window.cancelAnimationFrame(countdownFrame);
+        countdownFrame = null;
     }
 
     /**
@@ -2059,13 +2153,25 @@
     }
 
     /**
-     * Карточка матча для публичных списков. Названия команд ведут на их страницы,
-     * счёт — в детальный результат матча; клик по остальной части карточки тоже
-     * открывает матч (data-action стоит и на самой карточке).
+     * Строка «когда играем» в билете: дата, время (если назначено) и отсчёт.
      *
-     * Голы и карточки показываются под названием той команды, которая их получила:
-     * у хозяев — слева, у гостей — справа. Так сразу видно, чей это гол или карточка.
+     * withCountdown = false — отсчёт не добавляется: в афише ближайшего матча
+     * он стоит отдельной строкой над командами, дублировать его не нужно.
+     * Элемент отсчёта ставится всегда, даже если он пуст: renderCountdowns
+     * заполняет его по таймеру, а пустой (is-empty) просто не показывается.
      */
+    function matchWhenLine(match, withCountdown) {
+        var line = '<span class="inline-flex items-center gap-1">' + icon('calendar') +
+            esc(L.formatMatchWhen(match, 'long')) + '</span>';
+
+        if (withCountdown === false) {
+            return line;
+        }
+
+        return line + '<span class="match-countdown is-empty" data-countdown data-id="' +
+            L.toInt(match.id) + '"></span>';
+    }
+
     /** Отпечаток счёта матча: пусто — матч ещё не сыгран. */
     function matchScoreKey(match) {
         return match.finished ? match.scoreA + ':' + match.scoreB : '';
@@ -2098,6 +2204,14 @@
         return changed;
     }
 
+    /**
+     * Карточка матча для публичных списков. Названия команд ведут на их страницы,
+     * счёт — в детальный результат матча; клик по остальной части карточки тоже
+     * открывает матч (data-action стоит и на самой карточке).
+     *
+     * Голы и карточки показываются под названием той команды, которая их получила:
+     * у хозяев — слева, у гостей — справа. Так сразу видно, чей это гол или карточка.
+     */
     function matchCard(match) {
         var teamA = L.findTeam(state.data.teams, match.teamA);
         var teamB = L.findTeam(state.data.teams, match.teamB);
@@ -2124,13 +2238,51 @@
                     '</div>' +
                 '</div>' +
                 '<div class="mt-2 text-xs text-dark-600 flex flex-wrap items-center gap-3">' +
-                    '<span class="inline-flex items-center gap-1">' + icon('calendar') + esc(L.formatDate(match.date, 'long')) + '</span>' +
+                    matchWhenLine(match) +
                     statusPill(match) +
                 '</div>' +
                 // Кто не может играть из-за карточек: «Пропустят матч: Иванов А. (Спартак)»
                 matchBanLine(match) +
             '</article>';
     }
+
+    /**
+     * Афиша ближайшего матча на главной: крупно команды, дата с временем и живой
+     * отсчёт до начала. Когда турнир доигран, та же афиша показывает последний
+     * матч со счётом — главная не остаётся пустой.
+     */
+    function nextMatchCard(match) {
+        var teamA = L.findTeam(state.data.teams, match.teamA);
+        var teamB = L.findTeam(state.data.teams, match.teamB);
+        var marksA = teamMarks(match, match.teamA);
+        var marksB = teamMarks(match, match.teamB);
+        var middle = match.finished
+            ? '<span class="score-display">' + match.scoreA + ' : ' + match.scoreB + '</span>'
+            : '<span class="next-match-vs">против</span>';
+
+        return '' +
+            '<article class="match-card next-match-card ' + (match.finished ? 'finished' : 'upcoming') + '"' +
+                ' data-action="match-public-open" data-id="' + match.id + '" title="Подробности матча">' +
+                '<p class="next-match-countdown is-empty" data-countdown data-id="' + L.toInt(match.id) + '"></p>' +
+                '<div class="next-match-line">' +
+                    '<div class="next-match-side">' +
+                        teamLink(teamA, teamA ? teamA.name : 'Команда удалена', false, false) +
+                        (marksA ? '<div class="match-side-marks">' + marksA + '</div>' : '') +
+                    '</div>' +
+                    '<div class="next-match-middle">' + middle + '</div>' +
+                    '<div class="next-match-side next-match-side-away">' +
+                        teamLink(teamB, teamB ? teamB.name : 'Команда удалена', true, false) +
+                        (marksB ? '<div class="match-side-marks match-side-marks-away">' + marksB + '</div>' : '') +
+                    '</div>' +
+                '</div>' +
+                '<div class="next-match-when">' +
+                    matchWhenLine(match, false) +
+                    statusPill(match) +
+                '</div>' +
+                matchBanLine(match) +
+            '</article>';
+    }
+
 
     /**
      * Короткая сводка событий матча: голы, жёлтые и красные карточки (иконка и число).
@@ -3211,7 +3363,7 @@
         box.innerHTML =
             '<div class="flex flex-wrap items-center justify-between gap-2 mb-3">' +
                 '<span class="inline-flex items-center gap-1 text-xs text-dark-600">' + icon('calendar') +
-                    esc(L.formatDate(match.date, 'long')) + '</span>' +
+                    esc(L.formatMatchWhen(match, 'long')) + '</span>' +
                 statusPill(match) +
             '</div>' +
             '<div class="match-detail-score">' +
@@ -3628,7 +3780,7 @@
 
         return '<button type="button" class="admin-row" data-action="match-open" data-id="' + match.id + '">' +
             '<span class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 min-w-0">' +
-                '<span class="admin-hint whitespace-nowrap">' + esc(L.formatDate(match.date, 'numeric')) + '</span>' +
+                '<span class="admin-hint whitespace-nowrap">' + esc(L.formatMatchWhen(match, 'numeric')) + '</span>' +
                 '<span class="truncate font-medium">' + esc(teamA) + ' ' + score + ' ' + esc(teamB) + '</span>' +
             '</span>' +
             '<span class="admin-row-meta">' +
@@ -3671,7 +3823,7 @@
 
         scoreBox.innerHTML =
             '<div class="flex flex-wrap items-center justify-between gap-2 mb-3">' +
-                '<span class="admin-hint">' + esc(L.formatDate(match.date, 'long')) + '</span>' +
+                '<span class="admin-hint">' + esc(L.formatMatchWhen(match, 'long')) + '</span>' +
                 statusPill(match) +
             '</div>' +
             '<div class="admin-score-line">' +
@@ -4338,7 +4490,7 @@
      * друг за другом, миниатюры фотографий проявляются. Классы живут только во время
      * перехода и потом снимаются, поэтому фоновое обновление данных ничего не «переигрывает».
      */
-    var STAGGER_CONTAINERS = ['latest-results', 'upcoming-matches', 'matches-list', 'teams-grid'];
+    var STAGGER_CONTAINERS = ['next-match', 'upcoming-matches', 'matches-list', 'teams-grid'];
 
     function playStagger() {
         var section = document.querySelector('.page-section.active');
@@ -4492,11 +4644,14 @@
         playStagger();
 
         /* Блик по табло и отклик нот — только на главной: там сам табло и есть.
-           Уходим на другую страницу — снимаем отклик, ноты остаются чистыми. */
+           Уходим на другую страницу — снимаем отклик, ноты остаются чистыми.
+           Заодно запускаем и останавливаем отсчёт до ближайшего матча. */
         if (target === 'home') {
             startNoteSheen();
+            startCountdowns();
         } else {
             stopNoteSheen();
+            stopCountdowns();
         }
     }
 
@@ -4580,7 +4735,7 @@
             cancel.hidden = true;
         }
 
-        ['match-score-a', 'match-score-b'].forEach(function (id) {
+        ['match-score-a', 'match-score-b', 'match-time'].forEach(function (id) {
             var input = $(id);
 
             if (input) {
@@ -4618,7 +4773,8 @@
             teamB: read('match-team-b'),
             scoreA: read('match-score-a'),
             scoreB: read('match-score-b'),
-            date: read('match-date')
+            date: read('match-date'),
+            time: read('match-time')
         };
     }
 
@@ -4644,6 +4800,7 @@
         setValue('match-team-a', String(match.teamA));
         setValue('match-team-b', String(match.teamB));
         setValue('match-date', match.date || L.todayISO());
+        setValue('match-time', L.normalizeMatchTime(match.time));
         setValue('match-score-a', match.scoreA === null ? '' : String(match.scoreA));
         setValue('match-score-b', match.scoreB === null ? '' : String(match.scoreB));
 
@@ -4831,6 +4988,7 @@
             match.teamA = check.match.teamA;
             match.teamB = check.match.teamB;
             match.date = check.match.date;
+            match.time = check.match.time;
             match.scoreA = check.match.scoreA;
             match.scoreB = check.match.scoreB;
             match.finished = check.match.finished;
@@ -4845,6 +5003,7 @@
             teamA: check.match.teamA,
             teamB: check.match.teamB,
             date: check.match.date,
+            time: check.match.time,
             scoreA: check.match.scoreA,
             scoreB: check.match.scoreB,
             finished: check.match.finished
@@ -4915,6 +5074,7 @@
             teamA: match.teamA,
             teamB: match.teamB,
             date: match.date,
+            time: match.time,
             scoreA: scoreA ? scoreA.value : '',
             scoreB: scoreB ? scoreB.value : ''
         }, state.data.teams);
@@ -5452,13 +5612,16 @@
             });
         });
 
-        /* В фоновой вкладке кадры не идут: слежение за бликом останавливаем, а при
-           возвращении запускаем снова — иначе отклик замерзал бы на полуслове. */
+        /* В фоновой вкладке кадры не идут: слежение за бликом и отсчёт до матча
+           останавливаем, а при возвращении запускаем снова — иначе отклик замерзал
+           бы на полуслове, а отсчёт не обновлялся бы к моменту показа. */
         document.addEventListener('visibilitychange', function () {
             if (document.hidden) {
                 stopNoteSheen();
+                stopCountdowns();
             } else if (state.route === 'home') {
                 startNoteSheen();
+                startCountdowns();
             }
         });
     }

@@ -176,7 +176,7 @@ function boot(options) {
     };
 }
 
-test('главная страница: активна только она, статистика и списки матчей заполнены', () => {
+test('главная страница: активна только она, статистика и афиша ближайшего матча заполнены', () => {
     const app = boot();
 
     assert.equal(app.activeSection(), 'page-home');
@@ -185,13 +185,62 @@ test('главная страница: активна только она, ст�
     assert.equal(app.id('stat-players').textContent, '9');
     assert.equal(app.id('stat-finished').textContent, '2');
 
-    const latest = app.id('latest-results').querySelectorAll('.match-card');
-    assert.equal(latest.length, 2, 'на главной только завершённые матчи');
-    assert.match(latest[0].textContent, /Динамо/, 'сначала самый поздний матч');
-    assert.equal(app.id('upcoming-matches').querySelectorAll('.match-card').length, 2);
-    assert.equal(app.id('latest-results').querySelectorAll('.score-display').length, 2);
+    // Слева — афиша ближайшего из предстоящих матчей: команды, дата с временем и отсчёт
+    const featured = app.id('next-match').querySelector('.match-card.next-match-card');
+
+    assert.ok(featured, 'афиша ближайшего матча показана');
+    assert.equal(featured.getAttribute('data-id'), '3', 'выбран самый близкий по дате матч');
+    assert.equal(app.id('next-match-title').textContent, 'Ближайший матч');
+    assert.match(featured.textContent, /Спартак/, 'команды видны');
+    assert.match(featured.querySelector('.next-match-when').textContent, /19:30/, 'время начала показано');
+
+    const match = app.storedData().matches.find((item) => item.id === 3);
+    const countdown = featured.querySelector('.next-match-countdown');
+
+    assert.equal(countdown.textContent, L.countdownLabel(match, new Date()), 'отсчёт совпадает с датой матча');
+    assert.equal(countdown.classList.contains('is-empty'), false, 'отсчёт не пустой');
+
+    // Справа — остальные предстоящие матчи: афиша слева не повторяется
+    const upcoming = app.id('upcoming-matches').querySelectorAll('.match-card');
+
+    assert.equal(upcoming.length, 1, 'в списке только следующий матч');
+    assert.equal(upcoming[0].getAttribute('data-id'), '4');
+    assert.equal(app.id('upcoming-title').textContent, 'Предстоящие матчи');
+
+    // Последние результаты отдельным блоком не выводятся: они в один клик
+    // по плитке «Завершено» над этим блоком
+    assert.equal(app.id('latest-results'), null, 'блока «Последние результаты» на главной больше нет');
 
     assert.equal(app.storedData().teams.length, 4, 'демо-данные сразу попадают в хранилище');
+});
+
+test('главная: когда все матчи сыграны, блоки переключаются на итоги', () => {
+    const seeded = remoteData();
+
+    seeded.matches.forEach((match) => {
+        match.finished = true;
+        match.scoreA = 1;
+        match.scoreB = 1;
+    });
+
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(seeded) } });
+
+    assert.equal(app.id('next-match-title').textContent, 'Последний матч', 'заголовок афиши переключился');
+    assert.equal(app.id('upcoming-title').textContent, 'Последние результаты');
+    assert.equal(app.id('next-match-link').textContent, 'Все матчи');
+
+    const featured = app.id('next-match').querySelector('.match-card');
+
+    assert.equal(featured.getAttribute('data-id'), '4', 'показан самый поздний матч');
+    assert.match(featured.textContent, /1 : 1/, 'счёт последнего матча виден');
+    assert.equal(featured.querySelector('.next-match-countdown').classList.contains('is-empty'), true,
+        'у сыгранного матча отсчёта нет');
+
+    // В списке справа — остальные результаты (сам последний матч уже показан слева)
+    const results = app.id('upcoming-matches').querySelectorAll('.match-card');
+
+    assert.deepEqual(Array.from(results).map((card) => card.getAttribute('data-id')), ['3', '2', '1']);
+    assert.equal(app.id('stat-finished').textContent, '4');
 });
 
 test('навигация: переключение страниц, подсветка меню и хэш-адреса', () => {
@@ -521,10 +570,10 @@ test('названия команд кликабельны везде, где о
     const app = boot();
 
     // Главная: в карточках матчей обе команды — ссылки
-    const homeCards = app.$$('#latest-results .match-card').length + app.$$('#upcoming-matches .match-card').length;
+    const homeCards = app.$$('#next-match .match-card').length + app.$$('#upcoming-matches .match-card').length;
 
     assert.ok(homeCards > 0, 'на главной есть карточки матчей');
-    assert.equal(app.$$('#latest-results .team-link, #upcoming-matches .team-link').length, homeCards * 2,
+    assert.equal(app.$$('#next-match .team-link, #upcoming-matches .team-link').length, homeCards * 2,
         'на главной у каждой команды в карточке матча — ссылка');
 
     // Страница матчей: то же самое
@@ -595,7 +644,7 @@ test('кнопка «Назад» возвращает на предыдущую
 
     // Главная → матч → команда: назад сначала к матчу, затем на главную
     app.navigate('home');
-    app.click(app.id('latest-results').querySelector('.match-card[data-id="1"]'));
+    app.click(app.id('next-match').querySelector('.match-card'));
     assert.equal(app.id('match-detail-view').hidden, false, 'открылся детальный результат матча');
 
     app.click(app.id('match-detail').querySelector('a.match-detail-team'));
@@ -604,7 +653,7 @@ test('кнопка «Назад» возвращает на предыдущую
 
     app.click(app.button('go-back'));
     assert.equal(app.id('match-detail-view').hidden, false, 'вернулись к матчу');
-    assert.equal(app.window.location.hash, '#/match/1');
+    assert.equal(app.window.location.hash, '#/match/3', 'вернулись к тому же матчу');
 
     app.click(app.button('go-back'));
     assert.equal(app.activeSection(), 'page-home', 'а затем на главную');
@@ -819,20 +868,38 @@ test('админка: добавление матча и понятные про
     assert.match(app.id('match-form-error').textContent, /счёт обеих команд/);
     assert.equal(app.storedData().matches.length, 4, 'ничего не сохранено');
 
-    // Корректный предстоящий матч
+    // Корректный предстоящий матч — со временем начала
     app.id('match-score-a').value = '';
+    app.id('match-time').value = '19:30';
     app.submit(form);
     assert.equal(app.storedData().matches.length, 5);
     assert.equal(app.id('match-form-error').textContent, '');
     assert.equal(app.id('match-score-a').value, '', 'форма очищена');
     assert.equal(app.id('match-score-b').value, '');
+    assert.equal(app.id('match-time').value, '', 'время тоже очищено (поле необязательное)');
 
     const added = app.storedData().matches[4];
     assert.deepEqual(
-        { teamA: added.teamA, teamB: added.teamB, date: added.date, finished: added.finished },
-        { teamA: 1, teamB: 2, date: '2026-10-01', finished: false }
+        { teamA: added.teamA, teamB: added.teamB, date: added.date, time: added.time, finished: added.finished },
+        { teamA: 1, teamB: 2, date: '2026-10-01', time: '19:30', finished: false }
     );
     assert.equal(app.id('stat-matches').textContent, '5');
+
+    // Время видно в списке матчей админки и подставляется в форму редактирования
+    assert.match(app.id('admin-matches-list').textContent, /01\.10\.2026, 19:30/);
+
+    app.openMatch(added.id);
+    assert.match(app.id('admin-match-score').textContent, /1 октября 2026, 19:30/, 'время видно в карточке матча');
+    app.click(app.button('match-edit'));
+    assert.equal(app.id('match-time').value, '19:30', 'время подставляется в форму редактирования');
+    app.click(app.id('match-cancel'));
+
+    // Матч без времени — обычное дело: сохраняется и выглядит как раньше
+    app.id('match-team-a').value = '1';
+    app.id('match-team-b').value = '2';
+    app.id('match-date').value = '2026-10-02';
+    app.submit(form);
+    assert.equal(app.storedData().matches[5].time, '', 'время необязательно');
 });
 
 test('админка: ввод счёта, переоткрытие, правка и удаление матча влияют на таблицу', () => {
@@ -854,7 +921,11 @@ test('админка: ввод счёта, переоткрытие, правк�
     const saved = app.storedData().matches.find((match) => match.id === 3);
     assert.deepEqual([saved.scoreA, saved.scoreB, saved.finished], [4, 0, true]);
     assert.equal(app.id('stat-finished').textContent, '3');
-    assert.equal(app.id('latest-results').querySelectorAll('.match-card').length, 3, 'результат попал на главную');
+
+    // Матч сыгран — на главной его место занял следующий по расписанию,
+    // а сам результат смотрится по плитке «Завершено»
+    assert.equal(app.id('next-match').querySelector('.match-card').getAttribute('data-id'), '4');
+    assert.equal(app.id('next-match-title').textContent, 'Ближайший матч');
 
     app.navigate('standings');
     const spartakCells = Array.from(app.id('standings-body').querySelector('tr').querySelectorAll('td'))
@@ -878,7 +949,7 @@ test('админка: ввод счёта, переоткрытие, правк�
     app.openMatch(3);
     app.click(app.button('match-edit'));
     assert.equal(app.id('match-form-title').textContent, 'Изменить матч');
-    assert.equal(app.id('match-date').value, '2026-09-20');
+    assert.equal(app.id('match-date').value, app.storedData().matches.find((match) => match.id === 3).date);
     assert.equal(app.id('match-cancel').hidden, false, 'появилась кнопка отмены');
     assert.equal(app.id('match-score-a').value, '', 'у переоткрытого матча счёта ещё нет');
     assert.equal(app.id('admin-match-view').hidden, true, 'форма открылась в списке матчей');
@@ -888,7 +959,7 @@ test('админка: ввод счёта, переоткрытие, правк�
     app.click(app.button('match-edit'));
     assert.deepEqual(
         [app.id('match-score-a').value, app.id('match-score-b').value, app.id('match-date').value],
-        ['2', '1', '2026-09-10']
+        ['2', '1', app.storedData().matches.find((match) => match.id === 1).date]
     );
 
     // Сохраняем изменения переоткрытого матча №3
@@ -1020,7 +1091,7 @@ test('дисциплина: лимит жёлтых карточек превр�
     const app = boot();
     app.login();
 
-    // Четыре жёлтые карточки Иванова А. в первом матче (Спартак — Локомотив, 10 сентября)
+    // Четыре жёлтые карточки Иванова А. в первом матче (Спартак — Локомотив)
     app.openMatch(1);
 
     for (let i = 0; i < 4; i += 1) {
@@ -1037,7 +1108,8 @@ test('дисциплина: лимит жёлтых карточек превр�
 
     assert.match(adminBans.textContent, /Пропустят матч по карточкам/);
     assert.match(adminBans.textContent, /Иванов А\./);
-    assert.match(adminBans.textContent, /4-я жёлтая карточка, получена 10\.09\.2026/);
+    assert.ok(adminBans.textContent.includes('4-я жёлтая карточка, получена ' +
+        L.formatDate(app.storedData().matches[0].date, 'numeric')), 'в админке видна дата получения карточки');
     assert.match(adminBans.textContent, /4-я жёлтая карточка за весь турнир превращается в красную/,
         'в админке видно само правило');
     assert.equal(adminBans.querySelectorAll('.admin-ban-item').length, 1);
@@ -1059,7 +1131,8 @@ test('дисциплина: лимит жёлтых карточек превр�
     assert.match(line.textContent, /Пропустят матч:/);
     assert.match(line.textContent, /Иванов А\./);
     assert.match(line.textContent, /\(Спартак\)/);
-    assert.equal(line.querySelector('.ban-name').getAttribute('title'), '4-я жёлтая карточка, получена 10.09.2026');
+    assert.equal(line.querySelector('.ban-name').getAttribute('title'),
+        '4-я жёлтая карточка, получена ' + L.formatDate(app.storedData().matches[0].date, 'numeric'));
 
     // Детальный результат: блок «Дисквалификации» с причиной и правилом
     app.click(card(3));
@@ -1069,7 +1142,8 @@ test('дисциплина: лимит жёлтых карточек превр�
     assert.ok(block, 'на странице матча появился блок дисквалификаций');
     assert.match(block.textContent, /Дисквалификации/);
     assert.match(block.textContent, /Иванов А\./);
-    assert.match(block.textContent, /4-я жёлтая карточка, получена 10\.09\.2026/);
+    assert.ok(block.textContent.includes('4-я жёлтая карточка, получена ' +
+        L.formatDate(app.storedData().matches[0].date, 'numeric')), 'в блоке видна дата получения карточки');
     assert.match(block.textContent, /превращается в красную/);
 
     // Матч сыгран — дисквалификация отбыта: новый матч Спартака без ограничений
@@ -1080,9 +1154,13 @@ test('дисциплина: лимит жёлтых карточек превр�
     app.click(app.button('match-save-score'));
     app.click(app.button('match-back'));
 
+    // Новый матч Спартака — после того, в котором отбыта дисквалификация
+    const nextSpartak = L.matchStart(app.storedData().matches.find((match) => match.id === 3));
+
+    nextSpartak.setDate(nextSpartak.getDate() + 7);
     app.id('match-team-a').value = '1';
     app.id('match-team-b').value = '4';
-    app.id('match-date').value = '2026-10-01';
+    app.id('match-date').value = L.toISODate(nextSpartak);
     app.submit(app.$('[data-form="match"]'));
 
     app.navigate('matches');
@@ -2408,11 +2486,15 @@ test('свежий результат: изменившийся счёт пом�
 
     await app.wait(140);
 
-    const card = app.id('latest-results').querySelector('.match-card[data-id="' + played.id + '"]');
+    // Свежий счёт показывается в списке матчей: на главной результаты
+    // не дублируются, за них отвечает плитка «Завершено»
+    app.navigate('matches');
 
-    assert.ok(card, 'матч с изменившимся счётом виден в последних результатах');
+    const card = app.id('matches-list').querySelector('.match-card[data-id="' + played.id + '"]');
+
+    assert.ok(card, 'матч с изменившимся счётом виден в списке матчей');
     assert.equal(card.classList.contains('is-fresh'), true, 'у свежего счёта горит «лампа»');
-    assert.equal(app.$$('#latest-results .match-card.is-fresh').length, 1, 'лампа только у изменившегося матча');
+    assert.equal(app.$$('#matches-list .match-card.is-fresh').length, 1, 'лампа только у изменившегося матча');
 
     app.stopAutoRefresh();
 });
@@ -2737,15 +2819,17 @@ test('карточка матча: голы и карточки показаны
     assert.match(card.textContent, /2 : 1/, 'счёт на месте');
 
     // Нижняя строка карточки: дата и статус матча
-    assert.match(card.querySelector('.mt-2').textContent, /сентября/);
+    assert.ok(card.querySelector('.mt-2').textContent.includes(L.formatDate(seeded.matches[0].date, 'long')),
+        'дата матча видна');
     assert.ok(card.querySelector('.status-pill'), 'статус матча виден');
 
-    // На главной странице карточки матчей устроены так же
+    // На главной странице афиша ближайшего матча — тот же билет матча
     app.navigate('home');
 
-    const homeCard = app.id('latest-results').querySelector('.match-card[data-id="1"]');
+    const homeCard = app.id('next-match').querySelector('.match-card');
 
-    assert.equal(homeCard.querySelectorAll('.match-side-marks').length, 2, 'и на главной — по командам');
+    assert.ok(homeCard.classList.contains('next-match-card'), 'на главной — афиша ближайшего матча');
+    assert.equal(homeCard.querySelectorAll('.team-link').length, 2, 'обе команды — ссылки');
 });
 
 

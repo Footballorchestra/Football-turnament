@@ -751,6 +751,48 @@ body.theme-afisha .score-display {
 }
 
 /*
+ * Ближайший матч на главной — тёмное табло, а не бумажный билет: так он читается
+ * как вывеска у входа, а латунный отсчёт ведёт до начала матча.
+ * Стили идут после правил .match-card, поэтому перекрывают их при той же точности.
+ */
+body.theme-afisha .page-section:not(.admin-panel) .next-match-card {
+    background: linear-gradient(160deg, var(--af-night-2), var(--af-night));
+    border-color: var(--af-brass-soft);
+    padding: 1.1rem;
+    color: #f6f3ec;
+}
+
+/* Пунктир отрыва и цветная лента по краю у табло не нужны */
+body.theme-afisha .page-section:not(.admin-panel) .next-match-card::before {
+    display: none;
+}
+
+body.theme-afisha .next-match-card .team-name {
+    color: #f6f3ec;
+}
+
+body.theme-afisha .next-match-card .next-match-vs,
+body.theme-afisha .next-match-card .next-match-when {
+    color: #c9c1ae;
+}
+
+body.theme-afisha .next-match-card .next-match-countdown {
+    background: linear-gradient(155deg, #d9b75f, #a8802c);
+    color: #1c1608;
+}
+
+/* Отметка статуса на тёмном табло — как латунная наклейка */
+body.theme-afisha .next-match-card .status-pill.upcoming {
+    background: rgba(217, 183, 95, 0.22);
+    color: #f0d79a;
+}
+
+body.theme-afisha .next-match-card .status-pill.finished {
+    background: rgba(47, 125, 58, 0.28);
+    color: #cfe6d0;
+}
+
+/*
  * «Лампа» у свежего результата: счёт, изменившийся с прошлой отрисовки, коротко
  * мигает латунным светом — видно, что только что прилетел новый результат.
  * Класс is-fresh ставит matchCard (assets/js/app.js).

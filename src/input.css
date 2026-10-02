@@ -489,6 +489,97 @@
         border-left: 3px solid #fbbc04;
     }
 
+    /* --- Афиша ближайшего матча на главной ---
+       Тот же билет, но крупнее: команды заметны сразу, а отсчёт до начала
+       стоит отдельной строкой над ними. Отсчёт ставит app.js (data-countdown). */
+    .next-match-card .next-match-line {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
+
+    .next-match-card .next-match-side {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .next-match-card .next-match-side .team-link {
+        gap: 0.5rem;
+    }
+
+    .next-match-card .next-match-side .team-name {
+        font-size: 1.0625rem;
+        white-space: normal;
+        overflow-wrap: break-word;
+    }
+
+    .next-match-card .next-match-side-away .team-link {
+        justify-content: flex-end;
+        text-align: right;
+    }
+
+    .next-match-card .next-match-middle {
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .next-match-card .next-match-vs {
+        font-size: 0.875rem;
+        color: #5f6368;
+    }
+
+    .next-match-card .next-match-countdown {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        margin-bottom: 0.75rem;
+        padding: 0.25rem 0.65rem;
+        border-radius: 9999px;
+        background: #e8f5e9;
+        color: #1b5e20;
+        font-size: 0.8125rem;
+        font-weight: 600;
+    }
+
+    /* Точка перед отсчётом вместо отдельной иконки: видно, что это живое значение */
+    .next-match-card .next-match-countdown::before {
+        content: '';
+        width: 0.45rem;
+        height: 0.45rem;
+        border-radius: 50%;
+        background: currentColor;
+        opacity: 0.75;
+    }
+
+    .next-match-card .next-match-when {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 0.75rem;
+        margin-top: 0.75rem;
+        font-size: 0.75rem;
+        color: #5f6368;
+    }
+
+    /* --- Отсчёт в обычном билете: маленькая отметка рядом с датой --- */
+    .match-countdown {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.1rem 0.45rem;
+        border-radius: 9999px;
+        background: #fef7e0;
+        color: #8a5300;
+        font-weight: 500;
+    }
+
+    /* Матч уже начался (или дата прошла) — отсчёт не показываем совсем */
+    .match-countdown.is-empty,
+    .next-match-card .next-match-countdown.is-empty {
+        display: none;
+    }
+
     /* --- Отметки событий в публичной карточке матча: голы и карточки --- */
     .match-mark {
         display: inline-flex;
@@ -2197,10 +2288,49 @@
         padding: 0.75rem;
     }
 
+    /* Афиша ближайшего матча на телефоне: команды встают друг под друга, поэтому
+       длинные названия («Филармония») читаются целиком, а не по слогам */
+    .next-match-card .next-match-line {
+        flex-direction: column;
+        align-items: center;
+        gap: 0.3rem;
+    }
+
+    .next-match-card .next-match-side {
+        flex: none;
+        width: 100%;
+    }
+
+    .next-match-card .next-match-side .team-link,
+    .next-match-card .next-match-side-away .team-link {
+        justify-content: center;
+    }
+
+    .next-match-card .next-match-side .team-name {
+        font-size: 0.9375rem;
+    }
+
+    .next-match-card .next-match-vs {
+        font-size: 0.75rem;
+    }
+
+    .next-match-card .next-match-countdown {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.5rem;
+        margin-bottom: 0.6rem;
+    }
+
     /* В карточке матча на телефоне названия команд важнее бейджей:
        строка «Спартак 3 : 1 Динамо» читается целиком и не обрезается */
     .match-card .team-badge {
         display: none;
+    }
+
+    /* Названия команд в билете переносятся по словам, как в «Афише матча»:
+       обрезанное «Филарм…» не сообщает, с кем играют */
+    .match-card .team-name {
+        white-space: normal;
+        overflow-wrap: break-word;
     }
 
     .score-display {

@@ -145,6 +145,72 @@ test('validateMatchInput: все проверки формы матча', () => 
     const finished = L.validateMatchInput(Object.assign({}, base, { scoreA: '3', scoreB: '0' }), teams);
     assert.equal(finished.match.finished, true);
     assert.deepEqual([finished.match.scoreA, finished.match.scoreB], [3, 0]);
+
+    // Время необязательно, но если указано — приводится к «ЧЧ:ММ»
+    assert.equal(L.validateMatchInput(base, teams).match.time, '');
+    assert.equal(L.validateMatchInput(Object.assign({}, base, { time: '9:5' }), teams).match.time, '09:05');
+    assert.equal(L.validateMatchInput(Object.assign({}, base, { time: '25:00' }), teams).error,
+        'Время матча указывается как ЧЧ:ММ');
+});
+
+test('normalizeMatchTime: время матча приводится к «ЧЧ:ММ», мусор отбрасывается', () => {
+    assert.equal(L.normalizeMatchTime('19:30'), '19:30');
+    assert.equal(L.normalizeMatchTime('9:5'), '09:05');
+    assert.equal(L.normalizeMatchTime('19:30:00'), '19:30', 'значение поля времени в браузере');
+    assert.equal(L.normalizeMatchTime(' 19:30 '), '19:30');
+    assert.equal(L.normalizeMatchTime('24:00'), '');
+    assert.equal(L.normalizeMatchTime('19:60'), '');
+    assert.equal(L.normalizeMatchTime(''), '');
+    assert.equal(L.normalizeMatchTime(null), '');
+    assert.equal(L.normalizeMatchTime(1930), '');
+    assert.equal(L.normalizeMatchTime('вечером'), '');
+});
+
+test('matchStart и formatMatchWhen: дата со временем и без', () => {
+    const withTime = L.matchStart({ date: '2026-10-06', time: '19:30' });
+
+    assert.equal(withTime.getFullYear(), 2026);
+    assert.equal(withTime.getMonth(), 9);
+    assert.equal(withTime.getDate(), 6);
+    assert.equal(withTime.getHours(), 19);
+    assert.equal(withTime.getMinutes(), 30);
+
+    const noTime = L.matchStart({ date: '2026-10-06' });
+
+    assert.equal(noTime.getHours(), 0, 'без времени матч относится к началу дня');
+    assert.equal(L.matchStart({ date: '' }), null);
+    assert.equal(L.matchStart(null), null);
+
+    assert.equal(L.formatMatchWhen({ date: '2026-10-06', time: '19:30' }, 'long'), '6 октября 2026, 19:30');
+    assert.equal(L.formatMatchWhen({ date: '2026-10-06' }, 'long'), '6 октября 2026');
+    assert.equal(L.formatMatchWhen({}, 'long'), 'Дата не указана');
+});
+
+test('countdownLabel: отсчёт до матча словами', () => {
+    const now = new Date(2026, 9, 2, 12, 0, 0);
+    const countdown = (date, time) => L.countdownLabel({ date, time }, now);
+
+    // Матч через несколько дней: считаем календарные дни, а не часы
+    assert.equal(countdown('2026-10-06', ''), 'через 4 дня');
+    assert.equal(countdown('2026-10-03', ''), 'завтра');
+    assert.equal(countdown('2026-10-03', '19:30'), 'завтра в 19:30');
+    assert.equal(countdown('2026-10-02', ''), 'сегодня', 'время не назначено');
+    assert.equal(countdown('2026-10-02', '15:00'), 'через 3 часа');
+    assert.equal(countdown('2026-10-02', '13:05'), 'через 1 час');
+    assert.equal(countdown('2026-10-02', '12:20'), 'через 20 минут');
+    assert.equal(countdown('2026-10-02', '12:05'), 'через 5 минут');
+    assert.equal(countdown('2026-10-02', '12:00'), 'вот-вот начнётся');
+
+    // Матч уже начался или дата неизвестна — отсчёт не показываем
+    assert.equal(countdown('2026-10-02', '11:59'), '');
+    assert.equal(countdown('2026-10-01', '19:30'), '');
+    assert.equal(countdown('', '19:30'), '');
+
+    // Окончания: 1 день, 2 дня, 5 дней, 11 дней
+    assert.equal(countdown('2026-10-03', '09:00'), 'завтра в 09:00');
+    assert.equal(countdown('2026-10-04', ''), 'через 2 дня');
+    assert.equal(countdown('2026-10-07', ''), 'через 5 дней');
+    assert.equal(countdown('2026-10-13', ''), 'через 11 дней');
 });
 
 test('adminPasswordMatches: сравнение пароля', () => {
@@ -219,6 +285,19 @@ test('sortMatches и selectMatches: порядок и фильтры', () => {
     assert.deepEqual(L.selectMatches(matches, 'upcoming').map((m) => m.id), [2, 3]);
     assert.equal(L.selectMatches(matches, 'all').length, 3);
     assert.equal(matches[0].id, 1, 'исходный массив не мутируется (было побочным эффектом в старой версии)');
+
+    // В один день порядок задаёт время начала: расписание дня читается сверху вниз
+    const sameDay = [
+        { id: 1, teamA: 1, teamB: 2, date: '2026-10-10', time: '19:30', finished: false },
+        { id: 2, teamA: 1, teamB: 2, date: '2026-10-10', time: '12:00', finished: false },
+        { id: 3, teamA: 1, teamB: 2, date: '2026-10-10', finished: false }
+    ];
+
+    assert.deepEqual(L.sortMatches(sameDay, 'asc').map((m) => m.id), [3, 2, 1],
+        'матч без времени считается началом дня');
+    assert.deepEqual(L.sortMatches(sameDay, 'desc').map((m) => m.id), [1, 2, 3]);
+    assert.deepEqual(L.selectMatches(sameDay, 'upcoming').map((m) => m.id), [3, 2, 1],
+        'предстоящие идут как расписание: ближайший первым');
 });
 
 test('searchMatches: поиск по части названия команды', () => {
@@ -620,6 +699,25 @@ test('normalizeData: чинит дубликаты, битые id и «вися�
     assert.equal(partial.length, 1);
     assert.equal(partial[0].finished, false);
     assert.equal(L.getStats(result.data).finished, 2, 'в зачёт идут только матчи с полным счётом');
+});
+
+test('normalizeData: время матча сохраняется, «мусор» в нём считается исправлением', () => {
+    const result = L.normalizeData({
+        teams: [{ id: 1, name: 'A' }, { id: 2, name: 'B' }],
+        matches: [
+            { id: 1, teamA: 1, teamB: 2, date: '2026-10-10', time: '9:5', finished: false },
+            { id: 2, teamA: 1, teamB: 2, date: '2026-10-11', time: '19:30:00', finished: false },
+            { id: 3, teamA: 1, teamB: 2, date: '2026-10-12', finished: false },
+            { id: 4, teamA: 1, teamB: 2, date: '2026-10-13', time: 'вечером', finished: false }
+        ]
+    });
+
+    assert.equal(result.data.matches[0].time, '09:05', 'время приводится к одному виду');
+    assert.equal(result.data.matches[1].time, '19:30', 'значение поля времени в браузере');
+    assert.equal(result.data.matches[2].time, '', 'времени нет — пусто');
+    assert.equal(result.data.matches[3].time, '', 'непонятное время отбрасывается');
+    assert.equal(result.repaired, true, 'непонятное время — это исправление данных');
+    assert.equal(L.formatMatchWhen(result.data.matches[1], 'long'), '11 октября 2026, 19:30');
 });
 
 test('normalizeData: матч с единственным счётом становится предстоящим', () => {
