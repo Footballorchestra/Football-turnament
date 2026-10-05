@@ -15,6 +15,9 @@ const path = require('node:path');
 
 const { createServer } = require('../tools/serve.js');
 const { createMockRepository, createMockServer } = require('./helpers/mock-github.js');
+// Настоящий пароль администратора в репозитории не хранится:
+// тесты входят в панель своим паролем-образцом (см. helpers/admin-credentials.js)
+const ADMIN = require('./helpers/admin-credentials.js');
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -90,6 +93,9 @@ const SITE_CONFIG = {
     },
     refreshIntervalMs: 0,
     autoPublishDelayMs: 50,
+    // Вход в панель: сайт сверяет пароль по солёному отпечатку, поэтому
+    // тесты подставляют свои соль и отпечаток вместо настоящих
+    admin: ADMIN.config(),
     // Заставку в обычных тестах выключаем, чтобы она не перекрывала страницу;
     // отдельный тест заставки задаёт своё время
     splashMs: 0
@@ -528,7 +534,7 @@ test('админ-панель целиком в браузере: вход, ко
 
     // Вход
     await page.click('[data-nav="admin"]');
-    await page.type('#admin-password', 'admin');
+    await page.type('#admin-password', ADMIN.password);
     await page.click('[data-form="login"] button[type="submit"]');
     assert.equal(await sectionVisible(page, 'page-admin-dashboard'), true);
     assert.equal(await sectionVisible(page, 'page-admin-login'), false);
@@ -867,7 +873,7 @@ test('синхронизация: посетитель видит данные �
     const admin = await openPage({ url: mockBaseUrl + '/', isolated: true });
 
     await clickWhenReady(admin.page, '[data-nav="admin"]');
-    await admin.page.type('#admin-password', 'admin');
+    await admin.page.type('#admin-password', ADMIN.password);
     await clickWhenReady(admin.page, '[data-form="login"] button[type="submit"]');
     await admin.page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
 
@@ -1023,7 +1029,7 @@ test('фото игрока: настоящее сжатие в браузере
 
     // 1. Вход администратора и токен публикации
     await clickWhenReady(page, '[data-nav="admin"]');
-    await page.type('#admin-password', 'admin');
+    await page.type('#admin-password', ADMIN.password);
     await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
     await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
 
@@ -1241,7 +1247,7 @@ test('эмблема команды: загрузка из админки, сж�
 
     // Вход и токен публикации
     await clickWhenReady(page, '[data-nav="admin"]');
-    await page.type('#admin-password', 'admin');
+    await page.type('#admin-password', ADMIN.password);
     await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
     await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
 
@@ -1490,7 +1496,7 @@ test('карточка игрока: имя ведёт на карточку, а
         await page.$eval('#admin-password', (input) => {
             input.value = '';
         });
-        await page.type('#admin-password', 'admin');
+        await page.type('#admin-password', ADMIN.password);
         await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
         await page.waitForFunction(() => window.FTApp.isAdmin(), { timeout: 5000 }).catch(() => {});
     }
@@ -1697,7 +1703,7 @@ test('фотографии команды: загрузка из админки,
 
     // 1. Вход и токен публикации
     await clickWhenReady(page, '[data-nav="admin"]');
-    await page.type('#admin-password', 'admin');
+    await page.type('#admin-password', ADMIN.password);
     await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
     await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
     await clickInView(page, '[data-action="toggle-settings"]');
@@ -2150,7 +2156,7 @@ test('дисквалификации: жёлтые карточки превра
 
     // 3. Админка: значок «пропуск» у игрока и блок в карточке матча
     await clickWhenReady(page, '[data-nav="admin"]');
-    await page.type('#admin-password', 'admin');
+    await page.type('#admin-password', ADMIN.password);
     await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
     await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
     await clickInView(page, '[data-action="admin-tab"][data-admin-tab="matches"]');
@@ -2344,7 +2350,7 @@ test('оформление «Афиша матча»: включение в ад
     const { page, problems } = await openPage({ url: mockBaseUrl + '/', isolated: true });
 
     await clickWhenReady(page, '[data-nav="admin"]');
-    await page.type('#admin-password', 'admin');
+    await page.type('#admin-password', ADMIN.password);
     await clickWhenReady(page, '[data-form="login"] button[type="submit"]');
     await page.waitForFunction(() => window.FTApp && window.FTApp.isAdmin());
 

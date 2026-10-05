@@ -23,6 +23,12 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
     'use strict';
 
+    /**
+     * Общая среда: в браузере — окно, в тестах Node.js — globalThis.
+     * Отсюда читаются настройки сайта (FT_CONFIG из assets/js/config.js).
+     */
+    var ENV = typeof globalThis !== 'undefined' ? globalThis : {};
+
     /** Настройки приложения. */
     var CONFIG = {
         storageKey: 'footballTournamentData',
@@ -42,10 +48,10 @@
         // 12 — появился выбор оформления сайта (settings.theme): администратор
         //      включает второй стиль «Афиша матча» одной кнопкой в панели.
         dataVersion: 12,
-        // Пароль администратора. Внимание: это демонстрационная защита,
-        // на статическом хостинге реальную авторизацию без сервера сделать нельзя
-        // (подробности — в README.md).
-        adminPassword: 'admin',
+        // Пароль администратора в репозитории не хранится. В коде лежит только
+        // солёный отпечаток пароля — он читается из настроек сайта
+        // (FT_CONFIG.admin в assets/js/config.js), а сверку делает
+        // adminPasswordMatches ниже. Подробности — в README.
         maxTeamNameLength: 30,
         maxPlayerNameLength: 40,
         // Игровой номер: целое число от 0 до этого значения
@@ -679,9 +685,195 @@
         };
     }
 
+    /* ------------------------------------------------------------------ */
+    /* Вход в панель: пароль сверяется по солёному отпечатку               */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * SHA-256 на чистом JavaScript (FIPS 180-4).
+     *
+     * Свой, а не из библиотеки, по двум причинам: сайт собирается без зависимостей
+     * (никаких CDN — так требует Content Security Policy), и тот же код должен
+     * работать в Node во время тестов. Правильность свечена со стандартным
+     * SHA-256 из Node.js (node:crypto).
+     */
+
+    /** Циклический сдвиг 32-битного слова вправо. */
+    function rotr(word, bits) {
+        return ((word >>> bits) | (word << (32 - bits))) >>> 0;
+    }
+
+    /** Константы SHA-256: первые 32 бита дробных частей кубических корней простых чисел. */
+    var SHA256_K = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ];
+
+    /** Байты строки в UTF-8: пароль может содержать кириллицу. */
+    function utf8Bytes(text) {
+        var bytes = [];
+        var index;
+        var code;
+        var next;
+        var point;
+
+        for (index = 0; index < text.length; index += 1) {
+            code = text.charCodeAt(index);
+
+            if (code < 0x80) {
+                bytes.push(code);
+            } else if (code < 0x800) {
+                bytes.push(0xc0 | (code >> 6), 0x80 | (code & 0x3f));
+            } else if (code >= 0xd800 && code <= 0xdbff && index + 1 < text.length) {
+                next = text.charCodeAt(index + 1);
+
+                if (next >= 0xdc00 && next <= 0xdfff) {
+                    // Суррогатная пара (символ вне основной плоскости) — четыре байта
+                    point = 0x10000 + ((code - 0xd800) << 10) + (next - 0xdc00);
+                    index += 1;
+                    bytes.push(0xf0 | (point >> 18), 0x80 | ((point >> 12) & 0x3f),
+                        0x80 | ((point >> 6) & 0x3f), 0x80 | (point & 0x3f));
+                } else {
+                    bytes.push(0xef, 0xbf, 0xbd);
+                }
+            } else if (code >= 0xd800 && code <= 0xdfff) {
+                // Одиночная суррогатная пара: в UTF-8 это символ замены
+                bytes.push(0xef, 0xbf, 0xbd);
+            } else {
+                bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 0x3f), 0x80 | (code & 0x3f));
+            }
+        }
+
+        return bytes;
+    }
+
+    /** Отпечаток строки: шестнадцатеричный SHA-256 (64 символа, только строчные). */
+    function sha256Hex(text) {
+        var message = utf8Bytes(String(text === null || text === undefined ? '' : text));
+        var bitLength = message.length * 8;
+        var high = Math.floor(bitLength / 0x100000000);
+        var low = bitLength - high * 0x100000000;
+        var h = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+            0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19];
+        var w = new Array(64);
+        var offset;
+        var round;
+        var a;
+        var b;
+        var c;
+        var d;
+        var e;
+        var f;
+        var g;
+        var last;
+        var small0;
+        var small1;
+        var choice;
+        var majority;
+        var temp1;
+        var temp2;
+
+        // Дополнение по стандарту: 0x80, нули до 56 байт в блоке и длина в битах (64 бита)
+        message.push(0x80);
+
+        while (message.length % 64 !== 56) {
+            message.push(0);
+        }
+
+        message.push((high >>> 24) & 0xff, (high >>> 16) & 0xff, (high >>> 8) & 0xff, high & 0xff);
+        message.push((low >>> 24) & 0xff, (low >>> 16) & 0xff, (low >>> 8) & 0xff, low & 0xff);
+
+        for (offset = 0; offset < message.length; offset += 64) {
+            for (round = 0; round < 16; round += 1) {
+                w[round] = ((message[offset + round * 4] << 24) | (message[offset + round * 4 + 1] << 16) |
+                    (message[offset + round * 4 + 2] << 8) | message[offset + round * 4 + 3]) >>> 0;
+            }
+
+            for (round = 16; round < 64; round += 1) {
+                small0 = rotr(w[round - 15], 7) ^ rotr(w[round - 15], 18) ^ (w[round - 15] >>> 3);
+                small1 = rotr(w[round - 2], 17) ^ rotr(w[round - 2], 19) ^ (w[round - 2] >>> 10);
+                w[round] = (w[round - 16] + small0 + w[round - 7] + small1) >>> 0;
+            }
+
+            a = h[0];
+            b = h[1];
+            c = h[2];
+            d = h[3];
+            e = h[4];
+            f = h[5];
+            g = h[6];
+            last = h[7];
+
+            for (round = 0; round < 64; round += 1) {
+                small1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+                choice = (e & f) ^ (~e & g);
+                temp1 = (last + small1 + choice + SHA256_K[round] + w[round]) >>> 0;
+                small0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+                majority = (a & b) ^ (a & c) ^ (b & c);
+                temp2 = (small0 + majority) >>> 0;
+
+                last = g;
+                g = f;
+                f = e;
+                e = (d + temp1) >>> 0;
+                d = c;
+                c = b;
+                b = a;
+                a = (temp1 + temp2) >>> 0;
+            }
+
+            h[0] = (h[0] + a) >>> 0;
+            h[1] = (h[1] + b) >>> 0;
+            h[2] = (h[2] + c) >>> 0;
+            h[3] = (h[3] + d) >>> 0;
+            h[4] = (h[4] + e) >>> 0;
+            h[5] = (h[5] + f) >>> 0;
+            h[6] = (h[6] + g) >>> 0;
+            h[7] = (h[7] + last) >>> 0;
+        }
+
+        return h.map(function (word) {
+            return ('00000000' + word.toString(16)).slice(-8);
+        }).join('');
+    }
+
+    /** Соль и отпечаток пароля из настроек сайта (FT_CONFIG.admin в config.js). */
+    function adminCredentials() {
+        var settings = (ENV.FT_CONFIG && ENV.FT_CONFIG.admin) || {};
+
+        return {
+            salt: typeof settings.passwordSalt === 'string' ? settings.passwordSalt : '',
+            hash: typeof settings.passwordHash === 'string' ? settings.passwordHash.toLowerCase() : ''
+        };
+    }
+
+    /**
+     * Совпадает ли пароль с парой «соль + отпечаток».
+     * Пустой отпечаток означает, что вход в панель закрыт для всех.
+     */
+    function passwordMatches(value, salt, hash) {
+        var expected = String(hash === null || hash === undefined ? '' : hash).toLowerCase();
+
+        if (!expected) {
+            return false;
+        }
+
+        var password = String(value === null || value === undefined ? '' : value);
+
+        return sha256Hex(String(salt === null || salt === undefined ? '' : salt) + ':' + password) === expected;
+    }
+
     /** Проверка пароля администратора. */
     function adminPasswordMatches(value) {
-        return String(value === null || value === undefined ? '' : value) === CONFIG.adminPassword;
+        var credentials = adminCredentials();
+
+        return passwordMatches(value, credentials.salt, credentials.hash);
     }
 
     /* ------------------------------------------------------------------ */
@@ -2743,6 +2935,8 @@
         formatMatchWhen: formatMatchWhen,
         pluralWord: pluralWord,
         validateMatchInput: validateMatchInput,
+        sha256Hex: sha256Hex,
+        passwordMatches: passwordMatches,
         adminPasswordMatches: adminPasswordMatches,
         isFinished: isFinished,
         sortMatches: sortMatches,

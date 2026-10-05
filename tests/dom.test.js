@@ -18,6 +18,9 @@ const EDITS_KEY = 'ft.localEdits';
 
 const L = require('../assets/js/logic.js');
 const { createMockRepository } = require('./helpers/mock-github.js');
+// Настоящий пароль администратора в репозитории не хранится:
+// тесты входят в панель своим паролем-образцом (см. helpers/admin-credentials.js)
+const ADMIN = require('./helpers/admin-credentials.js');
 
 function readSource(relativePath) {
     return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
@@ -52,6 +55,9 @@ function boot(options) {
                     apiBase: '/mock-api',
                     rawBase: '/mock-raw'
                 },
+                // Вход в панель: сайт сверяет пароль по солёному отпечатку,
+                // поэтому тесты подставляют свои соль и отпечаток.
+                admin: ADMIN.config(),
                 // В тестах фоновые таймеры обычно не нужны (0 — автообновление выключено)
                 refreshIntervalMs: settings.refreshIntervalMs === undefined ? 0 : settings.refreshIntervalMs,
                 // Заставка в тестах по умолчанию выключена; свой тест задаёт её время сам
@@ -132,7 +138,7 @@ function boot(options) {
         login: (password) => {
             fire('click', document.querySelector('[data-nav="admin"]'));
             const input = document.getElementById('admin-password');
-            input.value = password === undefined ? 'admin' : password;
+            input.value = password === undefined ? ADMIN.password : password;
             fire('submit', document.querySelector('[data-form="login"]'));
         },
         /** Открывает команду по названию — кликом по строке списка команд */
@@ -720,6 +726,9 @@ test('админка: вход только по паролю, сессия со
     assert.equal(app.window.FTApp.isAdmin(), false);
 
     app.login('admin');
+    assert.equal(app.id('login-error').textContent, 'Неверный пароль');
+
+    app.login();
     assert.equal(app.id('login-error').textContent, '');
     assert.equal(app.activeSection(), 'page-admin-dashboard');
     assert.equal(app.window.FTApp.isAdmin(), true);

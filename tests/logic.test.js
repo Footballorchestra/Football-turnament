@@ -7,6 +7,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const L = require('../assets/js/logic.js');
+const crypto = require('node:crypto');
+
+/** Эталонный SHA-256 из Node.js: с ним сверяется своя реализация в logic.js. */
+function sha256(text) {
+    return crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+}
 
 /** Простое «фальшивое» хранилище для проверки работы с localStorage. */
 function fakeStorage(initial) {
@@ -247,11 +253,65 @@ test('countdownParts: дни и отдельно часы, минуты и се�
     assert.equal(L.countdownParts({ date: '2026-10-06', time: '19:30', finished: true, scoreA: 1, scoreB: 0 }, now), null);
 });
 
-test('adminPasswordMatches: сравнение пароля', () => {
-    assert.equal(L.adminPasswordMatches('admin'), true);
-    assert.equal(L.adminPasswordMatches('admin '), false);
-    assert.equal(L.adminPasswordMatches(''), false);
-    assert.equal(L.adminPasswordMatches(undefined), false);
+test('sha256Hex: отпечаток совпадает со стандартным SHA-256', () => {
+    // Своя реализация нужна, чтобы сайт работал без внешних библиотек
+    // (CSP запрещает CDN). Сверяем её со стандартом из Node.js.
+    const samples = [
+        '', 'a', 'abc', 'образец строки', 'пароль', '🙂 эмодзи',
+        'x'.repeat(55), 'x'.repeat(56), 'x'.repeat(63), 'x'.repeat(64), 'x'.repeat(65),
+        'y'.repeat(120), 'Н'.repeat(300)
+    ];
+
+    samples.forEach((sample) => {
+        assert.equal(L.sha256Hex(sample), sha256(sample), 'строка ' + JSON.stringify(sample));
+    });
+
+    assert.equal(L.sha256Hex(undefined), sha256(''), 'пустое значение не ломает сверку');
+});
+
+test('passwordMatches: пароль сверяется по солёному отпечатку', () => {
+    // Настоящий пароль в репозитории не хранится — проверяем механизм
+    // на своём образце (он же используется тестами страницы).
+    const salt = 'образец-соли';
+    const password = 'образец-пароля';
+    const hash = sha256(salt + ':' + password);
+
+    assert.equal(L.passwordMatches(password, salt, hash), true);
+    assert.equal(L.passwordMatches(password + ' ', salt, hash), false, 'лишний пробел не подходит');
+    assert.equal(L.passwordMatches(password.toUpperCase(), salt, hash), false, 'регистр пароля важен');
+    assert.equal(L.passwordMatches('', salt, hash), false);
+    assert.equal(L.passwordMatches(undefined, salt, hash), false);
+    assert.equal(L.passwordMatches(password, 'другая-соль', hash), false, 'соль входит в отпечаток');
+    assert.equal(L.passwordMatches(password, salt, hash.toUpperCase()), true, 'регистр отпечатка не важен');
+    assert.equal(L.passwordMatches(password, salt, ''), false, 'без отпечатка вход закрыт');
+    assert.equal(L.passwordMatches(password, salt, undefined), false);
+});
+
+test('adminPasswordMatches: соль и отпечаток берутся из настроек сайта', () => {
+    const salt = 'настройки-соли';
+    const password = 'настройки-пароля';
+    const saved = globalThis.FT_CONFIG;
+
+    globalThis.FT_CONFIG = { admin: { passwordSalt: salt, passwordHash: sha256(salt + ':' + password) } };
+
+    try {
+        assert.equal(L.adminPasswordMatches(password), true, 'верный пароль пускает в панель');
+        assert.equal(L.adminPasswordMatches(password + '!'), false);
+        assert.equal(L.adminPasswordMatches('admin'), false, 'прежний пароль по умолчанию не действует');
+        assert.equal(L.adminPasswordMatches(''), false);
+        assert.equal(L.adminPasswordMatches(undefined), false);
+    } finally {
+        globalThis.FT_CONFIG = saved;
+    }
+
+    // Настроек нет — вход закрыт для всех (лучше закрыто, чем открыто)
+    globalThis.FT_CONFIG = {};
+
+    try {
+        assert.equal(L.adminPasswordMatches(password), false);
+    } finally {
+        globalThis.FT_CONFIG = saved;
+    }
 });
 
 test('computeStandings: очки, разница мячей и места команд', () => {

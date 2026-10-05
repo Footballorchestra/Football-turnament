@@ -1771,7 +1771,7 @@
         }
     }
 
-    /** Версия сайта из адреса подключённого скрипта: assets/js/app.js?v=53 → 53. */
+    /** Версия сайта из адреса подключённого скрипта: assets/js/app.js?v=55 → 55. */
     function runningBuildVersion() {
         var script = document.querySelector('script[src*="assets/js/app.js"]');
         var match = script ? BUILD_PATTERN.exec(script.getAttribute('src') || '') : null;
@@ -1779,7 +1779,7 @@
         return match ? parseInt(match[1], 10) : 0;
     }
 
-    /** Версия сайта в отданной странице: assets/js/app.js?v=54 → 54. */
+    /** Версия сайта в отданной странице: assets/js/app.js?v=55 → 55. */
     function deployedBuildVersion(html) {
         var match = BUILD_PATTERN.exec(String(html || ''));
 
