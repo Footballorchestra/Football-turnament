@@ -1176,28 +1176,39 @@ test('автогол: отмечается как гол, но мяч у нег�
     assert.equal(row.querySelector('.admin-row-count-goal').textContent.trim(), '1');
     assert.equal(row.querySelector('.admin-row-count-owngoal').textContent.trim(), '1');
 
-    // Публичная карточка матча: зелёный мяч гола и красный мяч автогола
+    // Публичная карточка матча: мячи стоят на стороне той команды, которой принесли гол, —
+    // зелёный мяч гола Спартака и красный мяч автогола, забитого её же игроком в свои ворота
     app.navigate('matches');
 
     const card = app.id('matches-list').querySelector('.match-card[data-id="1"]');
-    const marks = Array.from(card.querySelectorAll('.match-mark'));
+    const sides = Array.from(card.querySelectorAll('.match-side-marks')).map((side) =>
+        Array.from(side.querySelectorAll('.match-mark')).map((mark) =>
+            mark.className.replace('match-mark ', '') + ':' + mark.textContent.trim()));
 
-    assert.deepEqual(marks.map((mark) => [
-        mark.className.replace('match-mark ', ''),
-        mark.querySelector('use').getAttribute('href'),
-        mark.textContent.trim()
-    ]), [
-        ['match-mark-goal', '#i-ball', '1'],
-        ['match-mark-owngoal', '#i-ball', '1']
-    ], 'оба мяча круглые, но классы разные — цвет задают стили');
+    assert.deepEqual(sides, [
+        ['match-mark-goal:1'],
+        ['match-mark-owngoal:1']
+    ], 'автогол ушёл на сторону соперника: у Спартака зелёный мяч, у Локомотива — красный');
+    assert.equal(card.querySelector('.match-mark-owngoal use').getAttribute('href'), '#i-ball',
+        'мяч автогола — тот же круглый мяч, цвет задают стили');
 
-    // Детальный результат матча: у игрока видны и гол, и автогол
+    // Детальный результат: у игрока виден его гол, а автогол — в колонке Локомотива,
+    // ведь мяч в свои ворота принёс гол сопернику
     app.click(card);
 
-    const squadMarks = Array.from(app.id('match-detail').querySelectorAll('.squad-row .squad-mark'));
+    const columns = Array.from(app.id('match-detail').querySelectorAll('.squad-column'));
+    const ownGoalChip = columns[1].querySelector('.squad-owngoal-mark');
 
-    assert.deepEqual(squadMarks.map((mark) => mark.className + ':' + mark.textContent.trim()),
-        ['squad-mark squad-mark-goal:1', 'squad-mark squad-mark-owngoal:1']);
+    assert.deepEqual(Array.from(app.id('match-detail').querySelectorAll('.squad-row .squad-mark'))
+        .map((mark) => mark.className + ':' + mark.textContent.trim()),
+        ['squad-mark squad-mark-goal:1'], 'в составе Спартака остался только зелёный мяч гола');
+    assert.equal(columns[0].querySelector('.squad-owngoal'), null, 'в колонке Спартака автогола нет');
+    assert.ok(ownGoalChip, 'автогол стоит в колонке Локомотива');
+    assert.equal(ownGoalChip.querySelector('use').getAttribute('href'), '#i-ball', 'у автогола красный мяч');
+    assert.match(ownGoalChip.textContent, /Автогол: Иванов А\. \(Спартак\)/,
+        'у автогола указан и его автор, и его команда');
+    assert.equal(ownGoalChip.getAttribute('title'),
+        'Мяч в свои ворота: Иванов А. (Спартак) — гол засчитан команде «Локомотив»');
 
     // Таблица бомбардиров: автогол не прибавился к голам, у него своя колонка
     app.navigate('players');

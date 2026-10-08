@@ -965,6 +965,49 @@ test('события матча: голы и карточки', () => {
     assert.equal(L.countMatchGoals([{ team: 1, player: 'Иванов А.' }, null]), 0, 'мусор не считается');
 });
 
+test('sideEvents: автогол уходит на сторону соперника', () => {
+    const match = { teamA: 1, teamB: 2 };
+    const events = [
+        { team: 1, player: 'Иванов А.', type: 'goal' },
+        { team: 1, player: 'Петров П.', type: 'own-goal' },
+        { team: 1, player: 'Сидоров С.', type: 'yellow' },
+        { team: 2, player: 'Кузнецов К.', type: 'goal' },
+        { team: 2, player: 'Попов П.', type: 'own-goal' },
+        { team: 2, player: 'Попов П.', type: 'red' }
+    ];
+
+    // Соперник команды в матче: у чужой команды и у матча без соперника его нет
+    assert.equal(L.opponentTeamId(match, 1), 2);
+    assert.equal(L.opponentTeamId(match, 2), 1);
+    assert.equal(L.opponentTeamId(match, 3), null);
+    assert.equal(L.opponentTeamId(match, null), null);
+    assert.equal(L.opponentTeamId(null, 1), null);
+
+    // Сторона Спартака: свой гол и жёлтая плюс автогол игрока Локомотива —
+    // мяч в свои ворота принёс гол именно Спартаку
+    assert.deepEqual(L.sideEvents(events, 1, 2).map((event) => event.type + ':' + event.player), [
+        'goal:Иванов А.',
+        'yellow:Сидоров С.',
+        'own-goal:Попов П.'
+    ], 'автогол соперника стоит на стороне Спартака');
+    assert.deepEqual(L.sideEvents(events, 2, 1).map((event) => event.type), ['own-goal', 'goal', 'red'],
+        'автогол соперника стоит там, где его записали, — порядок записей матча сохраняется');
+    assert.equal(L.playerEventCount(L.sideEvents(events, 1, 2), 1, 'Петров П.', 'own-goal'), 0,
+        'свой автогол в свою сторону не попадает');
+
+    // Мячей на стороне ровно столько, сколько в счёте команды
+    const balls = (teamId, opponentId) => L.sideEvents(events, teamId, opponentId)
+        .filter((event) => L.isGoalEvent(event.type)).length;
+
+    assert.equal(balls(1, 2), 2, 'гол Иванова и автогол Локомотива');
+    assert.equal(balls(2, 1), 2, 'гол Кузнецова и автогол Спартака');
+
+    assert.deepEqual(L.sideEvents(null, 1, 2), []);
+    assert.deepEqual(L.sideEvents(events, null, 1), [], 'без команды стороны нет');
+    assert.deepEqual(L.sideEvents(events, 2, null).map((event) => event.type), ['goal', 'red'],
+        'без соперника автоголы никому не отдаются');
+});
+
 test('normalizeMatchEvents: остаются только корректные события команд матча', () => {
     const match = { teamA: 1, teamB: 2 };
     const result = L.normalizeMatchEvents([

@@ -890,9 +890,54 @@
     }
 
     .squad-mark-goal { color: #2e7d32; }
-    .squad-mark-owngoal { color: #c62828; }
     .squad-mark-yellow { color: #f9a825; }
     .squad-mark-red { color: #e53935; }
+
+    /* Автогол соперника стоит в колонке команды, которой засчитан мяч: сразу видно,
+       откуда взялся гол в счёте. Мяч красный, как и у остальных автоголов, а имя
+       автора ведёт на его карточку — в скобках указана его собственная команда. */
+    .squad-owngoal {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 0.75rem;
+        margin-bottom: 0.5rem;
+        font-size: 0.75rem;
+    }
+
+    .squad-owngoal-mark {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.1rem 0.5rem;
+        border-radius: 9999px;
+        background: #fdecea;
+        color: #7f1d1d;
+        font-weight: 500;
+    }
+
+    .squad-owngoal-mark-ball {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.1rem;
+        flex: none;
+        font-weight: 600;
+        color: #c62828;
+    }
+
+    .squad-owngoal-mark .icon {
+        width: 0.9rem;
+        height: 0.9rem;
+    }
+
+    .squad-owngoal-player {
+        color: inherit;
+        text-decoration: underline dotted;
+        text-underline-offset: 0.15rem;
+    }
+
+    .squad-owngoal-team {
+        color: #9a6a6a;
+    }
 
     .score-display {
         background: #202124;

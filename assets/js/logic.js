@@ -1471,6 +1471,51 @@
         return teamEvents(events, teamId, type).length;
     }
 
+    /** Соперник команды в матче: его ворота защищает другая сторона счёта. */
+    function opponentTeamId(match, teamId) {
+        var id = toInt(teamId);
+
+        if (!isPlainObject(match) || id === null) {
+            return null;
+        }
+
+        if (toInt(match.teamA) === id) {
+            return toInt(match.teamB);
+        }
+
+        if (toInt(match.teamB) === id) {
+            return toInt(match.teamA);
+        }
+
+        return null;
+    }
+
+    /**
+     * События матча глазами одной команды: её собственные голы и карточки плюс
+     * автоголы игроков соперника. Автогол — мяч в свои ворота, поэтому в счёт
+     * он идёт другой команде, и отметка у него стоит на стороне соперника:
+     * иначе мячи под названием команды не сходились бы с её счётом.
+     */
+    function sideEvents(events, teamId, opponentId) {
+        var id = toInt(teamId);
+        var other = toInt(opponentId);
+
+        // Команды нет — нет и стороны: ничьи записи к ней не относятся
+        if (id === null) {
+            return [];
+        }
+
+        return (Array.isArray(events) ? events : []).filter(function (event) {
+            var team = toInt(event.team);
+
+            if (team === id) {
+                return event.type !== 'own-goal';
+            }
+
+            return other !== null && team === other && event.type === 'own-goal';
+        });
+    }
+
     /** Добавляет событие в конец списка и возвращает новый список. */
     function addEvent(events, teamId, player, type) {
         var list = (Array.isArray(events) ? events : []).slice();
@@ -2991,6 +3036,8 @@
         teamEvents: teamEvents,
         playerEventCount: playerEventCount,
         countTeamEvents: countTeamEvents,
+        opponentTeamId: opponentTeamId,
+        sideEvents: sideEvents,
         addEvent: addEvent,
         removeLastEvent: removeLastEvent,
         matchSquad: matchSquad,
