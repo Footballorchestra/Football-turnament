@@ -1,7 +1,7 @@
 {
   "version": 12,
-  "revision": 522,
-  "updatedAt": "2026-10-02T12:56:23.645Z",
+  "revision": 545,
+  "updatedAt": "2026-10-08T07:47:13.566Z",
   "teams": [
     {
       "id": 1,
@@ -133,7 +133,8 @@
         "Малахов Александр",
         "Чекмарев Григорий",
         "Митинский Александр",
-        "Субботкин Иван"
+        "Субботкин Иван",
+        "Автогол"
       ]
     },
     {
@@ -565,12 +566,73 @@
       "id": 11,
       "teamA": 6,
       "teamB": 7,
-      "scoreA": null,
-      "scoreB": null,
+      "scoreA": 2,
+      "scoreB": 10,
       "date": "2026-10-06",
       "time": "20:00",
-      "finished": false,
-      "events": []
+      "finished": true,
+      "events": [
+        {
+          "team": 6,
+          "player": "Винник Андрей",
+          "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Кубышкин Дмитрий",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Субботкин Иван",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Чекмарев Григорий",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Малахов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Малахов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Малахов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Малахов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Терехов Владимир",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Кулик Сергей",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Серов Лев",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Автогол",
+          "type": "goal"
+        }
+      ]
     },
     {
       "id": 12,
@@ -589,7 +651,7 @@
       "teamB": 1,
       "scoreA": null,
       "scoreB": null,
-      "date": "2026-10-14",
+      "date": "2026-10-13",
       "time": "",
       "finished": false,
       "events": []
