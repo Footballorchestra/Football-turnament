@@ -3581,19 +3581,24 @@
     }
 
     /**
-     * Строка игрока в публичном составе: голы, жёлтая и красная карточки.
-     * Автогола здесь нет: мяч в свои ворота засчитан сопернику, поэтому отметка
-     * стоит в его колонке (см. squadOwnGoals) — так мячи на стороне команды
-     * сходятся с её счётом.
+     * Строка игрока в публичном составе: голы, автоголы, жёлтая и красная карточки.
+     * Автогол стоит здесь же, у своего игрока, но красным мячом: сам цвет и говорит,
+     * что игрок отметился в свои ворота.
      */
     function squadRow(match, teamId, player) {
         var goals = L.playerEventCount(match.events, teamId, player, 'goal');
+        var ownGoals = L.playerEventCount(match.events, teamId, player, 'own-goal');
         var yellow = L.playerEventCount(match.events, teamId, player, 'yellow');
         var red = L.playerEventCount(match.events, teamId, player, 'red');
         var marks = '';
 
         if (goals) {
             marks += '<span class="squad-mark squad-mark-goal">' + icon('ball') + goals + '</span>';
+        }
+
+        if (ownGoals) {
+            marks += '<span class="squad-mark squad-mark-owngoal" title="Автогол: мяч в свои ворота">' +
+                icon('ball') + ownGoals + '</span>';
         }
 
         if (yellow) {
@@ -3615,54 +3620,6 @@
         '</div>';
     }
 
-    /**
-     * Автоголы игроков соперника: эти мячи влетели в ворота данной команды, поэтому
-     * строка стоит в её колонке — сразу видно, откуда взялся мяч в счёте.
-     * Имя автора ведёт на его карточку, в скобках — команда, за которую он играет.
-     */
-    function squadOwnGoals(match, teamId, teamName) {
-        var opponentId = L.opponentTeamId(match, teamId);
-        var opponent = L.findTeam(state.data.teams, opponentId);
-        var opponentName = opponent ? opponent.name : 'Команда удалена';
-        var rows = [];
-        var found = {};
-
-        L.sideEvents(match.events, teamId, opponentId).forEach(function (event) {
-            if (event.type !== 'own-goal') {
-                return;
-            }
-
-            var key = L.cleanText(event.player).toLowerCase();
-
-            if (!found[key]) {
-                found[key] = { player: event.player, count: 0 };
-                rows.push(found[key]);
-            }
-
-            found[key].count += 1;
-        });
-
-        if (!rows.length) {
-            return '';
-        }
-
-        var title = function (row) {
-            return 'Мяч в свои ворота: ' + row.player + ' (' + opponentName + ') — гол засчитан команде «' +
-                teamName + '»';
-        };
-
-        return '<div class="squad-owngoal">' + rows.map(function (row) {
-            return '<span class="squad-owngoal-mark" title="' + esc(title(row)) + '">' +
-                '<span class="squad-owngoal-mark-ball">' + icon('ball') +
-                    (row.count > 1 ? row.count : '') + '</span>' +
-                '<span class="squad-owngoal-mark-text">Автогол: ' +
-                    playerLink(opponent, row.player, { className: 'squad-owngoal-player' }) +
-                    ' <span class="squad-owngoal-team">(' + esc(opponentName) + ')</span>' +
-                '</span>' +
-            '</span>';
-        }).join('') + '</div>';
-    }
-
     /** Колонка команды в детальном результате: кто играл, кто забил, у кого карточки. */
     function squadColumn(match, team, teamId, teamName) {
         var players = L.matchSquad(team, match.events, teamId);
@@ -3679,7 +3636,6 @@
                         L.toInt(team.id) + '" title="Открыть страницу команды">' + esc(teamName) + '</a>'
                     : esc(teamName)) +
             '</h3>' +
-            squadOwnGoals(match, teamId, teamName) +
             rows +
         '</section>';
     }
@@ -3713,8 +3669,7 @@
         var events = Array.isArray(match.events) ? match.events : [];
         var hint = L.isFinished(match)
             ? 'Записано голов: ' + L.countMatchGoals(match.events) + ' из ' + (match.scoreA + match.scoreB) +
-                ' — зелёный мяч отмечает гол, красный — автогол (мяч в свои ворота засчитан сопернику), ' +
-                'прямоугольники — жёлтую и красную карточки.'
+                ' — зелёный мяч отмечает гол, красный — автогол, прямоугольники — жёлтую и красную карточки.'
             : (events.length
                 ? 'Счёт ещё не сохранён — отметки внесены заранее.'
                 : 'Матч ещё не сыгран: счёт, голы и карточки появятся после матча.');

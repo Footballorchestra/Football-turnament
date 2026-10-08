@@ -2313,19 +2313,13 @@ test('автоголы: красный мяч в матчах и своя кол
     });
     assert.equal(card.overflow, 0, 'страница не выходит за экран');
 
-    // 2. Детальный результат: автогол отмечен в колонке той команды, которой он принёс гол,
-    //    и подписан именем автора с названием его собственной команды
+    // 2. Детальный результат: автогол стоит у своего игрока — тот же мяч, но красный
     await page.click('#matches-list .match-card[data-id="1"]');
     await page.waitForFunction(() => document.getElementById('match-detail-view').hidden === false);
 
     const detail = await page.evaluate(() => ({
         columns: Array.from(document.querySelectorAll('#match-detail .squad-column')).map((column) => ({
             team: column.querySelector('.squad-team').textContent.trim(),
-            ownGoals: Array.from(column.querySelectorAll('.squad-owngoal-mark')).map((mark) => ({
-                text: mark.textContent.replace(/\s+/g, ' ').trim(),
-                title: mark.getAttribute('title'),
-                color: getComputedStyle(mark.querySelector('.icon')).color
-            })),
             rows: Array.from(column.querySelectorAll('.squad-row')).map((row) => ({
                 player: row.querySelector('.squad-name').textContent,
                 marks: Array.from(row.querySelectorAll('.squad-mark')).map((mark) => ({
@@ -2338,20 +2332,13 @@ test('автоголы: красный мяч в матчах и своя кол
     }));
 
     assert.deepEqual(detail.columns.map((column) => column.team), ['Ветераны МГК', 'ФК МГСО']);
-    assert.deepEqual(detail.columns[0].ownGoals.map((mark) => [mark.text, mark.color]),
-        [['Автогол: Сергеев Валентин (ФК МГСО)', RED_BALL]], 'автогол гостя принёс гол хозяевам');
-    assert.equal(detail.columns[0].ownGoals[0].title,
-        'Мяч в свои ворота: Сергеев Валентин (ФК МГСО) — гол засчитан команде «Ветераны МГК»');
-    assert.deepEqual(detail.columns[0].rows.map((row) => [row.player, row.marks.map((mark) => mark.cls)]), [
-        ['Шорохов Александр', ['squad-mark squad-mark-goal']],
-        ['Бусырев Сергей', []]
-    ], 'своих мячей у Бусырева нет: его автогол ушёл в колонку соперника');
-
-    assert.deepEqual(detail.columns[1].ownGoals.map((mark) => mark.text),
-        ['Автогол: Бусырев Сергей (Ветераны МГК)'], 'автогол хозяина принёс гол гостям');
+    assert.deepEqual(detail.columns[0].rows.map((row) => [row.player, row.marks.map((mark) => [mark.cls, mark.color])]), [
+        ['Шорохов Александр', [['squad-mark squad-mark-goal', GREEN_BALL]]],
+        ['Бусырев Сергей', [['squad-mark squad-mark-owngoal', RED_BALL]]]
+    ], 'гол — зелёный мяч, автогол у своего игрока — красный');
     assert.deepEqual(detail.columns[1].rows.map((row) => [row.player, row.marks.map((mark) => mark.color)]), [
-        ['Сергеев Валентин', [GREEN_BALL]]
-    ], 'у Сергеева остался только его зелёный мяч, автогол стоит в колонке хозяев');
+        ['Сергеев Валентин', [GREEN_BALL, RED_BALL]]
+    ], 'у Сергеева его гол и его автогол стоят рядом двумя мячами');
     assert.equal(detail.overflow, 0, 'страница не выходит за экран');
 
     // 3. Таблица бомбардиров: у автоголов своя колонка

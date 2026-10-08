@@ -1192,23 +1192,21 @@ test('автогол: отмечается как гол, но мяч у нег�
     assert.equal(card.querySelector('.match-mark-owngoal use').getAttribute('href'), '#i-ball',
         'мяч автогола — тот же круглый мяч, цвет задают стили');
 
-    // Детальный результат: у игрока виден его гол, а автогол — в колонке Локомотива,
-    // ведь мяч в свои ворота принёс гол сопернику
+    // Детальный результат матча: у игрока видны и гол, и автогол — автогол тот же мяч,
+    // но красный: сам цвет отметки и говорит, что игрок забил в свои ворота
     app.click(card);
 
-    const columns = Array.from(app.id('match-detail').querySelectorAll('.squad-column'));
-    const ownGoalChip = columns[1].querySelector('.squad-owngoal-mark');
+    const squadMarks = Array.from(app.id('match-detail').querySelectorAll('.squad-row .squad-mark'));
 
-    assert.deepEqual(Array.from(app.id('match-detail').querySelectorAll('.squad-row .squad-mark'))
-        .map((mark) => mark.className + ':' + mark.textContent.trim()),
-        ['squad-mark squad-mark-goal:1'], 'в составе Спартака остался только зелёный мяч гола');
-    assert.equal(columns[0].querySelector('.squad-owngoal'), null, 'в колонке Спартака автогола нет');
-    assert.ok(ownGoalChip, 'автогол стоит в колонке Локомотива');
-    assert.equal(ownGoalChip.querySelector('use').getAttribute('href'), '#i-ball', 'у автогола красный мяч');
-    assert.match(ownGoalChip.textContent, /Автогол: Иванов А\. \(Спартак\)/,
-        'у автогола указан и его автор, и его команда');
-    assert.equal(ownGoalChip.getAttribute('title'),
-        'Мяч в свои ворота: Иванов А. (Спартак) — гол засчитан команде «Локомотив»');
+    assert.deepEqual(squadMarks.map((mark) => mark.className + ':' + mark.textContent.trim()), [
+        'squad-mark squad-mark-goal:1',
+        'squad-mark squad-mark-owngoal:1'
+    ], 'у Иванова рядом с зелёным мячом гола стоит красный мяч автогола');
+    assert.equal(squadMarks[0].querySelector('use').getAttribute('href'), '#i-ball');
+    assert.equal(squadMarks[1].querySelector('use').getAttribute('href'), '#i-ball',
+        'оба мяча круглые, цвет задают стили');
+    assert.equal(squadMarks[1].getAttribute('title'), 'Автогол: мяч в свои ворота',
+        'подсказка объясняет красный мяч');
 
     // Таблица бомбардиров: автогол не прибавился к голам, у него своя колонка
     app.navigate('players');
