@@ -746,6 +746,7 @@ test('номер игрока в заявке и его статистика п�
             { id: 1, events: [
                 { team: 1, player: 'Иванов А.', type: 'goal' },
                 { team: 1, player: 'иванов а.', type: 'goal' },
+                { team: 1, player: 'Иванов А.', type: 'own-goal' },
                 { team: 1, player: 'Иванов А.', type: 'yellow' },
                 { team: 2, player: 'Иванов А.', type: 'goal' }
             ] },
@@ -753,10 +754,10 @@ test('номер игрока в заявке и его статистика п�
         ]
     };
 
-    assert.deepEqual(L.playerStats(data, 1, 'Иванов А.'), { goals: 2, yellow: 1, red: 0 });
-    assert.deepEqual(L.playerStats(data, 1, 'Петров П.'), { goals: 0, yellow: 0, red: 1 });
-    assert.deepEqual(L.playerStats(data, 2, 'Кузнецов К.'), { goals: 0, yellow: 0, red: 0 });
-    assert.deepEqual(L.playerStats(null, 1, 'Иванов А.'), { goals: 0, yellow: 0, red: 0 });
+    assert.deepEqual(L.playerStats(data, 1, 'Иванов А.'), { goals: 2, ownGoals: 1, yellow: 1, red: 0 });
+    assert.deepEqual(L.playerStats(data, 1, 'Петров П.'), { goals: 0, ownGoals: 0, yellow: 0, red: 1 });
+    assert.deepEqual(L.playerStats(data, 2, 'Кузнецов К.'), { goals: 0, ownGoals: 0, yellow: 0, red: 0 });
+    assert.deepEqual(L.playerStats(null, 1, 'Иванов А.'), { goals: 0, ownGoals: 0, yellow: 0, red: 0 });
 });
 
 
@@ -935,13 +936,33 @@ test('события матча: голы и карточки', () => {
     assert.equal(twoGoals.length, 5, 'исходный список не мутируется');
 
     assert.equal(L.isEventType('goal'), true);
+    assert.equal(L.isEventType('own-goal'), true);
     assert.equal(L.isEventType('yellow'), true);
     assert.equal(L.isEventType('red'), true);
     assert.equal(L.isEventType('assist'), false, 'голевые передачи больше не поддерживаются');
     assert.equal(L.isEventType('карточка'), false);
     assert.equal(L.eventLabel('goal'), 'Гол');
+    assert.equal(L.eventLabel('own-goal'), 'Автогол');
     assert.equal(L.eventLabel('yellow'), 'Жёлтая карточка');
     assert.equal(L.eventLabel('red'), 'Красная карточка');
+
+    // Автогол записывается так же, как гол, но это мяч в свои ворота
+    const withOwnGoal = L.addEvent(twoGoals, 1, 'Иванов А.', 'own-goal');
+
+    assert.equal(withOwnGoal.length, 6, 'автогол — обычная запись');
+    assert.deepEqual(withOwnGoal[5], { team: 1, player: 'Иванов А.', type: 'own-goal' });
+    assert.equal(L.playerEventCount(withOwnGoal, 1, 'Иванов А.', 'own-goal'), 1);
+    assert.equal(L.playerEventCount(withOwnGoal, 1, 'Иванов А.', 'goal'), 2, 'голы и автоголы считаются отдельно');
+    assert.equal(L.countTeamEvents(withOwnGoal, 1, 'own-goal'), 1);
+
+    // «Мяч в сетке» — и гол, и автогол: подсказка «Записано голов» сверяется со счётом
+    assert.equal(L.isGoalEvent('goal'), true);
+    assert.equal(L.isGoalEvent('own-goal'), true);
+    assert.equal(L.isGoalEvent('yellow'), false);
+    assert.equal(L.countMatchGoals(twoGoals), 3, 'три обычных гола');
+    assert.equal(L.countMatchGoals(withOwnGoal), 4, 'автогол тоже мяч');
+    assert.equal(L.countMatchGoals(null), 0);
+    assert.equal(L.countMatchGoals([{ team: 1, player: 'Иванов А.' }, null]), 0, 'мусор не считается');
 });
 
 test('normalizeMatchEvents: остаются только корректные события команд матча', () => {
@@ -950,6 +971,7 @@ test('normalizeMatchEvents: остаются только корректные �
         { team: 1, player: 'Иванов А.', type: 'goal' },
         { team: 2, player: '  Кузнецов К.  ', type: 'yellow' },
         { team: 1, player: 'Петров П.', type: 'red' },
+        { team: 2, player: 'Волков В.', type: 'own-goal' },
         { team: 3, player: 'Чужой', type: 'goal' },
         { team: 1, player: '', type: 'goal' },
         { team: 1, player: 'Голевой Г.', type: 'assist' },
@@ -960,8 +982,9 @@ test('normalizeMatchEvents: остаются только корректные �
     assert.deepEqual(result.events, [
         { team: 1, player: 'Иванов А.', type: 'goal' },
         { team: 2, player: 'Кузнецов К.', type: 'yellow' },
-        { team: 1, player: 'Петров П.', type: 'red' }
-    ]);
+        { team: 1, player: 'Петров П.', type: 'red' },
+        { team: 2, player: 'Волков В.', type: 'own-goal' }
+    ], 'автогол — корректное событие, оно не считается исправлением данных');
 
     assert.deepEqual(L.normalizeMatchEvents(undefined, match), { events: [], repaired: false });
     assert.deepEqual(L.normalizeMatchEvents('нет', match), { events: [], repaired: true });
@@ -1123,9 +1146,67 @@ test('лучшие бомбардиры: пустые данные и запис
 
     assert.equal(rows.length, 2, 'неизвестный тип события не считается');
     assert.deepEqual(rows[0], {
-        teamId: 1, teamName: 'Спартак', player: 'Ушедший У.', number: '', goals: 1, yellow: 0, red: 0, place: 1
+        teamId: 1, teamName: 'Спартак', player: 'Ушедший У.', number: '',
+        goals: 1, ownGoals: 0, yellow: 0, red: 0, place: 1
     });
     assert.equal(rows[1].teamName, 'Неизвестная команда');
+});
+
+test('лучшие бомбардиры: автоголы идут отдельной колонкой и не превращаются в голы', () => {
+    const data = {
+        teams: [
+            { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.', 'Сидоров С.'] },
+            { id: 2, name: 'Динамо', players: ['Кузнецов К.'] }
+        ],
+        matches: [
+            {
+                id: 1, teamA: 1, teamB: 2, scoreA: 3, scoreB: 1, date: '2026-09-10', finished: true,
+                events: [
+                    { team: 1, player: 'Иванов А.', type: 'goal' },
+                    { team: 1, player: 'Петров П.', type: 'own-goal' },
+                    { team: 2, player: 'Кузнецов К.', type: 'goal' }
+                ]
+            },
+            {
+                id: 2, teamA: 2, teamB: 1, scoreA: 1, scoreB: 1, date: '2026-09-17', finished: true,
+                events: [
+                    { team: 1, player: 'Петров П.', type: 'own-goal' },
+                    { team: 1, player: 'Сидоров С.', type: 'own-goal' },
+                    { team: 1, player: 'Иванов А.', type: 'yellow' }
+                ]
+            }
+        ]
+    };
+
+    const rows = L.computePlayerStats(data);
+
+    assert.deepEqual(
+        rows.map((row) => [row.player, row.goals, row.ownGoals]),
+        [
+            ['Иванов А.', 1, 0],
+            ['Кузнецов К.', 1, 0],
+            ['Петров П.', 0, 2],
+            ['Сидоров С.', 0, 1]
+        ],
+        'порядок по голам, автоголы отдельным числом'
+    );
+    assert.deepEqual(rows.map((row) => row.place), [1, 2, 3, 4]);
+
+    // Игрок с одними автоголами всё равно в таблице: иначе колонку «Автоголы»
+    // было бы видно только у тех, кто заодно забивал и в чужие ворота
+    assert.equal(rows.some((row) => row.player === 'Петров П.' && row.goals === 0), true);
+
+    // Автоголы — обычный числовой столбец: сортируются «от большего»
+    assert.equal(L.defaultSortDirection('ownGoals'), 'desc');
+    assert.deepEqual(
+        L.sortRows(rows, { key: 'ownGoals' }).map((row) => row.player),
+        ['Петров П.', 'Сидоров С.', 'Кузнецов К.', 'Иванов А.'],
+        'при равенстве порядок решают команда и имя'
+    );
+
+    // Карточка Иванова на его голы не влияет, а автогол Петрова не идёт в голы
+    assert.equal(rows[0].player, 'Иванов А.');
+    assert.deepEqual([rows[0].goals, rows[0].yellow], [1, 1]);
 });
 
 test('нормализация: пустой турнир — допустимое состояние, а не «битые данные»', () => {
@@ -1265,7 +1346,8 @@ test('все игроки турнира: команда, имя и статис
     data.matches[0].events = [
         { team: 1, player: 'Иванов А.', type: 'goal' },
         { team: 1, player: 'Иванов А.', type: 'yellow' },
-        { team: 2, player: 'Попов П.', type: 'red' }
+        { team: 2, player: 'Попов П.', type: 'red' },
+        { team: 2, player: 'Попов П.', type: 'own-goal' }
     ];
     data.playerInfo = { '1|иванов а.': { number: 8, note: '' } };
 
@@ -1279,17 +1361,19 @@ test('все игроки турнира: команда, имя и статис
         player: 'Иванов А.',
         number: 8,
         goals: 1,
+        ownGoals: 0,
         yellow: 1,
         red: 0
     });
     assert.equal(rows[1].player, 'Петров П.');
-    assert.deepEqual([rows[1].goals, rows[1].yellow, rows[1].red], [0, 0, 0], 'игроки без событий тоже в списке');
+    assert.deepEqual([rows[1].goals, rows[1].ownGoals, rows[1].yellow, rows[1].red], [0, 0, 0, 0],
+        'игроки без событий тоже в списке');
     assert.equal(rows[1].number, '', 'без номера — пустая строка');
     assert.equal(Object.prototype.hasOwnProperty.call(rows[1], 'birthDate'), false, 'даты рождения в строке нет');
 
     const popov = rows.find((row) => row.player === 'Попов П.');
 
-    assert.deepEqual([popov.teamName, popov.goals, popov.red], ['Локомотив', 0, 1]);
+    assert.deepEqual([popov.teamName, popov.goals, popov.ownGoals, popov.red], ['Локомотив', 0, 1, 1]);
 
     // Пустые данные не ломают список
     assert.deepEqual(L.computeAllPlayers(null), []);

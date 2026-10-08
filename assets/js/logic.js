@@ -47,7 +47,10 @@
         //      birthDate отбрасывается при загрузке данных.
         // 12 — появился выбор оформления сайта (settings.theme): администратор
         //      включает второй стиль «Афиша матча» одной кнопкой в панели.
-        dataVersion: 12,
+        // 13 — появились автоголы: событие own-goal записывается на игрока так же,
+        //      как обычный гол, но в интерфейсе отмечено красным мячом, а в таблице
+        //      бомбардиров считается отдельной колонкой.
+        dataVersion: 13,
         // Пароль администратора в репозитории не хранится. В коде лежит только
         // солёный отпечаток пароля — он читается из настроек сайта
         // (FT_CONFIG.admin в assets/js/config.js), а сверку делает
@@ -1106,6 +1109,8 @@
                     // Игровой номер берём из данных игрока ('' — номер не задан)
                     number: getPlayerInfo(data, id, name).number,
                     goals: 0,
+                    // Автоголы считаются отдельно от голов: они видны своей колонкой
+                    ownGoals: 0,
                     yellow: 0,
                     red: 0
                 };
@@ -1131,6 +1136,8 @@
 
                 if (event.type === 'goal') {
                     row.goals += 1;
+                } else if (event.type === 'own-goal') {
+                    row.ownGoals += 1;
                 } else if (event.type === 'yellow') {
                     row.yellow += 1;
                 } else {
@@ -1139,9 +1146,11 @@
             });
         });
 
-        // В таблице бомбардиров остаются только те, кто забивал
+        // В таблице бомбардиров остаются те, кто забивал: обычный гол или автогол.
+        // Игрок с одними автоголами тоже попадает в список — иначе колонка «Автоголы»
+        // показывала бы нули у всех, кроме тех, кто заодно забивал и в чужие ворота.
         var scorers = rows.filter(function (row) {
-            return row.goals > 0;
+            return row.goals > 0 || row.ownGoals > 0;
         });
 
         scorers.sort(function (a, b) {
@@ -1174,11 +1183,11 @@
         return -1;
     }
 
-    /** Голы и карточки одного игрока по всем матчам турнира. */
+    /** Голы, автоголы и карточки одного игрока по всем матчам турнира. */
     function playerStats(data, teamId, player) {
         var id = toInt(teamId);
         var name = cleanText(player, CONFIG.maxPlayerNameLength);
-        var result = { goals: 0, yellow: 0, red: 0 };
+        var result = { goals: 0, ownGoals: 0, yellow: 0, red: 0 };
 
         if (id === null || !name || !data || !Array.isArray(data.matches)) {
             return result;
@@ -1186,6 +1195,7 @@
 
         data.matches.forEach(function (match) {
             result.goals += playerEventCount(match.events, id, name, 'goal');
+            result.ownGoals += playerEventCount(match.events, id, name, 'own-goal');
             result.yellow += playerEventCount(match.events, id, name, 'yellow');
             result.red += playerEventCount(match.events, id, name, 'red');
         });
@@ -1193,7 +1203,7 @@
         return result;
     }
 
-    /** Голы и карточки всех игроков одним проходом: ключ — «команда|имя в нижнем регистре». */
+    /** Голы, автоголы и карточки всех игроков одним проходом: ключ — «команда|имя в нижнем регистре». */
     function collectPlayerStats(data) {
         var events = {};
         var matches = (data && Array.isArray(data.matches)) ? data.matches : [];
@@ -1211,11 +1221,13 @@
                 }
 
                 if (!events[key]) {
-                    events[key] = { goals: 0, yellow: 0, red: 0 };
+                    events[key] = { goals: 0, ownGoals: 0, yellow: 0, red: 0 };
                 }
 
                 if (event.type === 'goal') {
                     events[key].goals += 1;
+                } else if (event.type === 'own-goal') {
+                    events[key].ownGoals += 1;
                 } else if (event.type === 'yellow') {
                     events[key].yellow += 1;
                 } else {
@@ -1240,7 +1252,7 @@
             (team.players || []).forEach(function (player, index) {
                 var key = photoKey(team.id, player);
                 var info = getPlayerInfo(data, team.id, player);
-                var totals = stats[key] || { goals: 0, yellow: 0, red: 0 };
+                var totals = stats[key] || { goals: 0, ownGoals: 0, yellow: 0, red: 0 };
 
                 rows.push({
                     teamId: toInt(team.id),
@@ -1249,6 +1261,7 @@
                     player: cleanText(player, CONFIG.maxPlayerNameLength),
                     number: info.number,
                     goals: totals.goals,
+                    ownGoals: totals.ownGoals,
                     yellow: totals.yellow,
                     red: totals.red
                 });
@@ -1271,6 +1284,7 @@
         teamName: 'text',
         name: 'text',
         goals: 'number',
+        ownGoals: 'number',
         yellow: 'number',
         red: 'number',
         place: 'number'
@@ -1344,9 +1358,18 @@
     /* События матча: голы и карточки                                      */
     /* ------------------------------------------------------------------ */
 
-    /** Типы событий: гол, жёлтая и красная карточки (порядок — как в интерфейсе). */
-    var EVENT_TYPES = ['goal', 'yellow', 'red'];
-    var EVENT_LABELS = { goal: 'Гол', yellow: 'Жёлтая карточка', red: 'Красная карточка' };
+    /**
+     * Типы событий: гол, автогол, жёлтая и красная карточки (порядок — как в интерфейсе).
+     * Автогол записывается на игрока так же, как гол, но мяч летит в свои ворота:
+     * отметка у него красная, а в таблице бомбардиров он идёт отдельной колонкой.
+     */
+    var EVENT_TYPES = ['goal', 'own-goal', 'yellow', 'red'];
+    var EVENT_LABELS = {
+        goal: 'Гол',
+        'own-goal': 'Автогол',
+        yellow: 'Жёлтая карточка',
+        red: 'Красная карточка'
+    };
 
     function isEventType(value) {
         return EVENT_TYPES.indexOf(value) !== -1;
@@ -1354,6 +1377,22 @@
 
     function eventLabel(type) {
         return EVENT_LABELS[type] || '';
+    }
+
+    /** Мяч в сетке: обычный гол и автогол — оба идут в счёт матча. */
+    function isGoalEvent(type) {
+        return type === 'goal' || type === 'own-goal';
+    }
+
+    /**
+     * Сколько мячей записано в матче: голы и автоголы обеих команд.
+     * Нужно для подсказки «Записано голов: 2 из 3» — она сверяет записи со счётом,
+     * а автогол тоже мяч, просто в свои ворота.
+     */
+    function countMatchGoals(events) {
+        return (Array.isArray(events) ? events : []).filter(function (event) {
+            return isPlainObject(event) && isGoalEvent(event.type);
+        }).length;
     }
 
     /** Одно событие матча: какая команда, какой игрок и что сделал. */
@@ -2946,6 +2985,8 @@
         groupMatchesForAdmin: groupMatchesForAdmin,
         isEventType: isEventType,
         eventLabel: eventLabel,
+        isGoalEvent: isGoalEvent,
+        countMatchGoals: countMatchGoals,
         normalizeMatchEvents: normalizeMatchEvents,
         teamEvents: teamEvents,
         playerEventCount: playerEventCount,

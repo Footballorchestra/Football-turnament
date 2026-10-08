@@ -1771,7 +1771,7 @@
         }
     }
 
-    /** Версия сайта из адреса подключённого скрипта: assets/js/app.js?v=55 → 55. */
+    /** Версия сайта из адреса подключённого скрипта: assets/js/app.js?v=56 → 56. */
     function runningBuildVersion() {
         var script = document.querySelector('script[src*="assets/js/app.js"]');
         var match = script ? BUILD_PATTERN.exec(script.getAttribute('src') || '') : null;
@@ -1779,7 +1779,7 @@
         return match ? parseInt(match[1], 10) : 0;
     }
 
-    /** Версия сайта в отданной странице: assets/js/app.js?v=55 → 55. */
+    /** Версия сайта в отданной странице: assets/js/app.js?v=56 → 56. */
     function deployedBuildVersion(html) {
         var match = BUILD_PATTERN.exec(String(html || ''));
 
@@ -2575,15 +2575,18 @@
     /**
      * Имена классов отметок перечислены явно: Tailwind собирает только те классы,
      * которые целиком встречаются в исходниках, поэтому части имён не склеиваются.
+     * Мяч у автогола тот же (i-ball), но красный: цвет задаёт класс owngoal.
      */
     var SUMMARY_CLASSES = {
         'match-mark': {
             goal: 'match-mark match-mark-goal',
+            'own-goal': 'match-mark match-mark-owngoal',
             yellow: 'match-mark match-mark-yellow',
             red: 'match-mark match-mark-red'
         },
         'admin-row-count': {
             goal: 'admin-row-count admin-row-count-goal',
+            'own-goal': 'admin-row-count admin-row-count-owngoal',
             yellow: 'admin-row-count admin-row-count-yellow',
             red: 'admin-row-count admin-row-count-red'
         }
@@ -2594,6 +2597,7 @@
         var classes = SUMMARY_CLASSES[markClass] || SUMMARY_CLASSES['match-mark'];
         var types = [
             { type: 'goal', icon: 'ball' },
+            { type: 'own-goal', icon: 'ball' },
             { type: 'yellow', icon: 'card-yellow' },
             { type: 'red', icon: 'card-red' }
         ];
@@ -2858,11 +2862,9 @@
     }
 
     /**
-     * Лучшие бомбардиры: голы и карточки по всем матчам турнира.
-     * Сортировка — по голам, затем по карточкам (см. computePlayerStats).
-     */
-    /**
-     * Лучшие бомбардиры: голы по всем матчам турнира.
+     * Лучшие бомбардиры: голы по всем матчам турнира и отдельной колонкой — автоголы.
+     * В список попадают те, кто забивал: и в чужие ворота, и в свои (иначе колонку
+     * автоголов было бы видно только у тех, кто заодно забивал и обычные мячи).
      * Заголовки столбцов — кнопки сортировки, место считается по текущему порядку.
      */
     function renderPlayers() {
@@ -2879,15 +2881,19 @@
                 sortHeader('scorers', 'player', 'Игрок') +
                 sortHeader('scorers', 'teamName', 'Команда', { className: 'col-optional' }) +
                 sortHeader('scorers', 'goals', 'Голы', { className: 'num', title: 'Забитые мячи' }) +
+                sortHeader('scorers', 'ownGoals', 'Автоголы', {
+                    className: 'num',
+                    title: 'Автоголы: мячи в свои ворота'
+                }) +
             '</tr>';
         }
 
         var rows = L.computePlayerStats(state.data);
 
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="4" class="empty-state">' +
+            body.innerHTML = '<tr><td colspan="5" class="empty-state">' +
                 (state.data.matches.length
-                    ? 'Голы ещё не отмечены — их вносит администратор в карточке матча'
+                    ? 'Голы и автоголы ещё не отмечены — их вносит администратор в карточке матча'
                     : 'Матчи ещё не добавлены') +
             '</td></tr>';
             return;
@@ -2911,6 +2917,9 @@
                     teamLink(L.findTeam(state.data.teams, row.teamId), row.teamName, false, true) +
                 '</td>' +
                 '<td class="num player-goals">' + row.goals + '</td>' +
+                // Ноль в автоголах не выделяем: красным подсвечиваются только те,
+                // у кого мяч действительно побывал в своих воротах
+                '<td class="num' + (row.ownGoals ? ' player-own-goals' : '') + '">' + row.ownGoals + '</td>' +
             '</tr>';
         }).join('');
     }
@@ -2934,6 +2943,11 @@
                 // вместе с ячейками — иначе заголовок держит место и сжимает имя игрока
                 sortHeader('allPlayers', 'teamName', 'Команда', { className: 'col-optional' }) +
                 sortHeader('allPlayers', 'goals', 'Г', { className: 'num', title: 'Забитые голы' }) +
+                // Автоголы на телефоне тоже скрыты: столбик чисел забрал бы место у имени
+                sortHeader('allPlayers', 'ownGoals', 'АГ', {
+                    className: 'num col-optional',
+                    title: 'Автоголы: мячи в свои ворота'
+                }) +
                 sortHeader('allPlayers', 'yellow', 'Ж', { className: 'num', title: 'Жёлтые карточки' }) +
                 sortHeader('allPlayers', 'red', 'К', { className: 'num', title: 'Красные карточки' }) +
             '</tr>';
@@ -2942,7 +2956,7 @@
         var rows = L.computeAllPlayers(state.data);
 
         if (!rows.length) {
-            body.innerHTML = '<tr><td colspan="5" class="empty-state">Игроки ещё не добавлены — их вносит ' +
+            body.innerHTML = '<tr><td colspan="6" class="empty-state">Игроки ещё не добавлены — их вносит ' +
                 'администратор в карточках команд</td></tr>';
             return;
         }
@@ -2962,6 +2976,7 @@
                 '</td>' +
                 '<td class="col-optional">' + teamLink(team, row.teamName, false, true) + '</td>' +
                 '<td class="num squad-goals">' + row.goals + '</td>' +
+                '<td class="num col-optional" title="Автоголы: мячи в свои ворота">' + row.ownGoals + '</td>' +
                 '<td class="num">' + row.yellow + '</td>' +
                 '<td class="num">' + row.red + '</td>' +
             '</tr>';
@@ -3127,6 +3142,7 @@
         return {
             player: player,
             goals: stats.goals,
+            ownGoals: stats.ownGoals,
             yellow: stats.yellow,
             red: stats.red
         };
@@ -3145,6 +3161,7 @@
                 }) +
             '</td>' +
             '<td class="num squad-goals" title="Забитые голы">' + row.goals + '</td>' +
+            '<td class="num col-optional" title="Автоголы: мячи в свои ворота">' + row.ownGoals + '</td>' +
             '<td class="num" title="Жёлтые карточки">' + row.yellow + '</td>' +
             '<td class="num" title="Красные карточки">' + row.red + '</td>' +
         '</tr>';
@@ -3152,7 +3169,7 @@
 
     /**
      * Состав команды: свёрнутый блок-кнопка «Состав», по нажатию раскрывается список
-     * столбиком — имя, забитые голы, жёлтые и красные карточки.
+     * столбиком — имя, забитые голы, автоголы, жёлтые и красные карточки.
      * Имя игрока — ссылка на его карточку, заголовки столбцов сортируют список.
      */
     function teamSquadBlock(team) {
@@ -3187,6 +3204,11 @@
                         '<tr>' +
                             sortHeader('squad', 'player', 'Игрок') +
                             sortHeader('squad', 'goals', 'Г', { className: 'num', title: 'Забитые голы' }) +
+                            // Автоголы на телефоне скрыты: иначе столбик чисел сжимает имя игрока
+                            sortHeader('squad', 'ownGoals', 'АГ', {
+                                className: 'num col-optional',
+                                title: 'Автоголы: мячи в свои ворота'
+                            }) +
                             sortHeader('squad', 'yellow', 'Ж', { className: 'num', title: 'Жёлтые карточки' }) +
                             sortHeader('squad', 'red', 'К', { className: 'num', title: 'Красные карточки' }) +
                         '</tr>' +
@@ -3318,7 +3340,8 @@
                     '<div class="player-card-team mb-2">' +
                         teamLink(opened.team, opened.team.name, false, true) + '</div>' +
                     '<p class="text-sm text-dark-600">В турнире: голы — ' +
-                        '<span class="font-medium text-dark-800">' + stats.goals + '</span>, жёлтые — ' +
+                        '<span class="font-medium text-dark-800">' + stats.goals + '</span>, автоголы — ' +
+                        '<span class="font-medium text-dark-800">' + stats.ownGoals + '</span>, жёлтые — ' +
                         '<span class="font-medium text-dark-800">' + stats.yellow + '</span>, красные — ' +
                         '<span class="font-medium text-dark-800">' + stats.red + '</span></p>' +
                 '</div>' +
@@ -3554,15 +3577,20 @@
         ], { duration: MOTION.normal, easing: 'cubic-bezier(.2,.7,.3,1)' });
     }
 
-    /** Строка игрока в публичном составе: голы, жёлтая и красная карточки. */
+    /** Строка игрока в публичном составе: голы, автоголы, жёлтая и красная карточки. */
     function squadRow(match, teamId, player) {
         var goals = L.playerEventCount(match.events, teamId, player, 'goal');
+        var ownGoals = L.playerEventCount(match.events, teamId, player, 'own-goal');
         var yellow = L.playerEventCount(match.events, teamId, player, 'yellow');
         var red = L.playerEventCount(match.events, teamId, player, 'red');
         var marks = '';
 
         if (goals) {
             marks += '<span class="squad-mark squad-mark-goal">' + icon('ball') + goals + '</span>';
+        }
+
+        if (ownGoals) {
+            marks += '<span class="squad-mark squad-mark-owngoal">' + icon('ball') + ownGoals + '</span>';
         }
 
         if (yellow) {
@@ -3632,9 +3660,8 @@
         var nameB = teamB ? teamB.name : 'Команда удалена';
         var events = Array.isArray(match.events) ? match.events : [];
         var hint = L.isFinished(match)
-            ? 'Записано голов: ' + (L.countTeamEvents(match.events, match.teamA, 'goal') +
-                L.countTeamEvents(match.events, match.teamB, 'goal')) + ' из ' + (match.scoreA + match.scoreB) +
-                ' — мяч отмечает гол, прямоугольники — жёлтую и красную карточки.'
+            ? 'Записано голов: ' + L.countMatchGoals(match.events) + ' из ' + (match.scoreA + match.scoreB) +
+                ' — зелёный мяч отмечает гол, красный — автогол, прямоугольники — жёлтую и красную карточки.'
             : (events.length
                 ? 'Счёт ещё не сохранён — отметки внесены заранее.'
                 : 'Матч ещё не сыгран: счёт, голы и карточки появятся после матча.');
@@ -4090,14 +4117,13 @@
         var teamB = L.findTeam(state.data.teams, match.teamB);
         var nameA = teamA ? teamA.name : 'Неизвестная команда';
         var nameB = teamB ? teamB.name : 'Неизвестная команда';
-        var goalsA = L.countTeamEvents(match.events, match.teamA, 'goal');
-        var goalsB = L.countTeamEvents(match.events, match.teamB, 'goal');
         // Кто пропускает этот матч из-за карточек (считается по событиям и правилам из настроек)
         var bans = L.matchSuspensions(state.data, match.id);
         var hint = L.isFinished(match)
-            ? 'Записано голов: ' + (goalsA + goalsB) + ' из ' + (match.scoreA + match.scoreB) +
-                '. Мяч — гол, прямоугольник — карточка, кнопка «Убрать» снимает последнюю запись игрока'
-            : 'Счёт ещё не введён, но голы и карточки можно отметить уже сейчас. ' +
+            ? 'Записано голов: ' + L.countMatchGoals(match.events) + ' из ' + (match.scoreA + match.scoreB) +
+                '. Зелёный мяч — гол, красный — автогол, прямоугольник — карточка; ' +
+                'кнопка «Убрать» снимает последнюю запись игрока'
+            : 'Счёт ещё не введён, но голы, автоголы и карточки можно отметить уже сейчас. ' +
                 'Кнопка «Убрать» снимает последнюю запись игрока.';
 
         scoreBox.innerHTML =
@@ -4194,9 +4220,10 @@
         '</div>';
     }
 
-    /** Строка игрока: имя и три отметки — гол, жёлтая и красная карточки. */
+    /** Строка игрока: имя и четыре отметки — гол, автогол, жёлтая и красная карточки. */
     function matchPlayerRow(match, teamId, player, ban) {
         var goals = L.playerEventCount(match.events, teamId, player, 'goal');
+        var ownGoals = L.playerEventCount(match.events, teamId, player, 'own-goal');
         var yellow = L.playerEventCount(match.events, teamId, player, 'yellow');
         var red = L.playerEventCount(match.events, teamId, player, 'red');
         var last = lastPlayerEvent(match.events, teamId, player);
@@ -4215,6 +4242,7 @@
             '</span>' +
             '<span class="event-actions">' +
                 eventButton(match.id, teamId, player, 'goal', goals) +
+                eventButton(match.id, teamId, player, 'own-goal', ownGoals) +
                 eventButton(match.id, teamId, player, 'yellow', yellow) +
                 eventButton(match.id, teamId, player, 'red', red) +
                 /* Кнопка видна всегда: пока записей нет — она приглушена,
@@ -4248,9 +4276,11 @@
     /**
      * Вид кнопок отметок. Имена классов перечислены явно: Tailwind собирает только
      * те классы, которые целиком встречаются в исходниках.
+     * Гол и автогол — один и тот же мяч: у гола он зелёный, у автогола красный.
      */
     var EVENT_BUTTONS = {
         goal: { icon: 'ball', cls: 'event-btn-goal' },
+        'own-goal': { icon: 'ball', cls: 'event-btn-owngoal' },
         yellow: { icon: 'card-yellow', cls: 'event-btn-yellow' },
         red: { icon: 'card-red', cls: 'event-btn-red' }
     };

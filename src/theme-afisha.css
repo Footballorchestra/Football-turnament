@@ -815,6 +815,18 @@ body.theme-afisha .next-match-card .status-pill.finished {
 }
 
 /*
+ * Мячи на тёмном табло светлее: тёмно-зелёный и тёмно-красный (см. src/input.css)
+ * на ночном фоне почти не читаются. Гол — зелёный мяч, автогол — красный.
+ */
+body.theme-afisha .next-match-card .match-mark-goal {
+    color: #81c784;
+}
+
+body.theme-afisha .next-match-card .match-mark-owngoal {
+    color: #f0a9a2;
+}
+
+/*
  * «Лампа» у свежего результата: счёт, изменившийся с прошлой отрисовки, коротко
  * мигает латунным светом — видно, что только что прилетел новый результат.
  * Класс is-fresh ставит matchCard (assets/js/app.js).

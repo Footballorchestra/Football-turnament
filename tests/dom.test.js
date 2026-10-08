@@ -472,17 +472,17 @@ test('лучшие бомбардиры: таблица показывает т�
     assert.equal(rows.length, 2, 'игрок только с карточкой в таблицу бомбардиров не попадает');
     assert.deepEqual(rows.map((row) => row.querySelector('.player-name').textContent),
         ['Иванов А.', 'Кузнецов К.']);
-    assert.deepEqual(numbers(rows[0]), ['1', '2'], 'место и голы');
+    assert.deepEqual(numbers(rows[0]), ['1', '2', '0'], 'место, голы и автоголы');
     assert.match(rows[0].querySelector('.col-optional').textContent, /Спартак/, 'команда игрока показана');
-    assert.deepEqual(numbers(rows[1]), ['2', '1']);
+    assert.deepEqual(numbers(rows[1]), ['2', '1', '0']);
 
     // Колонок жёлтых и красных карточек в таблице больше нет
     // Стрелку сортировки (↕) в подписях столбцов не учитываем
     const headers = Array.from(app.id('players-body').closest('table').querySelectorAll('thead th'))
         .map((cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim());
 
-    assert.deepEqual(headers, ['#', 'Игрок', 'Команда', 'Голы']);
-    assert.equal(rows[0].querySelectorAll('td').length, 4, 'место, игрок, команда, голы');
+    assert.deepEqual(headers, ['#', 'Игрок', 'Команда', 'Голы', 'Автоголы']);
+    assert.equal(rows[0].querySelectorAll('td').length, 5, 'место, игрок, команда, голы и автоголы');
 
     // Кнопка в меню ведёт на страницу
     app.click(app.$('[data-nav="players"]'));
@@ -1046,9 +1046,9 @@ test('админка: в карточке матча отмечаются гол
     assert.match(app.id('admin-match-score').textContent, /Спартак/);
     assert.match(app.id('admin-match-score').textContent, /Локомотив/);
 
-    // Состав обеих команд: три отметки (гол и две карточки) и кнопка «Убрать» у каждого игрока
+    // Состав обеих команд: четыре отметки (гол, автогол и две карточки) и кнопка «Убрать» у каждого игрока
     assert.equal(app.id('admin-match-events').querySelectorAll('.event-row').length, 5);
-    assert.equal(app.id('admin-match-events').querySelectorAll('[data-action="match-event"]').length, 15);
+    assert.equal(app.id('admin-match-events').querySelectorAll('[data-action="match-event"]').length, 20);
     assert.equal(app.id('admin-match-events').querySelectorAll('[data-action="match-event-undo"]').length, 5);
     assert.equal(app.id('admin-match-events').querySelectorAll('.event-btn.is-active').length, 0, 'записей ещё нет');
 
@@ -1132,6 +1132,87 @@ test('админка: в карточке матча отмечаются гол
     reloaded.openMatch(1);
     assert.equal(reloaded.markButton(1, 'Иванов-старший', 'goal').querySelector('.event-count').textContent, '1');
     assert.equal(reloaded.markButton(2, 'Кузнецов К.', 'goal').classList.contains('is-active'), true);
+});
+
+test('автогол: отмечается как гол, но мяч у него красный и своя колонка', () => {
+    const app = boot();
+
+    app.login();
+    app.openMatch(1);
+
+    // Отметка автогола стоит рядом с голом и опознаётся по подписи
+    const ownGoalButton = app.markButton(1, 'Иванов А.', 'own-goal');
+
+    assert.ok(ownGoalButton, 'в карточке матча есть отметка автогола');
+    assert.equal(ownGoalButton.getAttribute('title'), 'Автогол');
+    assert.equal(ownGoalButton.getAttribute('aria-label'), 'Автогол: Иванов А.');
+    assert.equal(ownGoalButton.querySelector('use').getAttribute('href'), '#i-ball', 'автогол — тот же мяч');
+
+    app.click(ownGoalButton);
+
+    assert.deepEqual(app.storedData().matches[0].events, [{ team: 1, player: 'Иванов А.', type: 'own-goal' }]);
+    assert.equal(app.markButton(1, 'Иванов А.', 'own-goal').classList.contains('is-active'), true);
+    assert.equal(app.markButton(1, 'Иванов А.', 'own-goal').classList.contains('event-btn-owngoal'), true);
+    assert.equal(app.markButton(1, 'Иванов А.', 'own-goal').querySelector('.event-count').textContent, '1');
+    assert.equal(app.markButton(1, 'Иванов А.', 'goal').classList.contains('is-active'), false, 'гол не записан');
+
+    const undoTitle = () => app.id('admin-match-events')
+        .querySelector('[data-action="match-event-undo"][data-player="Иванов А."]').getAttribute('title');
+
+    assert.equal(undoTitle(), 'Убрать последнюю запись: Автогол', 'кнопка «Убрать» знает про автогол');
+
+    // Автогол — тоже мяч: подсказка сверяет его со счётом матча
+    assert.match(app.id('admin-match-score').textContent, /Записано голов: 1 из 3/);
+
+    // Плюс обычный гол того же игрока: два мяча, но отметки разные
+    app.click(app.markButton(1, 'Иванов А.', 'goal'));
+    assert.match(app.id('admin-match-score').textContent, /Записано голов: 2 из 3/);
+
+    // В списке матчей автоголы считаются отдельно от голов
+    app.click(app.button('match-back'));
+
+    const row = app.id('admin-matches-list').querySelector('[data-action="match-open"][data-id="1"]');
+
+    assert.equal(row.querySelector('.admin-row-count-goal').textContent.trim(), '1');
+    assert.equal(row.querySelector('.admin-row-count-owngoal').textContent.trim(), '1');
+
+    // Публичная карточка матча: зелёный мяч гола и красный мяч автогола
+    app.navigate('matches');
+
+    const card = app.id('matches-list').querySelector('.match-card[data-id="1"]');
+    const marks = Array.from(card.querySelectorAll('.match-mark'));
+
+    assert.deepEqual(marks.map((mark) => [
+        mark.className.replace('match-mark ', ''),
+        mark.querySelector('use').getAttribute('href'),
+        mark.textContent.trim()
+    ]), [
+        ['match-mark-goal', '#i-ball', '1'],
+        ['match-mark-owngoal', '#i-ball', '1']
+    ], 'оба мяча круглые, но классы разные — цвет задают стили');
+
+    // Детальный результат матча: у игрока видны и гол, и автогол
+    app.click(card);
+
+    const squadMarks = Array.from(app.id('match-detail').querySelectorAll('.squad-row .squad-mark'));
+
+    assert.deepEqual(squadMarks.map((mark) => mark.className + ':' + mark.textContent.trim()),
+        ['squad-mark squad-mark-goal:1', 'squad-mark squad-mark-owngoal:1']);
+
+    // Таблица бомбардиров: автогол не прибавился к голам, у него своя колонка
+    app.navigate('players');
+
+    const scorerRow = app.id('players-body').querySelector('tr');
+
+    assert.equal(scorerRow.querySelector('.player-name').textContent, 'Иванов А.');
+    assert.deepEqual(Array.from(scorerRow.querySelectorAll('td.num')).map((cell) => cell.textContent.trim()),
+        ['1', '1', '1'], 'место, голы и автоголы');
+    assert.equal(scorerRow.querySelector('.player-own-goals').textContent, '1');
+
+    // Карточка игрока: автоголы видны в статистике вместе с голами
+    app.click(app.id('players-body').querySelector('a.player-link'));
+
+    assert.match(app.id('player-card').textContent, /В турнире: голы — 1, автоголы — 1/);
 });
 
 test('дисциплина: лимит жёлтых карточек превращается в красную, игрок пропускает следующий матч', () => {
@@ -2891,11 +2972,12 @@ test('админка: фотографии команды загружаются
 test('состав команды: блок «Состав», по нажатию — список со статистикой', () => {
     const seeded = remoteData();
 
-    // Иванов А. забил дважды и получил жёлтую, Петров П. — красную
+    // Иванов А. забил дважды и получил жёлтую, Петров П. — автогол и красную
     seeded.matches[0].events = [
         { team: 1, player: 'Иванов А.', type: 'goal' },
         { team: 1, player: 'Иванов А.', type: 'goal' },
         { team: 1, player: 'Иванов А.', type: 'yellow' },
+        { team: 1, player: 'Петров П.', type: 'own-goal' },
         { team: 1, player: 'Петров П.', type: 'red' }
     ];
     seeded.playerInfo = { '1|иванов а.': { number: 7, note: '' } };
@@ -2921,22 +3003,23 @@ test('состав команды: блок «Состав», по нажати�
     const columns = Array.from(block().querySelectorAll('thead th'))
         .map((cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim());
 
-    assert.deepEqual(columns, ['Игрок', 'Г', 'Ж', 'К'], 'имя, голы, Ж и К');
+    assert.deepEqual(columns, ['Игрок', 'Г', 'АГ', 'Ж', 'К'], 'имя, голы, автоголы, Ж и К');
 
     const rows = Array.from(block().querySelectorAll('tbody tr')).map((row) => ({
         name: row.querySelector('.player-name').textContent,
         goals: row.children[1].textContent,
-        yellow: row.children[2].textContent,
-        red: row.children[3].textContent,
+        ownGoals: row.children[2].textContent,
+        yellow: row.children[3].textContent,
+        red: row.children[4].textContent,
         link: row.querySelector('a.player-link').getAttribute('href')
     }));
 
     assert.equal(rows.length, 3, 'все игроки команды — столбиком');
     assert.deepEqual(rows[0], {
-        name: 'Иванов А.', goals: '2', yellow: '1', red: '0', link: '#/player/1/0'
+        name: 'Иванов А.', goals: '2', ownGoals: '0', yellow: '1', red: '0', link: '#/player/1/0'
     });
     assert.deepEqual(rows[1], {
-        name: 'Петров П.', goals: '0', yellow: '0', red: '1', link: '#/player/1/1'
+        name: 'Петров П.', goals: '0', ownGoals: '1', yellow: '0', red: '1', link: '#/player/1/1'
     });
 
     // Даты рождения в составе больше нет — ни столбца, ни подписи под именем
@@ -3066,12 +3149,13 @@ test('счётчики на главной кликабельны и откры�
 test('страница «Все игроки»: краткая информация и сортировка по столбцам', () => {
     const seeded = remoteData();
 
-    // Иванов А.: два гола и жёлтая. Кузнецов К.: гол. Остальные без событий
+    // Иванов А.: два гола и жёлтая. Кузнецов К.: гол и автогол. Остальные без событий
     seeded.matches[0].events = [
         { team: 1, player: 'Иванов А.', type: 'goal' },
         { team: 1, player: 'Иванов А.', type: 'goal' },
         { team: 1, player: 'Иванов А.', type: 'yellow' },
-        { team: 2, player: 'Кузнецов К.', type: 'goal' }
+        { team: 2, player: 'Кузнецов К.', type: 'goal' },
+        { team: 2, player: 'Кузнецов К.', type: 'own-goal' }
     ];
     seeded.playerInfo = {
         '1|иванов а.': { number: 7, note: '' },
@@ -3094,10 +3178,10 @@ test('страница «Все игроки»: краткая информац�
     // Столбцы и кнопки сортировки: даты рождения среди них больше нет
     assert.deepEqual(
         Array.from(head().querySelectorAll('th')).map((cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim()),
-        ['Игрок', 'Команда', 'Г', 'Ж', 'К']
+        ['Игрок', 'Команда', 'Г', 'АГ', 'Ж', 'К']
     );
     assert.equal(head().querySelector('[data-key="birthDate"]'), null, 'столбца с датой рождения нет');
-    assert.equal(head().querySelectorAll('[data-action="sort"]').length, 5, 'сортировать можно по каждому столбцу');
+    assert.equal(head().querySelectorAll('[data-action="sort"]').length, 6, 'сортировать можно по каждому столбцу');
     assert.equal(column('goals').getAttribute('aria-sort'), 'none', 'пока порядок исходный');
 
     // Краткая информация в строке
@@ -3105,8 +3189,8 @@ test('страница «Все игроки»: краткая информац�
 
     assert.equal(first.querySelector('.player-name').textContent, 'Иванов А.');
     assert.match(first.children[1].textContent, /Спартак/);
-    assert.deepEqual(Array.from(first.children).slice(2).map((cell) => cell.textContent), ['2', '1', '0'],
-        'голы, жёлтые и красные карточки');
+    assert.deepEqual(Array.from(first.children).slice(2).map((cell) => cell.textContent), ['2', '0', '1', '0'],
+        'голы, автоголы, жёлтые и красные карточки');
 
     // Сортировка по голам: сначала от большего, повторное нажатие — от меньшего
     app.click(head().querySelector('[data-key="goals"]'));
@@ -3128,6 +3212,14 @@ test('страница «Все игроки»: краткая информац�
     assert.equal(names()[8], 'Смирнов Д.');
     assert.equal(column('player').getAttribute('aria-sort'), 'ascending');
 
+    // Сортировка по автоголам: сначала тот, у кого он есть
+    app.click(head().querySelector('[data-key="ownGoals"]'));
+
+    assert.equal(column('ownGoals').getAttribute('aria-sort'), 'descending');
+    assert.equal(names()[0], 'Кузнецов К.', 'у него автогол');
+    assert.deepEqual(Array.from(body().querySelector('tr').children).slice(2).map((cell) => cell.textContent),
+        ['1', '1', '0', '0'], 'гол, автогол, жёлтые и красные карточки');
+
     // Сортировка по карточкам
     app.click(head().querySelector('[data-key="yellow"]'));
 
@@ -3142,6 +3234,7 @@ test('состав команды и бомбардиры тоже сортир�
         { team: 1, player: 'Иванов А.', type: 'goal' },
         { team: 1, player: 'Иванов А.', type: 'goal' },
         { team: 1, player: 'Сидоров С.', type: 'goal' },
+        { team: 1, player: 'Сидоров С.', type: 'own-goal' },
         { team: 2, player: 'Кузнецов К.', type: 'goal' }
     ];
 
@@ -3172,7 +3265,7 @@ test('состав команды и бомбардиры тоже сортир�
     const scorers = () => Array.from(app.id('players-body').querySelectorAll('tr .player-name'))
         .map((cell) => cell.textContent);
 
-    assert.equal(app.id('players-head').querySelectorAll('[data-action="sort"]').length, 3, 'три сортируемых столбца');
+    assert.equal(app.id('players-head').querySelectorAll('[data-action="sort"]').length, 4, 'четыре сортируемых столбца');
     assert.deepEqual(scorers(), ['Иванов А.', 'Кузнецов К.', 'Сидоров С.'], 'по умолчанию — по голам');
     assert.deepEqual(
         Array.from(app.id('players-body').querySelectorAll('tr td:first-child')).map((cell) => cell.textContent),
@@ -3180,17 +3273,31 @@ test('состав команды и бомбардиры тоже сортир�
         'место считается по текущему порядку'
     );
 
+    // Колонка автоголов: у Сидорова его гол в свои ворота не прибавился к голам
+    assert.deepEqual(
+        Array.from(app.id('players-body').querySelectorAll('tr')).map((row) => row.lastElementChild.textContent),
+        ['0', '0', '1'],
+        'автоголы считаются отдельной колонкой'
+    );
+
     app.click(app.id('players-head').querySelector('[data-key="player"]'));
     assert.equal(app.id('players-head').querySelector('[data-key="player"]').closest('th').getAttribute('aria-sort'),
         'ascending');
     assert.deepEqual(scorers(), ['Иванов А.', 'Кузнецов К.', 'Сидоров С.'], 'по имени — тот же порядок');
+
+    app.click(app.id('players-head').querySelector('[data-key="ownGoals"]'));
+
+    assert.equal(app.id('players-head').querySelector('[data-key="ownGoals"]').closest('th').getAttribute('aria-sort'),
+        'descending');
+    assert.deepEqual(scorers(), ['Сидоров С.', 'Кузнецов К.', 'Иванов А.'],
+        'по автоголам — вперёд забивший в свои, при равенстве решают команда и имя');
 
     app.click(app.id('players-head').querySelector('[data-key="goals"]'));
 
     assert.equal(app.id('players-head').querySelector('[data-key="goals"]').closest('th').getAttribute('aria-sort'),
         'descending');
     assert.deepEqual(
-        Array.from(app.id('players-body').querySelectorAll('tr td:last-child')).map((cell) => cell.textContent),
+        Array.from(app.id('players-body').querySelectorAll('tr td.player-goals')).map((cell) => cell.textContent),
         ['2', '1', '1'],
         'голы по убыванию'
     );

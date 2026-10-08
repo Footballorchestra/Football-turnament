@@ -657,7 +657,7 @@ test('админ-панель целиком в браузере: вход, ко
     });
 
     assert.ok(bestPlayers.length > 0, 'игрок с голом попал в список');
-    assert.deepEqual(bestPlayers.slice(3), ['1'], 'в таблице бомбардиров только голы');
+    assert.deepEqual(bestPlayers.slice(3), ['1', '0'], 'в таблице бомбардиров голы и автоголы разными столбцами');
 
     // Ничья 2:2 приносит по одному очку каждой команде
     const after = await dataSnapshot(page);
@@ -1177,8 +1177,8 @@ test('страница команды: из турнирной таблицы в
     assert.deepEqual(
         await page.$$eval('#team-squad thead th', (cells) => cells.map(
             (cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim())),
-        ['Игрок', 'Г', 'Ж', 'К'],
-        'столбцы состава (без даты рождения)'
+        ['Игрок', 'Г', 'АГ', 'Ж', 'К'],
+        'столбцы состава (без даты рождения, с автоголами)'
     );
     assert.ok(await page.$$eval('#team-squad tbody tr', (rows) => rows.length) > 0, 'игроки видны столбиком');
     assert.equal(await page.$eval('#team-detail [data-action="squad-toggle"]', (button) => button.getAttribute('aria-expanded')),
@@ -1875,8 +1875,8 @@ test('счётчики на главной и сортировка таблиц 
     assert.equal(view.hash, '#/allplayers', 'у страницы свой адрес');
     assert.equal(view.title, 'Все игроки');
     assert.ok(view.rows > 0, 'игроки показаны: ' + view.rows);
-    assert.deepEqual(view.columns, ['Игрок', 'Команда', 'Г', 'Ж', 'К']);
-    assert.equal(view.sortButtons, 5, 'сортировка по каждому столбцу');
+    assert.deepEqual(view.columns, ['Игрок', 'Команда', 'Г', 'АГ', 'Ж', 'К']);
+    assert.equal(view.sortButtons, 6, 'сортировка по каждому столбцу');
     assert.ok(view.firstRow[0].length > 0, 'в строке видно имя игрока');
 
     // Нажатие на «Г» сортирует по забитым голам (от большего), повторное — наоборот
@@ -2231,6 +2231,164 @@ test('дисквалификации: жёлтые карточки превра
     // Репозиторий возвращаем в исходное состояние
     mockRepository.changeExternally(original);
 });
+/**
+ * Автоголы в браузере: мяч автогола красный, мяч обычного гола — зелёный,
+ * и это видно всюду, где смотрят матчи (список матчей и детальный результат),
+ * а в таблице бомбардиров у автоголов своя колонка, которая не складывается с голами.
+ * Данные подставляются свои: в рабочем data.json автоголов пока нет.
+ * В конце тест возвращает репозиторий в исходное состояние.
+ */
+test('автоголы: красный мяч в матчах и своя колонка у бомбардиров', { skip }, async () => {
+    const original = JSON.parse(fs.readFileSync(path.join(ROOT, 'data.json'), 'utf8'));
+    const goal = (team, player) => ({ team: team, player: player, type: 'goal' });
+    const ownGoal = (team, player) => ({ team: team, player: player, type: 'own-goal' });
+    // Цвета мячей: зелёный — обычный гол, красный — автогол (см. src/input.css)
+    const GREEN_BALL = 'rgb(46, 125, 50)';
+    const RED_BALL = 'rgb(198, 40, 40)';
+
+    mockRepository.changeExternally({
+        version: 13,
+        revision: 915,
+        updatedAt: '2026-09-10T10:00:00.000Z',
+        teams: [
+            { id: 1, name: 'Ветераны МГК', players: ['Шорохов Александр', 'Бусырев Сергей'] },
+            { id: 2, name: 'ФК МГСО', players: ['Сергеев Валентин'] }
+        ],
+        matches: [
+            {
+                id: 1, teamA: 1, teamB: 2, scoreA: 2, scoreB: 2, date: '2026-09-01', finished: true,
+                events: [
+                    goal(1, 'Шорохов Александр'),
+                    ownGoal(1, 'Бусырев Сергей'),
+                    goal(2, 'Сергеев Валентин'),
+                    ownGoal(2, 'Сергеев Валентин')
+                ]
+            }
+        ],
+        photos: {},
+        teamPhotos: {},
+        teamImages: {},
+        playerInfo: {},
+        settings: { yellowLimit: 4, yellowPeriodDays: 0, theme: 'classic' }
+    });
+
+    const { page, problems } = await openPage({ url: mockBaseUrl + '/#/matches', isolated: true });
+
+    await page.waitForFunction(() => document.querySelectorAll('#matches-list .match-card').length > 0);
+    await page.waitForFunction(() => {
+        const splash = document.getElementById('splash');
+
+        return !splash || splash.hidden;
+    }, { timeout: 20000 }).catch(() => {});
+    await page.keyboard.press('Escape');
+
+    // 1. Карточка матча: у хозяев два разных мяча — гол зелёный, автогол красный
+    const card = await page.evaluate(() => {
+        const box = document.querySelector('#matches-list .match-card[data-id="1"]');
+        const side = box.querySelectorAll('.match-side-marks')[0];
+
+        return {
+            marks: Array.from(side.querySelectorAll('.match-mark')).map((mark) => ({
+                cls: mark.className,
+                ball: mark.querySelector('use').getAttribute('href'),
+                count: mark.textContent.trim(),
+                color: getComputedStyle(mark.querySelector('.icon')).color
+            })),
+            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth
+        };
+    });
+
+    assert.deepEqual(card.marks.map((mark) => mark.count), ['1', '1'], 'один гол и один автогол');
+    assert.deepEqual(card.marks.map((mark) => [mark.cls, mark.ball]), [
+        ['match-mark match-mark-goal', '#i-ball'],
+        ['match-mark match-mark-owngoal', '#i-ball']
+    ], 'мяч один и тот же, но отметки разные');
+    assert.equal(card.marks[0].color, GREEN_BALL, 'мяч обычного гола — зелёный');
+    assert.equal(card.marks[1].color, RED_BALL, 'мяч автогола — красный');
+    assert.equal(card.overflow, 0, 'страница не выходит за экран');
+
+    // 2. Детальный результат матча: у игроков те же два цвета
+    await page.click('#matches-list .match-card[data-id="1"]');
+    await page.waitForFunction(() => document.getElementById('match-detail-view').hidden === false);
+
+    const detail = await page.evaluate(() => Array.from(document.querySelectorAll('#match-detail .squad-row'))
+        .map((row) => ({
+            player: row.querySelector('.squad-name').textContent,
+            marks: Array.from(row.querySelectorAll('.squad-mark')).map((mark) => ({
+                cls: mark.className,
+                color: getComputedStyle(mark.querySelector('.icon')).color
+            }))
+        })));
+
+    const scored = detail.filter((row) => row.player === 'Шорохов Александр')[0];
+    const ownScored = detail.filter((row) => row.player === 'Бусырев Сергей')[0];
+
+    assert.deepEqual(scored.marks.map((mark) => [mark.cls, mark.color]),
+        [['squad-mark squad-mark-goal', GREEN_BALL]], 'забитый гол — зелёный мяч');
+    assert.deepEqual(ownScored.marks.map((mark) => [mark.cls, mark.color]),
+        [['squad-mark squad-mark-owngoal', RED_BALL]], 'автогол — красный мяч');
+
+    // 3. Таблица бомбардиров: у автоголов своя колонка
+    await page.click('[data-nav="players"]');
+    await page.waitForFunction(() => document.querySelectorAll('#players-body tr').length > 0);
+
+    const scorers = await page.evaluate(() => ({
+        headers: Array.from(document.querySelectorAll('#players-head th'))
+            .map((cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim()),
+        rows: Array.from(document.querySelectorAll('#players-body tr')).map((row) => {
+            const own = row.lastElementChild;
+
+            return {
+                player: row.querySelector('.player-name').textContent,
+                goals: row.querySelector('.player-goals').textContent.trim(),
+                ownGoals: own.textContent.trim(),
+                ownGoalsColor: getComputedStyle(own).color,
+                ownGoalsMarked: own.classList.contains('player-own-goals')
+            };
+        })
+    }));
+
+    assert.deepEqual(scorers.headers, ['#', 'Игрок', 'Команда', 'Голы', 'Автоголы']);
+    assert.deepEqual(scorers.rows.map((row) => [row.player, row.goals, row.ownGoals]), [
+        ['Сергеев Валентин', '1', '1'],
+        ['Шорохов Александр', '1', '0'],
+        ['Бусырев Сергей', '0', '1']
+    ], 'автогол не прибавляется к голам и не мешает попасть в список');
+    assert.deepEqual(scorers.rows.map((row) => row.ownGoalsMarked), [true, false, true],
+        'красным выделены только те, у кого автогол есть');
+    assert.equal(scorers.rows[0].ownGoalsColor, RED_BALL, 'число автоголов — в цвете красного мяча');
+
+    // 4. Телефон: колонка автоголов остаётся видимой, горизонтальной прокрутки нет
+    await page.setViewport({ width: 360, height: 640, isMobile: true, hasTouch: true });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    const phone = await page.evaluate(() => {
+        const table = document.querySelector('#page-players table');
+
+        return {
+            headers: Array.from(document.querySelectorAll('#players-head th'))
+                .filter((cell) => cell.getBoundingClientRect().width > 0)
+                .map((cell) => cell.textContent.replace(/[↕↑↓]/g, '').trim()),
+            overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+            tableOverflow: table ? Math.round(table.getBoundingClientRect().width - table.parentElement.clientWidth) : 0
+        };
+    });
+
+    assert.deepEqual(phone.headers, ['#', 'Игрок', 'Голы', 'Автоголы'],
+        'на телефоне команда скрыта, а автоголы на месте');
+    assert.equal(phone.overflow, 0, 'страница не выходит за экран');
+    assert.ok(phone.tableOverflow <= 0, 'таблица помещается по ширине: ' + phone.tableOverflow);
+
+    const meaningful = problems.filter((item) => !item.includes('Failed to load resource'));
+
+    assert.deepEqual(meaningful, [], 'нет ошибок консоли и сбоев загрузки');
+    await page.close();
+
+    // Репозиторий возвращаем в исходное состояние
+    mockRepository.changeExternally(original);
+});
+
+
 
 /**
  * Главная страница в браузере: ближайший матч со временем начала и живой отсчёт.
