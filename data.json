@@ -1,7 +1,7 @@
 {
   "version": 13,
-  "revision": 565,
-  "updatedAt": "2026-10-08T09:34:41.107Z",
+  "revision": 576,
+  "updatedAt": "2026-10-10T14:22:16.947Z",
   "teams": [
     {
       "id": 1,
@@ -565,12 +565,63 @@
       "id": 12,
       "teamA": 4,
       "teamB": 2,
-      "scoreA": null,
-      "scoreB": null,
+      "scoreA": 6,
+      "scoreB": 4,
       "date": "2026-10-09",
       "time": "22:30",
-      "finished": false,
-      "events": []
+      "finished": true,
+      "events": [
+        {
+          "team": 4,
+          "player": "Хатылев Владимир",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Хатылев Владимир",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Хатылев Владимир",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Мясников Ефим",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Абраров Артур",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Колясников Андрей",
+          "type": "goal"
+        },
+        {
+          "team": 2,
+          "player": "Аракелян Арман",
+          "type": "goal"
+        },
+        {
+          "team": 2,
+          "player": "Аракелян Арман",
+          "type": "goal"
+        },
+        {
+          "team": 2,
+          "player": "Корявичев Сергей",
+          "type": "goal"
+        },
+        {
+          "team": 2,
+          "player": "Зенин Константин",
+          "type": "goal"
+        }
+      ]
     },
     {
       "id": 13,
@@ -587,10 +638,10 @@
       "id": 14,
       "teamA": 6,
       "teamB": 7,
-      "date": "2026-10-06",
-      "time": "",
       "scoreA": 2,
       "scoreB": 10,
+      "date": "2026-10-06",
+      "time": "",
       "finished": true,
       "events": [
         {
