@@ -1,7 +1,7 @@
 {
   "version": 13,
-  "revision": 579,
-  "updatedAt": "2026-10-10T14:32:25.429Z",
+  "revision": 587,
+  "updatedAt": "2026-10-11T14:57:05.146Z",
   "teams": [
     {
       "id": 1,
@@ -703,6 +703,48 @@
           "team": 6,
           "player": "Кора Степан",
           "type": "own-goal"
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "teamA": 8,
+      "teamB": 3,
+      "date": "2026-10-10",
+      "time": "",
+      "scoreA": 6,
+      "scoreB": 0,
+      "finished": true,
+      "events": [
+        {
+          "team": 8,
+          "player": "Мещанов Никита",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Мещанов Никита",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Мещанов Никита",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Деревенко Матвей",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Деревенко Матвей",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Алексеев Никита",
+          "type": "goal"
         }
       ]
     }
