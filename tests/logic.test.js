@@ -157,6 +157,13 @@ test('validateMatchInput: все проверки формы матча', () => 
     assert.equal(L.validateMatchInput(Object.assign({}, base, { time: '9:5' }), teams).match.time, '09:05');
     assert.equal(L.validateMatchInput(Object.assign({}, base, { time: '25:00' }), teams).error,
         'Время матча указывается как ЧЧ:ММ');
+
+    // Судья матча — необязательное поле: пустое значение допустимо, лишние пробелы убираются
+    assert.equal(L.validateMatchInput(base, teams).match.referee, '', 'судья не указан');
+    assert.equal(L.validateMatchInput(Object.assign({}, base, { referee: '  Иванов  Иван  Иванович ' }), teams)
+        .match.referee, 'Иванов Иван Иванович');
+    assert.equal(L.validateMatchInput(Object.assign({}, base, { referee: 'И. И. Иванов' }), teams).match.referee,
+        'И. И. Иванов', 'фамилия с инициалами тоже подходит');
 });
 
 test('normalizeMatchTime: время матча приводится к «ЧЧ:ММ», мусор отбрасывается', () => {
@@ -1093,6 +1100,24 @@ test('normalizeData: события матчей сохраняются, «му�
     assert.equal(result.repaired, true, 'событие чужой команды — это исправление данных');
     assert.deepEqual(result.data.matches[0].events, [{ team: 1, player: 'Иванов А.', type: 'goal' }]);
     assert.equal(result.data.version, L.CONFIG.dataVersion, 'в данных отмечена новая версия формата');
+});
+
+test('normalizeData: судья матча сохраняется, лишние пробелы убираются', () => {
+    const result = L.normalizeData({
+        teams: [
+            { id: 1, name: 'Спартак', players: [] },
+            { id: 2, name: 'Зенит', players: [] }
+        ],
+        matches: [
+            { id: 1, teamA: 1, teamB: 2, date: '2026-09-10', referee: '  Иванов  Иван  Иванович ' },
+            { id: 2, teamA: 2, teamB: 1, date: '2026-09-17' },
+            { id: 3, teamA: 1, teamB: 2, date: '2026-09-24', referee: 'Петров Пётр Петрович' }
+        ]
+    });
+
+    assert.equal(result.data.matches[0].referee, 'Иванов Иван Иванович', 'лишние пробелы убраны');
+    assert.equal(result.data.matches[1].referee, '', 'судья не указан — пустая строка');
+    assert.equal(result.data.matches[2].referee, 'Петров Пётр Петрович', 'ФИО судьи не теряется при загрузке');
 });
 
 test('лучшие бомбардиры: сортировка по голам, при равенстве — по имени', () => {

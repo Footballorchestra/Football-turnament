@@ -50,13 +50,18 @@
         // 13 — появились автоголы: событие own-goal записывается на игрока так же,
         //      как обычный гол, но в интерфейсе отмечено красным мячом, а в таблице
         //      бомбардиров считается отдельной колонкой.
-        dataVersion: 13,
+        // 14 — у матча появился судья (match.referee): ФИО арбитра заполняет
+        //      администратор, а в детальном результате матча его видит зритель.
+        dataVersion: 14,
         // Пароль администратора в репозитории не хранится. В коде лежит только
         // солёный отпечаток пароля — он читается из настроек сайта
         // (FT_CONFIG.admin в assets/js/config.js), а сверку делает
         // adminPasswordMatches ниже. Подробности — в README.
         maxTeamNameLength: 30,
         maxPlayerNameLength: 40,
+        // Судья матча — ФИО арбитра, необязательное поле: символов столько же,
+        // сколько у имени игрока
+        maxRefereeNameLength: 40,
         // Игровой номер: целое число от 0 до этого значения
         maxPlayerNumber: 99,
         // Принадлежность игрока — свободный текст (школа, клуб, тренер):
@@ -637,6 +642,8 @@
         var date = String(source.date === null || source.date === undefined ? '' : source.date).trim();
         var rawTime = String(source.time === null || source.time === undefined ? '' : source.time).trim();
         var time = normalizeMatchTime(rawTime);
+        // Судья — необязательное поле: пустое значение значит «судья не указан»
+        var referee = cleanText(source.referee, CONFIG.maxRefereeNameLength);
 
         if (teamA === null || teamIds.indexOf(teamA) === -1) {
             return { ok: false, error: 'Выберите первую команду' };
@@ -681,6 +688,7 @@
                 teamB: teamB,
                 date: date,
                 time: time,
+                referee: referee,
                 scoreA: finished ? scoreA : null,
                 scoreB: finished ? scoreB : null,
                 finished: finished
@@ -2727,6 +2735,9 @@
                 repaired = true;
             }
 
+            // Судья матча — необязательный текст: ФИО арбитра ('' — не указан)
+            var referee = cleanText(match.referee, CONFIG.maxRefereeNameLength);
+
             var scoreA = normalizeScore(match.scoreA);
             var scoreB = normalizeScore(match.scoreB);
             var bothScoresValid = Number.isInteger(scoreA) && Number.isInteger(scoreB);
@@ -2757,6 +2768,7 @@
                 scoreB: scoreB,
                 date: date,
                 time: time,
+                referee: referee,
                 finished: bothScoresValid,
                 events: events.events
             });

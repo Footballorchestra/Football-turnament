@@ -3673,11 +3673,19 @@
             : (events.length
                 ? 'Счёт ещё не сохранён — отметки внесены заранее.'
                 : 'Матч ещё не сыгран: счёт, голы и карточки появятся после матча.');
+        // Судья матча: ФИО арбитра стоит рядом с датой, если администратор его указал
+        var refereeLine = match.referee
+            ? '<span class="inline-flex items-center gap-1" title="Судья матча">' + icon('person') +
+                'Судья: ' + esc(match.referee) + '</span>'
+            : '';
 
         box.innerHTML =
             '<div class="flex flex-wrap items-center justify-between gap-2 mb-3">' +
-                '<span class="inline-flex items-center gap-1 text-xs text-dark-600">' + icon('calendar') +
-                    esc(L.formatMatchWhen(match, 'long')) + '</span>' +
+                '<span class="inline-flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-dark-600">' +
+                    '<span class="inline-flex items-center gap-1">' + icon('calendar') +
+                        esc(L.formatMatchWhen(match, 'long')) + '</span>' +
+                    refereeLine +
+                '</span>' +
                 statusPill(match) +
             '</div>' +
             '<div class="match-detail-score">' +
@@ -4136,7 +4144,8 @@
 
         scoreBox.innerHTML =
             '<div class="flex flex-wrap items-center justify-between gap-2 mb-3">' +
-                '<span class="admin-hint">' + esc(L.formatMatchWhen(match, 'long')) + '</span>' +
+                '<span class="admin-hint">' + esc(L.formatMatchWhen(match, 'long')) +
+                    (match.referee ? ' · Судья: ' + esc(match.referee) : '') + '</span>' +
                 statusPill(match) +
             '</div>' +
             '<div class="admin-score-line">' +
@@ -5052,7 +5061,7 @@
             cancel.hidden = true;
         }
 
-        ['match-score-a', 'match-score-b', 'match-time'].forEach(function (id) {
+        ['match-score-a', 'match-score-b', 'match-time', 'match-referee'].forEach(function (id) {
             var input = $(id);
 
             if (input) {
@@ -5091,7 +5100,8 @@
             scoreA: read('match-score-a'),
             scoreB: read('match-score-b'),
             date: read('match-date'),
-            time: read('match-time')
+            time: read('match-time'),
+            referee: read('match-referee')
         };
     }
 
@@ -5118,6 +5128,7 @@
         setValue('match-team-b', String(match.teamB));
         setValue('match-date', match.date || L.todayISO());
         setValue('match-time', L.normalizeMatchTime(match.time));
+        setValue('match-referee', match.referee || '');
         setValue('match-score-a', match.scoreA === null ? '' : String(match.scoreA));
         setValue('match-score-b', match.scoreB === null ? '' : String(match.scoreB));
 
@@ -5306,6 +5317,7 @@
             match.teamB = check.match.teamB;
             match.date = check.match.date;
             match.time = check.match.time;
+            match.referee = check.match.referee;
             match.scoreA = check.match.scoreA;
             match.scoreB = check.match.scoreB;
             match.finished = check.match.finished;
@@ -5321,6 +5333,7 @@
             teamB: check.match.teamB,
             date: check.match.date,
             time: check.match.time,
+            referee: check.match.referee,
             scoreA: check.match.scoreA,
             scoreB: check.match.scoreB,
             finished: check.match.finished

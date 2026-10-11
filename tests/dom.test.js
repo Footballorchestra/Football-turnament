@@ -915,20 +915,29 @@ test('админка: добавление матча и понятные про
     assert.match(app.id('match-form-error').textContent, /счёт обеих команд/);
     assert.equal(app.storedData().matches.length, 4, 'ничего не сохранено');
 
-    // Корректный предстоящий матч — со временем начала
+    // Корректный предстоящий матч — со временем начала и судьёй
     app.id('match-score-a').value = '';
     app.id('match-time').value = '19:30';
+    app.id('match-referee').value = '  Иванов  Иван  Иванович ';
     app.submit(form);
     assert.equal(app.storedData().matches.length, 5);
     assert.equal(app.id('match-form-error').textContent, '');
     assert.equal(app.id('match-score-a').value, '', 'форма очищена');
     assert.equal(app.id('match-score-b').value, '');
     assert.equal(app.id('match-time').value, '', 'время тоже очищено (поле необязательное)');
+    assert.equal(app.id('match-referee').value, '', 'поле судьи тоже очищено');
 
     const added = app.storedData().matches[4];
     assert.deepEqual(
-        { teamA: added.teamA, teamB: added.teamB, date: added.date, time: added.time, finished: added.finished },
-        { teamA: 1, teamB: 2, date: '2026-10-01', time: '19:30', finished: false }
+        {
+            teamA: added.teamA, teamB: added.teamB, date: added.date, time: added.time,
+            referee: added.referee, finished: added.finished
+        },
+        {
+            teamA: 1, teamB: 2, date: '2026-10-01', time: '19:30',
+            referee: 'Иванов Иван Иванович', finished: false
+        },
+        'лишние пробелы в ФИО судьи убраны'
     );
     assert.equal(app.id('stat-matches').textContent, '5');
 
@@ -937,16 +946,51 @@ test('админка: добавление матча и понятные про
 
     app.openMatch(added.id);
     assert.match(app.id('admin-match-score').textContent, /1 октября 2026, 19:30/, 'время видно в карточке матча');
+    assert.match(app.id('admin-match-score').textContent, /Судья: Иванов Иван Иванович/,
+        'ФИО судьи видно в карточке матча админки');
     app.click(app.button('match-edit'));
     assert.equal(app.id('match-time').value, '19:30', 'время подставляется в форму редактирования');
+    assert.equal(app.id('match-referee').value, 'Иванов Иван Иванович',
+        'ФИО судьи подставляется в форму редактирования');
     app.click(app.id('match-cancel'));
 
-    // Матч без времени — обычное дело: сохраняется и выглядит как раньше
+    // Матч без времени и без судьи — обычное дело: сохраняется и выглядит как раньше
     app.id('match-team-a').value = '1';
     app.id('match-team-b').value = '2';
     app.id('match-date').value = '2026-10-02';
     app.submit(form);
     assert.equal(app.storedData().matches[5].time, '', 'время необязательно');
+    assert.equal(app.storedData().matches[5].referee, '', 'судья необязателен');
+});
+
+test('судья матча: ФИО видно зрителям в детальном результате матча', () => {
+    const app = boot();
+
+    app.login();
+    app.id('match-team-a').value = '1';
+    app.id('match-team-b').value = '2';
+    app.id('match-date').value = '2026-10-05';
+    app.id('match-referee').value = 'Петров Пётр Петрович';
+    app.submit(app.$('[data-form="match"]'));
+
+    const added = app.storedData().matches[4];
+
+    // Публичная страница: матч открывается кликом по карточке
+    app.navigate('matches');
+    app.click(app.id('matches-list').querySelector('.match-card[data-id="' + added.id + '"]'));
+
+    const line = app.id('match-detail').querySelector('[title="Судья матча"]');
+
+    assert.ok(line, 'в детальном результате есть строка с судьёй');
+    assert.match(line.textContent.replace(/\s+/g, ' ').trim(), /^Судья: Петров Пётр Петрович$/);
+    assert.equal(line.querySelector('use').getAttribute('href'), '#i-person', 'рядом иконка человека');
+
+    // Матч без судьи: лишней строки нет
+    app.click(app.button('match-public-back'));
+    app.click(app.id('matches-list').querySelector('.match-card[data-id="1"]'));
+
+    assert.equal(app.id('match-detail').querySelector('[title="Судья матча"]'), null,
+        'если судья не указан, строка не выводится');
 });
 
 test('админка: ввод счёта, переоткрытие, правка и удаление матча влияют на таблицу', () => {
