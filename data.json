@@ -1,7 +1,7 @@
 {
   "version": 13,
-  "revision": 577,
-  "updatedAt": "2026-10-10T14:24:52.922Z",
+  "revision": 579,
+  "updatedAt": "2026-10-10T14:32:25.429Z",
   "teams": [
     {
       "id": 1,
@@ -698,6 +698,11 @@
           "team": 7,
           "player": "Терехов Владимир",
           "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Кора Степан",
+          "type": "own-goal"
         }
       ]
     }
