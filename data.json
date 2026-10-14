@@ -1,7 +1,7 @@
 {
   "version": 14,
-  "revision": 593,
-  "updatedAt": "2026-10-13T21:13:55.849Z",
+  "revision": 594,
+  "updatedAt": "2026-10-14T14:47:15.682Z",
   "teams": [
     {
       "id": 1,
@@ -775,6 +775,17 @@
           "type": "goal"
         }
       ]
+    },
+    {
+      "id": 16,
+      "teamA": 2,
+      "teamB": 6,
+      "date": "2026-10-23",
+      "time": "22:00",
+      "referee": "",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
     }
   ],
   "photos": {
