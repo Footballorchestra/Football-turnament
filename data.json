@@ -1,7 +1,7 @@
 {
   "version": 14,
-  "revision": 594,
-  "updatedAt": "2026-10-14T14:47:15.682Z",
+  "revision": 603,
+  "updatedAt": "2026-10-20T12:56:40.142Z",
   "teams": [
     {
       "id": 1,
@@ -37,7 +37,8 @@
         "Зенин Константин",
         "Лазарев Максим",
         "Корявичев Сергей",
-        "Новосельцев Евгений"
+        "Новосельцев Евгений",
+        "Тунян Антон"
       ]
     },
     {
@@ -56,7 +57,9 @@
         "Ли Станислав",
         "Золочевский Кирилл",
         "Алиев Сархан",
-        "Ушанов Иван"
+        "Ушанов Иван",
+        "Рауш Дмитрий",
+        "Лебедев Михаил"
       ]
     },
     {
@@ -133,7 +136,8 @@
         "Малахов Александр",
         "Чекмарев Григорий",
         "Митинский Александр",
-        "Субботкин Иван"
+        "Субботкин Иван",
+        "Капреллянц Иаков"
       ]
     },
     {
@@ -780,12 +784,13 @@
       "id": 16,
       "teamA": 2,
       "teamB": 6,
+      "scoreA": null,
+      "scoreB": null,
       "date": "2026-10-23",
       "time": "22:00",
       "referee": "",
-      "scoreA": null,
-      "scoreB": null,
-      "finished": false
+      "finished": false,
+      "events": []
     }
   ],
   "photos": {
@@ -888,7 +893,11 @@
     "8|ильенко дмитрий": "assets/photos/ilenko-dmitrii-1a58f0.jpg",
     "8|деревенко матвей": "assets/photos/derevenko-matvei-14e1b2.jpg",
     "8|иванов святослав": "assets/photos/ivanov-svyatoslav-bf640f.jpg",
-    "8|заморов артемий": "assets/photos/zamorov-artemii-d89cfa.jpg"
+    "8|заморов артемий": "assets/photos/zamorov-artemii-d89cfa.jpg",
+    "3|рауш дмитрий": "assets/photos/raush-dmitrii-a592ff.jpg",
+    "3|лебедев михаил": "assets/photos/lebedev-mikhail-e15dc6.jpg",
+    "2|тунян антон": "assets/photos/tunyan-anton-434a37.jpg",
+    "7|капреллянц иаков": "assets/photos/kaprellyants-iakov-fd9a8b.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
