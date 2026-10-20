@@ -1,7 +1,7 @@
 {
   "version": 14,
-  "revision": 603,
-  "updatedAt": "2026-10-20T12:56:40.142Z",
+  "revision": 605,
+  "updatedAt": "2026-10-20T20:12:16.423Z",
   "teams": [
     {
       "id": 1,
@@ -791,6 +791,28 @@
       "referee": "",
       "finished": false,
       "events": []
+    },
+    {
+      "id": 17,
+      "teamA": 3,
+      "teamB": 5,
+      "date": "2026-10-23",
+      "time": "09:00",
+      "referee": "",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
+    },
+    {
+      "id": 18,
+      "teamA": 7,
+      "teamB": 1,
+      "date": "2026-10-23",
+      "time": "22:00",
+      "referee": "",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
     }
   ],
   "photos": {
