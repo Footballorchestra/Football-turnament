@@ -1,7 +1,7 @@
 {
   "version": 14,
-  "revision": 605,
-  "updatedAt": "2026-10-20T20:12:16.423Z",
+  "revision": 620,
+  "updatedAt": "2026-10-23T15:12:45.836Z",
   "teams": [
     {
       "id": 1,
@@ -796,18 +796,92 @@
       "id": 17,
       "teamA": 3,
       "teamB": 5,
+      "scoreA": 6,
+      "scoreB": 5,
       "date": "2026-10-23",
       "time": "09:00",
       "referee": "",
-      "scoreA": null,
-      "scoreB": null,
-      "finished": false
+      "finished": true,
+      "events": [
+        {
+          "team": 5,
+          "player": "Железняков Лев",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Шахбазян Артак",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Шахбазян Артак",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Куклачев Никита",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Носаков Василий",
+          "type": "goal"
+        },
+        {
+          "team": 3,
+          "player": "Рауш Дмитрий",
+          "type": "goal"
+        },
+        {
+          "team": 3,
+          "player": "Рауш Дмитрий",
+          "type": "goal"
+        },
+        {
+          "team": 3,
+          "player": "Зангиев Тимур",
+          "type": "goal"
+        },
+        {
+          "team": 3,
+          "player": "Мартынов Сергей",
+          "type": "goal"
+        },
+        {
+          "team": 3,
+          "player": "Ушанов Иван",
+          "type": "goal"
+        },
+        {
+          "team": 3,
+          "player": "Александров Максим",
+          "type": "goal"
+        },
+        {
+          "team": 3,
+          "player": "Рауш Дмитрий",
+          "type": "yellow"
+        }
+      ]
     },
     {
       "id": 18,
       "teamA": 7,
       "teamB": 1,
+      "scoreA": null,
+      "scoreB": null,
       "date": "2026-10-23",
+      "time": "22:00",
+      "referee": "",
+      "finished": false,
+      "events": []
+    },
+    {
+      "id": 19,
+      "teamA": 8,
+      "teamB": 4,
+      "date": "2026-10-26",
       "time": "22:00",
       "referee": "",
       "scoreA": null,
