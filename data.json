@@ -1,7 +1,7 @@
 {
   "version": 14,
-  "revision": 620,
-  "updatedAt": "2026-10-23T15:12:45.836Z",
+  "revision": 639,
+  "updatedAt": "2026-10-24T10:30:57.722Z",
   "teams": [
     {
       "id": 1,
@@ -113,7 +113,7 @@
         "Кузнецов Иван",
         "Кубышкин Дмитрий",
         "Мелкумов Александр",
-        "Петухов Михаил",
+        "Брусанов Тимофей",
         "Попов Евгений",
         "Светлов Владислав",
         "Федоров Артемий"
@@ -784,13 +784,34 @@
       "id": 16,
       "teamA": 2,
       "teamB": 6,
-      "scoreA": null,
-      "scoreB": null,
+      "scoreA": 2,
+      "scoreB": 2,
       "date": "2026-10-23",
       "time": "22:00",
       "referee": "",
-      "finished": false,
-      "events": []
+      "finished": true,
+      "events": [
+        {
+          "team": 2,
+          "player": "Зенин Константин",
+          "type": "goal"
+        },
+        {
+          "team": 2,
+          "player": "Зенин Константин",
+          "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Корнилов Глеб",
+          "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Брусанов Тимофей",
+          "type": "goal"
+        }
+      ]
     },
     {
       "id": 17,
@@ -869,24 +890,76 @@
       "id": 18,
       "teamA": 7,
       "teamB": 1,
-      "scoreA": null,
-      "scoreB": null,
+      "scoreA": 7,
+      "scoreB": 3,
       "date": "2026-10-23",
       "time": "22:00",
       "referee": "",
-      "finished": false,
-      "events": []
+      "finished": true,
+      "events": [
+        {
+          "team": 7,
+          "player": "Малахов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Малахов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Малахов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Серов Лев",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Серов Лев",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Серов Лев",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Еремин Иван",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Грач Алексей",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Желтов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Желтов Александр",
+          "type": "goal"
+        }
+      ]
     },
     {
       "id": 19,
       "teamA": 8,
       "teamB": 4,
+      "scoreA": null,
+      "scoreB": null,
       "date": "2026-10-26",
       "time": "22:00",
       "referee": "",
-      "scoreA": null,
-      "scoreB": null,
-      "finished": false
+      "finished": false,
+      "events": []
     }
   ],
   "photos": {
@@ -951,7 +1024,6 @@
     "6|бабичев владилен": "assets/photos/babichev-vladilen-6510df.jpg",
     "6|дроманов тимофей": "assets/photos/dromanov-timofei-db9527.jpg",
     "6|кузнецов иван": "assets/photos/kuznetsov-ivan-07337f.jpg",
-    "6|петухов михаил": "assets/photos/petukhov-mikhail-8e95a0.jpg",
     "6|федоров артемий": "assets/photos/fedorov-artemii-3ca56e.jpg",
     "4|саитов ринат": "assets/photos/saitov-rinat-67c875.jpg",
     "4|баймулдин аким": "assets/photos/baimuldin-akim-2a4a38.jpg",
