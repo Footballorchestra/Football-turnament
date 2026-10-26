@@ -1,7 +1,7 @@
 {
   "version": 14,
-  "revision": 639,
-  "updatedAt": "2026-10-24T10:30:57.722Z",
+  "revision": 647,
+  "updatedAt": "2026-10-26T21:02:00.894Z",
   "teams": [
     {
       "id": 1,
@@ -77,7 +77,8 @@
         "Файзулин Арсений",
         "Лазарев Алексей",
         "Хатылев Владимир",
-        "Демиденко Михаил"
+        "Демиденко Михаил",
+        "Станкевич Артем"
       ]
     },
     {
@@ -154,7 +155,8 @@
         "Кадыгроб Максим",
         "Заморов Артемий",
         "Алексеев Никита",
-        "Ильенко Дмитрий"
+        "Ильенко Дмитрий",
+        "Ахметкиреев Айдар"
       ]
     }
   ],
@@ -953,13 +955,29 @@
       "id": 19,
       "teamA": 8,
       "teamB": 4,
-      "scoreA": null,
-      "scoreB": null,
+      "scoreA": 1,
+      "scoreB": 2,
       "date": "2026-10-26",
       "time": "22:00",
       "referee": "",
-      "finished": false,
-      "events": []
+      "finished": true,
+      "events": [
+        {
+          "team": 8,
+          "player": "Ахметкиреев Айдар",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Мясников Ефим",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Файзулин Арсений",
+          "type": "goal"
+        }
+      ]
     }
   ],
   "photos": {
@@ -1065,7 +1083,9 @@
     "3|рауш дмитрий": "assets/photos/raush-dmitrii-a592ff.jpg",
     "3|лебедев михаил": "assets/photos/lebedev-mikhail-e15dc6.jpg",
     "2|тунян антон": "assets/photos/tunyan-anton-434a37.jpg",
-    "7|капреллянц иаков": "assets/photos/kaprellyants-iakov-fd9a8b.jpg"
+    "7|капреллянц иаков": "assets/photos/kaprellyants-iakov-fd9a8b.jpg",
+    "4|станкевич артем": "assets/photos/stankevich-artem-343f00.jpg",
+    "8|ахметкиреев айдар": "assets/photos/akhmetkireev-aidar-089816.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
