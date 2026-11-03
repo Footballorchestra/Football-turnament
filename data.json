@@ -1,7 +1,7 @@
 {
   "version": 14,
-  "revision": 647,
-  "updatedAt": "2026-10-26T21:02:00.894Z",
+  "revision": 660,
+  "updatedAt": "2026-11-03T04:38:34.715Z",
   "teams": [
     {
       "id": 1,
@@ -976,6 +976,81 @@
           "team": 4,
           "player": "Файзулин Арсений",
           "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Саитов Ринат",
+          "type": "yellow"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "teamA": 1,
+      "teamB": 2,
+      "date": "2026-11-11",
+      "time": "22:30",
+      "referee": "",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
+    },
+    {
+      "id": 21,
+      "teamA": 4,
+      "teamB": 3,
+      "date": "2026-11-10",
+      "time": "22:00",
+      "referee": "",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
+    },
+    {
+      "id": 22,
+      "teamA": 5,
+      "teamB": 7,
+      "date": "2026-11-02",
+      "time": "22:00",
+      "referee": "",
+      "scoreA": 3,
+      "scoreB": 2,
+      "finished": true,
+      "events": [
+        {
+          "team": 5,
+          "player": "Штода Максим",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Носаков Василий",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Носаков Василий",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Митинский Александр",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Малахов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 7,
+          "player": "Капреллянц Иаков",
+          "type": "yellow"
+        },
+        {
+          "team": 7,
+          "player": "Капреллянц Иаков",
+          "type": "red"
         }
       ]
     }
