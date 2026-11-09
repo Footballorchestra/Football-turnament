@@ -1,7 +1,7 @@
 {
   "version": 14,
-  "revision": 660,
-  "updatedAt": "2026-11-03T04:38:34.715Z",
+  "revision": 661,
+  "updatedAt": "2026-11-09T19:55:35.505Z",
   "teams": [
     {
       "id": 1,
@@ -988,33 +988,35 @@
       "id": 20,
       "teamA": 1,
       "teamB": 2,
+      "scoreA": null,
+      "scoreB": null,
       "date": "2026-11-11",
       "time": "22:30",
       "referee": "",
-      "scoreA": null,
-      "scoreB": null,
-      "finished": false
+      "finished": false,
+      "events": []
     },
     {
       "id": 21,
       "teamA": 4,
       "teamB": 3,
+      "scoreA": null,
+      "scoreB": null,
       "date": "2026-11-10",
       "time": "22:00",
       "referee": "",
-      "scoreA": null,
-      "scoreB": null,
-      "finished": false
+      "finished": false,
+      "events": []
     },
     {
       "id": 22,
       "teamA": 5,
       "teamB": 7,
+      "scoreA": 3,
+      "scoreB": 2,
       "date": "2026-11-02",
       "time": "22:00",
       "referee": "",
-      "scoreA": 3,
-      "scoreB": 2,
       "finished": true,
       "events": [
         {
@@ -1053,6 +1055,17 @@
           "type": "red"
         }
       ]
+    },
+    {
+      "id": 23,
+      "teamA": 6,
+      "teamB": 8,
+      "date": "2026-11-10",
+      "time": "22:00",
+      "referee": "",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
     }
   ],
   "photos": {
