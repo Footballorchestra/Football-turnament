@@ -1,7 +1,7 @@
 {
   "version": 14,
-  "revision": 661,
-  "updatedAt": "2026-11-09T19:55:35.505Z",
+  "revision": 682,
+  "updatedAt": "2026-11-10T22:53:00.591Z",
   "teams": [
     {
       "id": 1,
@@ -1000,13 +1000,49 @@
       "id": 21,
       "teamA": 4,
       "teamB": 3,
-      "scoreA": null,
-      "scoreB": null,
+      "scoreA": 3,
+      "scoreB": 1,
       "date": "2026-11-10",
       "time": "22:00",
       "referee": "",
-      "finished": false,
-      "events": []
+      "finished": true,
+      "events": [
+        {
+          "team": 4,
+          "player": "Колясников Андрей",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Демиденко Михаил",
+          "type": "goal"
+        },
+        {
+          "team": 4,
+          "player": "Файзулин Арсений",
+          "type": "goal"
+        },
+        {
+          "team": 3,
+          "player": "Рауш Дмитрий",
+          "type": "goal"
+        },
+        {
+          "team": 3,
+          "player": "Золочевский Кирилл",
+          "type": "yellow"
+        },
+        {
+          "team": 3,
+          "player": "Зангиев Тимур",
+          "type": "yellow"
+        },
+        {
+          "team": 3,
+          "player": "Матвеев Кирилл",
+          "type": "red"
+        }
+      ]
     },
     {
       "id": 22,
@@ -1060,12 +1096,64 @@
       "id": 23,
       "teamA": 6,
       "teamB": 8,
+      "scoreA": 2,
+      "scoreB": 8,
       "date": "2026-11-10",
       "time": "22:00",
       "referee": "",
-      "scoreA": null,
-      "scoreB": null,
-      "finished": false
+      "finished": true,
+      "events": [
+        {
+          "team": 8,
+          "player": "Кадыгроб Максим",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Кадыгроб Максим",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Кадыгроб Максим",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Кадыгроб Максим",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Иванов Святослав",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Иванов Святослав",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Шарифзода Дониер",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Дживага Андрей",
+          "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Брусанов Тимофей",
+          "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Светлов Владислав",
+          "type": "goal"
+        }
+      ]
     }
   ],
   "photos": {
