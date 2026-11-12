@@ -1,7 +1,7 @@
 {
   "version": 14,
-  "revision": 682,
-  "updatedAt": "2026-11-10T22:53:00.591Z",
+  "revision": 685,
+  "updatedAt": "2026-11-12T18:28:16.532Z",
   "teams": [
     {
       "id": 1,
@@ -988,13 +988,24 @@
       "id": 20,
       "teamA": 1,
       "teamB": 2,
-      "scoreA": null,
-      "scoreB": null,
+      "scoreA": 2,
+      "scoreB": 0,
       "date": "2026-11-11",
       "time": "22:30",
       "referee": "",
-      "finished": false,
-      "events": []
+      "finished": true,
+      "events": [
+        {
+          "team": 1,
+          "player": "Данилец Василий",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Данилец Василий",
+          "type": "goal"
+        }
+      ]
     },
     {
       "id": 21,
