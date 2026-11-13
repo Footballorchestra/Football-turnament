@@ -1,7 +1,7 @@
 {
   "version": 14,
-  "revision": 685,
-  "updatedAt": "2026-11-12T18:28:16.532Z",
+  "revision": 689,
+  "updatedAt": "2026-11-13T02:22:47.985Z",
   "teams": [
     {
       "id": 1,
@@ -1004,6 +1004,21 @@
           "team": 1,
           "player": "Данилец Василий",
           "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Карпец Матвей",
+          "type": "yellow"
+        },
+        {
+          "team": 2,
+          "player": "Аракелян Арман",
+          "type": "yellow"
+        },
+        {
+          "team": 2,
+          "player": "Зенин Константин",
+          "type": "yellow"
         }
       ]
     },
