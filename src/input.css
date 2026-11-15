@@ -2042,6 +2042,21 @@
         color: #ff8a80;
     }
 
+    /* Значок «2 матча» рядом с игроком в составе: ручной пропуск назначен */
+    .admin-ban-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.2rem;
+        padding: 0.05rem 0.375rem;
+        border: 1px solid #c62828;
+        border-radius: 9999px;
+        background: #402020;
+        color: #ffcdd2;
+        font-size: 0.6875rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
     /* Кнопка «Убрать»: снимает последнюю запись игрока (гол или карточку) */
     .event-btn-undo {
         min-width: 1.75rem;

@@ -85,6 +85,12 @@
         editingPlayer: null,
         /** Игрок, чьи игровой номер и принадлежность заполняет администратор: { teamId, index }. */
         editingPlayerInfo: null,
+        /** Игрок, которому администратор назначает ручной пропуск матчей: { teamId, index }. */
+        editingBan: null,
+        /** Форма ручного пропуска в карточке матча открыта для матча с этим id (null — закрыта). */
+        matchBanMatchId: null,
+        /** Команда, выбранная в форме ручного пропуска карточки матча (null — первая в списке). */
+        banTeamId: null,
         /** Открытая команда в разделе «Команды» (null — показывается список команд). */
         selectedTeamId: null,
         /** Открытый матч в разделе «Матчи» (null — показывается список матчей). */
@@ -2625,6 +2631,10 @@
      * Показывается подсказкой к имени игрока — так строка списка остаётся короткой.
      */
     function banReasonText(entry) {
+        if (entry.reason === 'manual') {
+            return 'Пропуск назначен вручную' + (entry.reasonNote ? ': ' + entry.reasonNote : '');
+        }
+
         return entry.reasonText + (entry.date ? ', получена ' + L.formatDate(entry.date, 'numeric') : '');
     }
 
@@ -3733,6 +3743,7 @@
         renderAdminMatches();
         renderAdminPlayers();
         renderAdminPlayerInfo();
+        renderAdminPlayerBan();
         renderDisciplineRule();
         renderThemeControls();
         fillAdminSelects();
@@ -3999,6 +4010,7 @@
         state.editingTeamId = null;
         state.editingPlayer = null;
         state.editingPlayerInfo = null;
+        state.editingBan = null;
 
         // Карточка команды живёт в разделе «Команды»: открываем его,
         // даже если нажали на название команды из раздела «Матчи»
@@ -4006,6 +4018,7 @@
 
         renderAdminTeams();
         renderAdminPlayers();
+        renderAdminPlayerBan();
 
         if (typeof window.scrollTo === 'function') {
             window.scrollTo(0, 0);
@@ -4017,8 +4030,10 @@
         state.editingTeamId = null;
         state.editingPlayer = null;
         state.editingPlayerInfo = null;
+        state.editingBan = null;
         renderAdminTeams();
         renderAdminPlayers();
+        renderAdminPlayerBan();
     }
 
     /**
@@ -4033,6 +4048,7 @@
 
         if (!match) {
             state.openMatchId = null;
+            cancelMatchBanEdit();
         }
 
         if (listView) {
@@ -4050,6 +4066,14 @@
 
         if (!list) {
             return;
+        }
+
+        // Показывается список матчей — форма ручного пропуска скрыта
+        var banFormBox = $('admin-match-ban-form');
+
+        if (banFormBox) {
+            banFormBox.hidden = true;
+            banFormBox.innerHTML = '';
         }
 
         var groups = L.groupMatchesForAdmin(state.data.matches);
@@ -4166,6 +4190,21 @@
 
         renderAdminMatchBans(match, bans);
 
+        // Кнопка «Назначить пропуск вручную»; после нажатия в этом блоке появляется форма
+        var banFormBox = $('admin-match-ban-form');
+
+        if (banFormBox) {
+            banFormBox.hidden = false;
+
+            if (state.matchBanMatchId === L.toInt(match.id)) {
+                renderAdminMatchBanForm(match);
+            } else {
+                banFormBox.innerHTML =
+                    '<button type="button" class="btn btn-ghost" data-action="match-ban-open" data-id="' + match.id + '">' +
+                        icon('card-red') + 'Назначить пропуск вручную</button>';
+            }
+        }
+
         actionsBox.innerHTML =
             (L.isFinished(match)
                 ? '<button type="button" class="btn btn-ghost" data-action="match-reopen" data-id="' + match.id + '">' +
@@ -4199,7 +4238,7 @@
         }
 
         box.innerHTML =
-            '<h3 class="admin-title">' + icon('card-red') + 'Пропустят матч по карточкам</h3>' +
+            '<h3 class="admin-title">' + icon('card-red') + 'Пропустят матч</h3>' +
             (entries.length
                 ? '<ul class="admin-ban-list">' + entries.map(function (entry) {
                     return '<li class="admin-ban-item">' +
@@ -4207,6 +4246,12 @@
                             playerNumberBadge(entry.teamId, entry.player) + '</span>' +
                         '<span class="admin-ban-team">' + esc(entry.teamName) + '</span>' +
                         '<span class="admin-ban-reason">' + esc(banReasonText(entry)) + '</span>' +
+                        (entry.reason === 'manual'
+                            ? '<span class="admin-ban-reason">осталось после этого матча: ' + entry.manualRest + '</span>' +
+                                '<button type="button" class="btn btn-sm btn-ghost" data-action="match-ban-clear" ' +
+                                    'data-team="' + L.toInt(entry.teamId) + '" data-player="' + esc(entry.player) + '">' +
+                                    'Снять</button>'
+                            : '') +
                     '</li>';
                 }).join('') + '</ul>'
                 : '<p class="admin-hint">Дисквалификаций нет — играют все.</p>') +
@@ -4333,6 +4378,351 @@
         renderAdminMatches();
     }
 
+    /* --- Ручной пропуск матчей: назначение вручную, без карточек --- */
+
+    /** Число из данных без исключений: некорректное значение превращается в 0. */
+    function toIntSafe(value) {
+        var number = L.toInt(value);
+
+        return number === null ? 0 : number;
+    }
+
+    /**
+     * Варианты «с какого матча начать»: предстоящие матчи команды.
+     * Пустое значение — с ближайшего матча, поэтому подписано явно.
+     */
+    function banStartOptions(teamId, selected) {
+        var upcoming = L.manualBanMatches(state.data, teamId, '', CONFIG.maxManualBanMatches);
+        var current = L.toInt(selected);
+
+        return '<option value="">С ближайшего матча</option>' + upcoming.map(function (match) {
+            return '<option value="' + match.id + '"' + (current === match.id ? ' selected' : '') + '>' +
+                esc(L.formatDate(match.date, 'numeric') + ' — ' + match.opponentName) + '</option>';
+        }).join('');
+    }
+
+    /** Подсказка, какие матчи команды попадут под ручной пропуск. */
+    function banMatchesPreview(teamId, fromId, count) {
+        var limit = L.toInt(count) || 0;
+
+        if (!limit) {
+            return '';
+        }
+
+        var list = L.manualBanMatches(state.data, teamId, fromId, limit);
+
+        if (!list.length) {
+            return '<p class="admin-hint mt-2">Предстоящих матчей у команды нет — пропуск начнётся, ' +
+                'когда матч добавится.</p>';
+        }
+
+        return '<p class="admin-hint mt-2">Пропустит: ' + list.map(function (match) {
+            return esc(L.formatDate(match.date, 'numeric') + ' — ' + match.opponentName);
+        }).join(', ') + '.</p>';
+    }
+
+    /**
+     * Форма ручного пропуска в карточке команды: открывается кнопкой у игрока.
+     * Поля — «с какого матча», «сколько матчей» и необязательная причина.
+     */
+    function renderAdminPlayerBan() {
+        var box = $('admin-player-ban');
+
+        if (!box) {
+            return;
+        }
+
+        var team = L.findTeam(state.data.teams, state.editingBan ? state.editingBan.teamId : null);
+        var index = state.editingBan ? state.editingBan.index : null;
+        var player = (team && index !== null) ? team.players[index] : '';
+
+        if (!team || !player) {
+            state.editingBan = null;
+            box.hidden = true;
+            box.innerHTML = '';
+            return;
+        }
+
+        var card = L.getManualSuspension(state.data, team.id, player);
+
+        box.hidden = false;
+        box.innerHTML =
+            '<h3 class="admin-title">' + icon('card-red') + 'Пропуск матчей: ' + esc(player) +
+                playerNumberBadge(team.id, player) + '</h3>' +
+            '<p class="admin-hint mb-3">Команда «' + esc(team.name) + '». Пропуск действует на матчи команды ' +
+                'подряд и не зависит от карточек: они складываются, матчи по карточкам из пропуска ' +
+                'не вычитаются.</p>' +
+            '<form data-form="player-ban" class="grid grid-cols-1 md:grid-cols-4 gap-3" novalidate>' +
+                '<div>' +
+                    '<label class="field-label text-dark-200" for="ban-start">С какого матча</label>' +
+                    '<select id="ban-start" class="admin-input">' + banStartOptions(team.id, card.from) + '</select>' +
+                '</div>' +
+                '<div>' +
+                    '<label class="field-label text-dark-200" for="ban-matches">Сколько матчей пропустить</label>' +
+                    '<input type="number" id="ban-matches" class="admin-input" min="1" max="' +
+                        CONFIG.maxManualBanMatches + '" step="1" inputmode="numeric" value="' +
+                        (card.matches || 1) + '">' +
+                '</div>' +
+                '<div class="md:col-span-2">' +
+                    '<label class="field-label text-dark-200" for="ban-reason">Причина (необязательно)</label>' +
+                    '<input type="text" id="ban-reason" class="admin-input" maxlength="' +
+                        CONFIG.maxManualBanReasonLength + '" placeholder="Например: решение лиги" value="' +
+                        esc(card.reason) + '">' +
+                '</div>' +
+                '<div class="md:col-span-4 flex flex-wrap gap-2">' +
+                    '<button type="submit" class="btn btn-primary">' + icon('check') + 'Сохранить пропуск</button>' +
+                    '<button type="button" class="btn btn-ghost" data-action="player-ban-cancel">Отмена</button>' +
+                    (card.matches
+                        ? '<button type="button" class="btn btn-danger" data-action="player-ban-clear" data-team="' +
+                            L.toInt(team.id) + '" data-index="' + index + '">' + icon('trash') +
+                            'Снять пропуск</button>'
+                        : '') +
+                '</div>' +
+                '<div class="md:col-span-4">' + banMatchesPreview(team.id, card.from, card.matches) + '</div>' +
+                '<p id="player-ban-error" class="field-error md:col-span-4" role="alert"></p>' +
+            '</form>';
+    }
+
+    /** Открывает форму ручного пропуска игрока. */
+    function startPlayerBanEdit(teamId, index) {
+        state.editingBan = { teamId: L.toInt(teamId), index: L.toInt(index) };
+        renderAdminPlayerBan();
+
+        var box = $('admin-player-ban');
+        var input = $('ban-matches');
+
+        if (box && typeof box.scrollIntoView === 'function') {
+            box.scrollIntoView({ block: 'nearest' });
+        }
+
+        if (input && typeof input.focus === 'function') {
+            input.focus();
+        }
+    }
+
+    /** Закрывает форму ручного пропуска. */
+    function cancelPlayerBanEdit() {
+        state.editingBan = null;
+        renderAdminPlayerBan();
+    }
+
+    /**
+     * Форма «Назначить пропуск вручную» в карточке матча: команда, игрок, число матчей.
+     * Первый матч пропуска — открытый матч: администратор сразу видит, на кого он влияет.
+     */
+    function renderAdminMatchBanForm(match) {
+        var box = $('admin-match-ban-form');
+
+        if (!box) {
+            return;
+        }
+
+        var teams = state.data.teams;
+
+        if (!match || !teams.length) {
+            box.hidden = true;
+            box.innerHTML = '';
+            return;
+        }
+
+        var team = L.findTeam(teams, state.banTeamId) || teams[0];
+        var players = Array.isArray(team.players) ? team.players : [];
+        var first = L.manualBanMatches(state.data, team.id, match.id, 1)[0];
+
+        box.hidden = false;
+        box.innerHTML =
+            '<h3 class="admin-title">' + icon('card-red') + 'Назначить пропуск вручную</h3>' +
+            '<p class="admin-hint mb-3">Пропуск действует на матчи команды игрока подряд — этот и следующие. ' +
+                (first
+                    ? 'Первый матч команды «' + esc(team.name) + '»: <strong>' +
+                        esc(L.formatDate(first.date, 'numeric') + ' — ' + first.opponentName) + '</strong>.'
+                    : 'У команды «' + esc(team.name) + '» нет предстоящих матчей — пропуск начнётся ' +
+                        'с первого добавленного.') +
+                ' Матчи, пропущенные по карточкам, из назначенного числа не вычитаются.</p>' +
+            '<form data-form="match-ban" class="grid grid-cols-1 md:grid-cols-4 gap-3" novalidate>' +
+                '<div>' +
+                    '<label class="field-label text-dark-200" for="ban-team">Команда</label>' +
+                    '<select id="ban-team" class="admin-input">' + teams.map(function (item) {
+                        return '<option value="' + item.id + '"' +
+                            (toIntSafe(item.id) === toIntSafe(team.id) ? ' selected' : '') + '>' +
+                            esc(item.name) + '</option>';
+                    }).join('') + '</select>' +
+                '</div>' +
+                '<div>' +
+                    '<label class="field-label text-dark-200" for="ban-player">Игрок</label>' +
+                    '<select id="ban-player" class="admin-input"' + (players.length ? '' : ' disabled') + '>' +
+                        (players.length
+                            ? players.map(function (item) {
+                                return '<option value="' + esc(item) + '">' + esc(item) + '</option>';
+                            }).join('')
+                            : '<option value="">Состав пуст</option>') +
+                    '</select>' +
+                '</div>' +
+                '<div>' +
+                    '<label class="field-label text-dark-200" for="ban-match-count">Сколько матчей пропустить</label>' +
+                    '<input type="number" id="ban-match-count" class="admin-input" min="1" max="' +
+                        CONFIG.maxManualBanMatches + '" step="1" inputmode="numeric" value="1">' +
+                '</div>' +
+                '<div>' +
+                    '<label class="field-label text-dark-200" for="ban-match-reason">Причина (необязательно)</label>' +
+                    '<input type="text" id="ban-match-reason" class="admin-input" maxlength="' +
+                        CONFIG.maxManualBanReasonLength + '" placeholder="Например: решение лиги">' +
+                '</div>' +
+                '<div class="md:col-span-4 flex flex-wrap items-center gap-2">' +
+                    '<button type="submit" class="btn btn-primary"' + (players.length ? '' : ' disabled') + '>' +
+                        icon('check') + 'Назначить пропуск</button>' +
+                    '<button type="button" class="btn btn-ghost" data-action="match-ban-cancel">Отмена</button>' +
+                '</div>' +
+                '<p id="match-ban-error" class="field-error md:col-span-4" role="alert"></p>' +
+            '</form>';
+    }
+
+    /** Открывает форму ручного пропуска в карточке матча. */
+    function startMatchBanEdit(matchId) {
+        state.matchBanMatchId = L.toInt(matchId);
+        state.banTeamId = null;
+        renderAdminMatchBanForm(findMatch(state.matchBanMatchId));
+
+        var select = $('ban-team');
+
+        if (select && typeof select.focus === 'function') {
+            select.focus();
+        }
+    }
+
+    /** Закрывает форму ручного пропуска в карточке матча (на её месте снова кнопка). */
+    function cancelMatchBanEdit() {
+        state.matchBanMatchId = null;
+        state.banTeamId = null;
+
+        var box = $('admin-match-ban-form');
+        var match = findMatch(state.openMatchId);
+
+        if (!box) {
+            return;
+        }
+
+        if (match) {
+            renderAdminMatchCard(match);
+            return;
+        }
+
+        box.hidden = true;
+        box.innerHTML = '';
+    }
+
+    /** Сохраняет ручной пропуск из формы карточки команды. */
+    function handlePlayerBanSubmit(event) {
+        event.preventDefault();
+
+        var team = L.findTeam(state.data.teams, state.editingBan ? state.editingBan.teamId : null);
+        var index = state.editingBan ? state.editingBan.index : null;
+        var player = (team && index !== null) ? team.players[index] : '';
+        var matches = $('ban-matches');
+        var reason = $('ban-reason');
+        var start = $('ban-start');
+
+        if (!team || !player) {
+            setFieldError('player-ban-error', 'Игрок не найден — откройте команду заново');
+            return;
+        }
+
+        var check = L.validateManualSuspension({
+            teamId: team.id,
+            player: player,
+            matches: matches ? matches.value : '',
+            reason: reason ? reason.value : '',
+            from: start ? start.value : ''
+        });
+
+        if (!check.ok) {
+            setFieldError('player-ban-error', check.error);
+            return;
+        }
+
+        L.setManualSuspension(state.data, team.id, player, check.value);
+        state.editingBan = null;
+        setFieldError('player-ban-error', '');
+        saveData('Пропуск матчей для игрока «' + player + '» сохранён');
+    }
+
+    /** Снимает ручной пропуск игрока из формы карточки команды. */
+    function clearPlayerBan(teamId, index) {
+        var team = L.findTeam(state.data.teams, teamId);
+        var player = (team && index !== null) ? team.players[index] : '';
+
+        if (!team || !player) {
+            return;
+        }
+
+        if (!askConfirm('Снять ручной пропуск матчей у игрока «' + player + '»?')) {
+            return;
+        }
+
+        L.removeManualSuspension(state.data, team.id, player);
+        state.editingBan = null;
+        saveData('Ручной пропуск игрока «' + player + '» снят');
+    }
+
+    /** Сохраняет пропуск, назначенный из карточки матча. */
+    function handleMatchBanSubmit(event) {
+        event.preventDefault();
+
+        var match = findMatch(state.matchBanMatchId);
+        var teamSelect = $('ban-team');
+        var playerSelect = $('ban-player');
+        var count = $('ban-match-count');
+        var reason = $('ban-match-reason');
+
+        if (!match) {
+            setFieldError('match-ban-error', 'Матч не найден — откройте его заново');
+            return;
+        }
+
+        var check = L.validateManualSuspension({
+            teamId: teamSelect ? teamSelect.value : '',
+            player: playerSelect ? playerSelect.value : '',
+            matches: count ? count.value : '',
+            reason: reason ? reason.value : '',
+            from: match.id
+        });
+
+        if (!check.ok) {
+            setFieldError('match-ban-error', check.error);
+            return;
+        }
+
+        L.setManualSuspension(state.data, check.value.teamId, check.value.player, check.value);
+        state.matchBanMatchId = null;
+        state.banTeamId = null;
+        setFieldError('match-ban-error', '');
+        saveData('Пропуск матчей для игрока «' + check.value.player + '» назначен');
+    }
+
+    /** Снимает ручной пропуск игрока кнопкой в карточке матча. */
+    function clearMatchBan(teamId, player) {
+        var team = L.findTeam(state.data.teams, teamId);
+        var name = L.cleanText(player, CONFIG.maxPlayerNameLength);
+        var firstName = null;
+
+        (team && Array.isArray(team.players) ? team.players : []).forEach(function (item) {
+            if (!firstName && L.cleanText(item).toLowerCase() === name.toLowerCase()) {
+                firstName = item;
+            }
+        });
+
+        if (!team || !firstName || !L.hasManualSuspension(state.data, team.id, firstName)) {
+            return;
+        }
+
+        if (!askConfirm('Снять ручной пропуск матчей у игрока «' + firstName + '»?')) {
+            return;
+        }
+
+        L.removeManualSuspension(state.data, team.id, firstName);
+        saveData('Ручной пропуск игрока «' + firstName + '» снят');
+    }
+
     /** Состав выбранной команды: игроки, переименование и удаление. */
     function renderAdminPlayers() {
         var container = $('admin-players-list');
@@ -4359,6 +4749,7 @@
                 state.editingPlayer.index === index;
             var hasPhoto = hasPlayerPhoto(team.id, player);
             var hasInfo = L.hasPlayerInfo(state.data, team.id, player);
+            var manualBan = L.getManualSuspension(state.data, team.id, player);
             var isBusy = !!state.photoBusy && state.photoBusy.kind === 'player' &&
                 state.photoBusy.teamId === L.toInt(team.id) && state.photoBusy.index === index;
 
@@ -4377,6 +4768,10 @@
                     playerAvatar(team.id, player, { small: true }) +
                     '<span class="truncate"><span class="admin-muted mr-2">' + (index + 1) + '.</span>' + esc(player) + '</span>' +
                     playerNumberBadge(team.id, player) +
+                    (manualBan.matches
+                        ? '<span class="admin-ban-badge">' + icon('card-red') + manualBan.matches + ' ' +
+                            esc(L.pluralWord(manualBan.matches, 'матч', 'матча', 'матчей')) + '</span>'
+                        : '') +
                 '</span>' +
                 '<span class="flex items-center gap-1 flex-none">' +
                     (isBusy
@@ -4390,6 +4785,10 @@
                         '" data-index="' + index + '" title="' + esc(hasInfo
                             ? 'Игровой номер и принадлежность заполнены — изменить'
                             : 'Заполнить игровой номер и принадлежность') + '">' + icon('info') + '</button>' +
+                    '<button type="button" class="btn btn-sm btn-ghost" data-action="player-ban-open" data-team="' + team.id +
+                        '" data-index="' + index + '" title="' + esc(manualBan.matches
+                            ? 'Пропуск назначен — изменить число матчей'
+                            : 'Назначить пропуск матчей') + '">' + icon('card-red') + '</button>' +
                     '<button type="button" class="btn btn-sm btn-ghost" data-action="player-rename" data-team="' + team.id +
                         '" data-index="' + index + '" title="Переименовать">' + icon('pencil') + '</button>' +
                     '<button type="button" class="btn btn-sm btn-danger" data-action="player-delete" data-team="' + team.id +
@@ -5028,6 +5427,9 @@
         state.editingTeamId = null;
         state.editingMatchId = null;
         state.editingPlayer = null;
+        state.editingBan = null;
+        state.matchBanMatchId = null;
+        state.banTeamId = null;
         state.selectedTeamId = null;
         state.openMatchId = null;
         // Следующий вход начинается с раздела «Команды»
@@ -5284,6 +5686,9 @@
 
         // Игровой номер и принадлежность игроков удалённой команды — тоже
         L.removeTeamPlayerInfo(state.data, team.id);
+
+        // Ручные пропуски игроков удалённой команды тоже убираем
+        L.removeTeamManualSuspensions(state.data, team.id);
 
         saveData('Команда «' + team.name + '» удалена');
     }
@@ -5547,6 +5952,9 @@
         // Игровой номер и принадлежность — тоже
         L.renamePlayerInfo(state.data, team.id, oldName, check.value);
 
+        // Ручной пропуск матчей переезжает на новое имя вместе с игроком
+        L.renameManualSuspension(state.data, team.id, oldName, check.value);
+
         state.editingPlayer = null;
         saveData('Имя игрока изменено');
     }
@@ -5573,6 +5981,11 @@
             delete state.photoPreviews[L.getPhoto(state.data, team.id, removed)];
             L.removePhoto(state.data, team.id, removed);
             L.removePlayerInfo(state.data, team.id, removed);
+            // Удалённому игроку пропускать нечего — ручной пропуск снимается
+            // (игрок уже удалён из заявки, поэтому запись убирается по ключу напрямую)
+            if (L.hasManualSuspension(state.data, team.id, removed)) {
+                L.removeManualSuspension(state.data, team.id, removed);
+            }
         }
 
         saveData('Игрок удалён');
@@ -5701,6 +6114,18 @@
             openPublicPlayer(teamId, index);
         } else if (action === 'player-info-open') {
             startPlayerInfoEdit(teamId, index);
+        } else if (action === 'player-ban-open') {
+            startPlayerBanEdit(teamId, index);
+        } else if (action === 'player-ban-cancel') {
+            cancelPlayerBanEdit();
+        } else if (action === 'player-ban-clear') {
+            clearPlayerBan(teamId, index);
+        } else if (action === 'match-ban-open') {
+            startMatchBanEdit(id);
+        } else if (action === 'match-ban-cancel') {
+            cancelMatchBanEdit();
+        } else if (action === 'match-ban-clear') {
+            clearMatchBan(teamId, element.getAttribute('data-player'));
         } else if (action === 'player-info-cancel') {
             cancelPlayerInfoEdit();
         } else if (action === 'player-info-clear') {
@@ -5796,6 +6221,10 @@
             handlePlayerInfoSubmit(event);
         } else if (name === 'discipline') {
             handleDisciplineSubmit(event);
+        } else if (name === 'player-ban') {
+            handlePlayerBanSubmit(event);
+        } else if (name === 'match-ban') {
+            handleMatchBanSubmit(event);
         }
     }
 
@@ -5827,6 +6256,25 @@
         }
 
         if (!target.id) {
+            return;
+        }
+
+        if (target.id === 'ban-team') {
+            // Смена команды в форме ручного пропуска обновляет список её игроков
+            state.banTeamId = L.toInt(target.value);
+
+            var banMatch = findMatch(state.matchBanMatchId);
+
+            if (banMatch) {
+                renderAdminMatchBanForm(banMatch);
+
+                var playerSelect = $('ban-player');
+
+                if (playerSelect && typeof playerSelect.focus === 'function') {
+                    playerSelect.focus();
+                }
+            }
+
             return;
         }
 

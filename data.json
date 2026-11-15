@@ -1,5 +1,5 @@
 {
-  "version": 14,
+  "version": 15,
   "revision": 689,
   "updatedAt": "2026-11-13T02:22:47.985Z",
   "teams": [
@@ -1450,6 +1450,7 @@
       "number": 21
     }
   },
+  "manualSuspensions": {},
   "settings": {
     "yellowLimit": 4,
     "yellowPeriodDays": 0,

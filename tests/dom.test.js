@@ -448,6 +448,115 @@ test('страница команды: открывается из турнир�
     assert.equal(app.id('match-detail-view').hidden, false, 'открылся детальный результат матча');
 });
 
+test('ручной пропуск: назначается из карточки матча, виден зрителю и снимается', () => {
+    const app = boot();
+    app.login();
+
+    // Матч 3 (Спартак — Динамо): открываем карточку матча в админке
+    app.openMatch(3);
+
+    const box = app.id('admin-match-ban-form');
+
+    assert.ok(box, 'в карточке матча есть блок ручного пропуска');
+    assert.equal(box.hidden, false);
+    assert.ok(app.button('match-ban-open'), 'сразу видна кнопка «Назначить пропуск вручную»');
+
+    app.click(app.button('match-ban-open'));
+
+    const form = app.$('[data-form="match-ban"]');
+
+    assert.ok(form, 'кнопка открывает форму');
+    assert.equal(form.querySelector('#ban-player').options.length, app.storedData().teams[0].players.length,
+        'в списке — игроки выбранной команды');
+
+    // Ошибка ввода не меняет данные
+    app.id('ban-match-count').value = '0';
+    app.submit(form);
+
+    assert.match(app.id('match-ban-error').textContent, /от 1 до 10/);
+    assert.deepEqual(app.storedData().manualSuspensions, undefined);
+
+    // Команду можно сменить: список игроков обновляется
+    app.id('ban-team').value = '2';
+    app.change(app.id('ban-team'));
+    assert.equal(app.id('ban-player').options[0].value, app.storedData().teams[1].players[0]);
+
+    // Рабочее назначение: Спартак, два матча, причина
+    app.id('ban-team').value = '1';
+    app.change(app.id('ban-team'));
+    app.id('ban-player').value = 'Иванов А.';
+    app.id('ban-match-count').value = '2';
+    app.id('ban-match-reason').value = 'решение лиги';
+    app.submit(app.$('[data-form="match-ban"]'));
+
+    const stored = app.storedData().manualSuspensions;
+
+    assert.deepEqual(Object.keys(stored), ['1|иванов а.']);
+    assert.equal(stored['1|иванов а.'].matches, 2);
+    assert.equal(stored['1|иванов а.'].reason, 'решение лиги');
+    assert.equal(stored['1|иванов а.'].from, 3, 'пропуск начинается с открытого матча');
+
+    // В блоке дисквалификаций видно причину и остаток, кнопка «Снять» убирает пропуск
+    assert.match(app.id('admin-match-bans').textContent, /Пропуск назначен вручную: решение лиги/);
+    assert.match(app.id('admin-match-bans').textContent, /осталось после этого матча: 1/);
+
+    // Зритель видит пропуск в расписании и в результате матча
+    app.navigate('matches');
+
+    const line = app.id('matches-list').querySelector('.match-card[data-id="3"] .match-bans');
+
+    assert.ok(line, 'в расписании у матча есть строка о пропуске');
+    assert.match(line.querySelector('.ban-name').getAttribute('title'), /Пропуск назначен вручную: решение лиги/);
+
+    app.navigate('admin');
+    app.openMatch(3);
+    app.click(app.button('match-ban-clear'));
+
+    assert.deepEqual(app.storedData().manualSuspensions, {}, 'кнопка «Снять» убирает пропуск');
+});
+
+test('ручной пропуск: назначается из карточки команды и попадает в состав', () => {
+    const app = boot();
+    app.login();
+
+    const team = app.storedData().teams[0];
+
+    app.openTeam(team.name);
+    app.click(app.$('#admin-players-list [data-action="player-ban-open"][data-index="0"]'));
+
+    const form = app.$('[data-form="player-ban"]');
+
+    assert.ok(form, 'кнопка у игрока открывает форму пропуска');
+
+    // С «какого матча» можно выбрать конкретный матч команды
+    const start = app.id('ban-start');
+
+    assert.ok(start.options.length > 1, 'в списке есть предстоящие матчи команды');
+    assert.equal(start.options[0].value, '', 'по умолчанию — с ближайшего матча');
+
+    app.id('ban-matches').value = '1';
+    app.submit(form);
+
+    assert.equal(app.storedData().manualSuspensions['1|иванов а.'].matches, 1);
+    assert.match(app.id('admin-players-list').textContent, /1 матч/, 'в составе виден значок пропуска');
+    assert.equal(app.id('player-ban-error'), null, 'после сохранения форма закрывается без ошибок');
+
+    // Повторное открытие формы показывает сохранённые значения
+    app.click(app.$('#admin-players-list [data-action="player-ban-open"][data-index="0"]'));
+    assert.equal(app.id('ban-matches').value, '1');
+
+    app.click(app.button('player-ban-clear'));
+    assert.deepEqual(app.storedData().manualSuspensions, {}, 'кнопка снимает пропуск');
+
+    // Удаление игрока снимает его ручной пропуск
+    app.click(app.$('#admin-players-list [data-action="player-ban-open"][data-index="0"]'));
+    app.id('ban-matches').value = '2';
+    app.submit(app.$('[data-form="player-ban"]'));
+    app.click(app.$('#admin-players-list [data-action="player-delete"][data-index="0"]'));
+
+    assert.deepEqual(app.storedData().manualSuspensions, {});
+});
+
 test('лучшие бомбардиры: таблица показывает только забитые мячи, без колонок карточек', () => {
     const app = boot();
 
@@ -1287,7 +1396,7 @@ test('дисциплина: лимит жёлтых карточек превр�
 
     const adminBans = app.id('admin-match-bans');
 
-    assert.match(adminBans.textContent, /Пропустят матч по карточкам/);
+    assert.match(adminBans.textContent, /Пропустят матч/);
     assert.match(adminBans.textContent, /Иванов А\./);
     assert.ok(adminBans.textContent.includes('4-я жёлтая карточка, получена ' +
         L.formatDate(app.storedData().matches[0].date, 'numeric')), 'в админке видна дата получения карточки');

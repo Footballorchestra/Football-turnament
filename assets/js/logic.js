@@ -52,7 +52,10 @@
         //      бомбардиров считается отдельной колонкой.
         // 14 — у матча появился судья (match.referee): ФИО арбитра заполняет
         //      администратор, а в детальном результате матча его видит зритель.
-        dataVersion: 14,
+        // 15 — появились ручные дисквалификации (карта manualSuspensions):
+        //      администратор вручную назначает игроку любой команды число
+        //      матчей, которые тот пропускает.
+        dataVersion: 15,
         // Пароль администратора в репозитории не хранится. В коде лежит только
         // солёный отпечаток пароля — он читается из настроек сайта
         // (FT_CONFIG.admin в assets/js/config.js), а сверку делает
@@ -76,7 +79,11 @@
         maxTeamImages: 6,
         // Дисциплина игроков: пределы настроек из админки
         maxYellowLimit: 12,
-        maxYellowPeriodDays: 3650
+        maxYellowPeriodDays: 3650,
+        // Ручная дисквалификация: сколько матчей можно назначить игроку за один раз
+        maxManualBanMatches: 10,
+        // Причина ручного пропуска — свободный текст, необязательный
+        maxManualBanReasonLength: 120
     };
 
     /** Палитра бейджей команд (классы описаны в src/input.css). */
@@ -2130,6 +2137,70 @@
     }
 
     /**
+     * Приводит карту ручных пропусков к корректному виду: остаются только
+     * действующие записи игроков заявки, число матчей и текст причины проверяются.
+     */
+    function normalizeManualSuspensions(rawCards, teams) {
+        var cards = {};
+
+        if (rawCards === undefined || rawCards === null) {
+            return { cards: cards, repaired: false };
+        }
+
+        if (!isPlainObject(rawCards)) {
+            return { cards: cards, repaired: true };
+        }
+
+        var repaired = false;
+
+        Object.keys(rawCards).forEach(function (key) {
+            var value = rawCards[key];
+            var parts = String(key).split('|');
+            var teamId = toInt(parts[0]);
+            var name = cleanText(parts.slice(1).join('|'), CONFIG.maxPlayerNameLength).toLowerCase();
+            var team = findTeam(teams, teamId);
+            var player = null;
+
+            (team && Array.isArray(team.players) ? team.players : []).forEach(function (item) {
+                if (cleanText(item).toLowerCase() === name && !player) {
+                    player = item;
+                }
+            });
+
+            if (!isPlainObject(value) || !player) {
+                repaired = true;
+                return;
+            }
+
+            var matchesValue = normalizeManualBanMatches(value.matches);
+            var reason = cleanManualBanReason(value.reason);
+            var rawReason = value.reason === undefined || value.reason === null ? '' : String(value.reason).trim();
+            var from = toInt(value.from);
+
+            if (matchesValue === null || matchesValue < 1 ||
+                rawReason.length > CONFIG.maxManualBanReasonLength ||
+                (from !== null && from <= 0)) {
+                repaired = true;
+            }
+
+            if (!matchesValue || matchesValue === null) {
+                return;
+            }
+
+            cards[manualSuspensionKey(team.id, player)] = {
+                team: toInt(team.id),
+                player: player,
+                matches: matchesValue,
+                from: from === null ? '' : from,
+                reason: reason,
+                createdAt: typeof value.createdAt === 'string' ? value.createdAt : ''
+            };
+        });
+
+        return { cards: cards, repaired: repaired };
+    }
+
+    /**
      * Приводит карту данных игроков к корректному виду: остаются только записи
      * оставшихся в заявке игроков, номер проверяется, длина текста ограничивается.
      * Прежнее поле birthDate (дата рождения) отбрасывается — оно больше не хранится.
@@ -2430,6 +2501,244 @@
         return toISODate(date);
     }
 
+    /* --- Ручные дисквалификации: администратор назначает пропуск матчей --- */
+
+    /** Пустая запись ручного пропуска (матчей 0 — пропуска нет). */
+    function emptyManualSuspension() {
+        return { matches: 0, reason: '', from: '', createdAt: '' };
+    }
+
+    /** Число матчей ручного пропуска: 0 — не назначен, null — недопустимое значение. */
+    function normalizeManualBanMatches(value) {
+        var count = 0;
+
+        if (value !== undefined && value !== null && value !== '') {
+            count = toInt(value);
+
+            if (count === null || count < 0 || count > CONFIG.maxManualBanMatches) {
+                count = null;
+            }
+        }
+
+        return count;
+    }
+
+    /** Причина ручного пропуска: свободный текст, обрезанный по длине. */
+    function cleanManualBanReason(value) {
+        return cleanText(value, CONFIG.maxManualBanReasonLength);
+    }
+
+    /** Ключ карты ручных пропусков: те же правила, что у карточек игроков. */
+    function manualSuspensionKey(teamId, player) {
+        return photoKey(teamId, player);
+    }
+
+    /**
+     * Ручной пропуск игрока: { matches, reason, from, createdAt }.
+     * from — матч, с которого начинается пропуск (выбирает администратор),
+     * createdAt — когда пропуск назначен. Игровой номер в записи не хранится:
+     * он берётся из карточки игрока и не устаревает.
+     */
+    function getManualSuspension(data, teamId, player) {
+        var cards = data ? data.manualSuspensions : null;
+        var key = manualSuspensionKey(teamId, player);
+        var card = null;
+
+        if (isPlainObject(cards)) {
+            // Имена игроков сравниваются без учёта регистра: данные могли править руками
+            var names = Object.keys(cards);
+            // Номинальное совпадение ищется первым, без учёта регистра — вторым шагом
+            var exact = names.filter(function (item) {
+                return item === key;
+            })[0];
+            var loose = exact === undefined ? names.filter(function (item) {
+                return String(item).toLowerCase().indexOf(String(key).toLowerCase()) === 0;
+            })[0] : exact;
+
+            card = loose === undefined ? null : cards[loose];
+        }
+
+        return readManualSuspension(card);
+    }
+
+    /** Запись ручного пропуска из данных: пустая, если записи нет или она испорчена. */
+    function readManualSuspension(card) {
+        var manual = emptyManualSuspension();
+
+        if (!isPlainObject(card)) {
+            return manual;
+        }
+
+        var matches = normalizeManualBanMatches(card.matches);
+
+        manual.matches = matches === null ? 0 : matches;
+        manual.reason = cleanManualBanReason(card.reason);
+        manual.from = toInt(card.from) || '';
+        manual.createdAt = typeof card.createdAt === 'string' ? card.createdAt : '';
+
+        return manual;
+    }
+
+    /** Есть ли у игрока действующий ручной пропуск. */
+    function hasManualSuspension(data, teamId, player) {
+        return getManualSuspension(data, teamId, player).matches > 0;
+    }
+
+    /**
+     * Записывает ручной пропуск игрока. matches = 0 удаляет запись — в том числе
+     * для игрока, которого уже нет в заявке (при удалении игрока).
+     * Новый пропуск назначается только игроку заявки: пропускать может лишь он.
+     */
+    function setManualSuspension(data, teamId, player, suspension) {
+        if (!isPlainObject(data)) {
+            return data;
+        }
+
+        var team = findTeam(data.teams, teamId);
+        var name = cleanText(player, CONFIG.maxPlayerNameLength);
+
+        if (!team || !name) {
+            return data;
+        }
+
+        var inSquad = Array.isArray(team.players) && team.players.some(function (item) {
+            return cleanText(item).toLowerCase() === name.toLowerCase();
+        });
+        var source = isPlainObject(suspension) ? suspension : {};
+        var matches = normalizeManualBanMatches(source.matches);
+
+        if (!inSquad && matches !== 0) {
+            return data;
+        }
+
+        if (!isPlainObject(data.manualSuspensions)) {
+            data.manualSuspensions = {};
+        }
+
+        var key = manualSuspensionKey(team.id, name);
+
+        if (!matches || matches === null) {
+            delete data.manualSuspensions[key];
+
+            return data;
+        }
+
+        data.manualSuspensions[key] = {
+            team: toInt(team.id),
+            player: name,
+            matches: matches,
+            from: toInt(source.from) || '',
+            reason: cleanManualBanReason(source.reason),
+            createdAt: (typeof source.createdAt === 'string' && source.createdAt) || new Date().toISOString()
+        };
+
+        return data;
+    }
+
+    /** Снимает ручной пропуск игрока. */
+    function removeManualSuspension(data, teamId, player) {
+        return setManualSuspension(data, teamId, player, { matches: 0 });
+    }
+
+    /** Снимает ручные пропуски всех игроков команды (при удалении команды). */
+    function removeTeamManualSuspensions(data, teamId) {
+        var cards = (data && isPlainObject(data.manualSuspensions)) ? data.manualSuspensions : {};
+        var prefix = manualSuspensionKey(teamId, '');
+
+        Object.keys(cards).forEach(function (key) {
+            if (key.indexOf(prefix) === 0) {
+                delete cards[key];
+            }
+        });
+
+        return data;
+    }
+
+    /** Переносит ручной пропуск на новое имя (при переименовании игрока). */
+    function renameManualSuspension(data, teamId, oldName, newName) {
+        var card = getManualSuspension(data, teamId, oldName);
+
+        if (!card.matches) {
+            return data;
+        }
+
+        removeManualSuspension(data, teamId, oldName);
+
+        return setManualSuspension(data, teamId, newName, card);
+    }
+
+    /** Проверяет ручную дисквалификацию из формы администратора. */
+    function validateManualSuspension(input) {
+        var source = input || {};
+        var teamId = toInt(source.teamId);
+        var player = cleanText(source.player, CONFIG.maxPlayerNameLength);
+        var matches = normalizeManualBanMatches(source.matches);
+
+        if (teamId === null || teamId <= 0) {
+            return { ok: false, error: 'Выберите команду игрока' };
+        }
+
+        if (!player) {
+            return { ok: false, error: 'Выберите игрока' };
+        }
+
+        if (matches === null || matches < 1 || matches > CONFIG.maxManualBanMatches) {
+            return {
+                ok: false,
+                error: 'Сколько матчей пропустить — целое число от 1 до ' + CONFIG.maxManualBanMatches
+            };
+        }
+
+        var rawReason = source.reason === undefined || source.reason === null ? '' : String(source.reason).trim();
+
+        if (Array.from(rawReason).length > CONFIG.maxManualBanReasonLength) {
+            return { ok: false, error: 'Причина — не длиннее ' + CONFIG.maxManualBanReasonLength + ' символов' };
+        }
+
+        return {
+            ok: true,
+            value: {
+                teamId: teamId,
+                player: player,
+                matches: matches,
+                reason: cleanManualBanReason(rawReason),
+                from: toInt(source.from) || ''
+            }
+        };
+    }
+
+    /**
+     * Все действующие ручные пропуски по порядку команд и заявок:
+     * [{ teamId, teamName, player, number, matches, reason, from }].
+     * Записи игроков, которых больше нет в заявке, пропускаются.
+     */
+    function manualSuspensions(data) {
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        var list = [];
+
+        teams.forEach(function (team) {
+            (Array.isArray(team.players) ? team.players : []).forEach(function (player) {
+                var card = getManualSuspension(data, team.id, player);
+
+                if (!card.matches) {
+                    return;
+                }
+
+                list.push({
+                    teamId: toInt(team.id),
+                    teamName: team.name,
+                    player: player,
+                    number: getPlayerInfo(data, team.id, player).number,
+                    matches: card.matches,
+                    reason: card.reason,
+                    from: card.from
+                });
+            });
+        });
+
+        return list;
+    }
+
     /**
      * Дисквалификации на каждый матч турнира.
      *
@@ -2438,6 +2747,11 @@
      * сама «переедет» на другой матч. Пропущенный матч считается отбытым — дальше
      * игрок снова может играть, а счёт жёлтых после превращения в красную
      * начинается заново.
+     *
+     * Ручные пропуски (data.manualSuspensions) действуют так же: первый матч — матч
+     * «from» (если он указан и ещё не сыгран), иначе ближайший матч команды; дальше —
+     * столько матчей команды подряд, сколько назначил администратор.
+     * В списке у такой записи reason = 'manual'.
      *
      * Возвращает { settings, bans }: bans — «id матча» → список игроков,
      * которые этот матч пропускают (с причиной и матчем, где получена карточка).
@@ -2449,6 +2763,8 @@
         var order = sortMatches(matches, 'asc');
         var bans = {};
         var state = {};
+        // Ручные пропуски: «id команды|имя» → запись администратора
+        var manualCards = {};
 
         var nameOf = function (player) {
             return cleanText(player, CONFIG.maxPlayerNameLength);
@@ -2495,6 +2811,79 @@
             return null;
         };
 
+        /**
+         * Матчи команды, которые она ещё не сыграла (в календарном порядке).
+         * Возвращает [{ id, index }] — id матча и его место в общем порядке.
+         */
+        var unplayedMatchesOf = function (teamId) {
+            var list = [];
+
+            order.forEach(function (match, index) {
+                if (toInt(match.teamA) !== toInt(teamId) && toInt(match.teamB) !== toInt(teamId)) {
+                    return;
+                }
+
+                var scoreA = normalizeScore(match.scoreA);
+                var scoreB = normalizeScore(match.scoreB);
+
+                if (Number.isInteger(scoreA) && Number.isInteger(scoreB)) {
+                    return;
+                }
+
+                list.push({ id: toInt(match.id), index: index });
+            });
+
+            return list;
+        };
+
+        /**
+         * Первый матч ручного пропуска: выбранный администратором матч команды,
+         * если он ещё не сыгран, иначе ближайший матч. null — матчей не осталось.
+         */
+        var firstFreeMatch = function (teamId, fromId) {
+            var rest = unplayedMatchesOf(teamId);
+            var wanted = toInt(fromId);
+            var start = 0;
+
+            if (wanted !== null) {
+                rest.forEach(function (item, position) {
+                    if (item.id === wanted) {
+                        start = position;
+                    }
+                });
+            }
+
+            return rest.length ? rest[start] : null;
+        };
+
+        /**
+         * Какой по счёту пропуск команды приходится на матч matchId (начиная с первого
+         * матча ручного пропуска), -1 — этот матч в пропуск не входит.
+         */
+        var manualOffset = function (teamId, manual, matchId) {
+            var rest = unplayedMatchesOf(teamId);
+            var first = firstFreeMatch(teamId, manual.from);
+            var startIndex = -1;
+
+            if (!first) {
+                return -1;
+            }
+
+            rest.forEach(function (item, position) {
+                if (item.id === first.id) {
+                    startIndex = position;
+                }
+            });
+
+            for (var i = 0; i < rest.length; i++) {
+                if (rest[i].id === toInt(matchId)) {
+                    return (startIndex >= 0 && i >= startIndex) ? i - startIndex : -1;
+                }
+            }
+
+            return -1;
+        };
+
         /** Записывает дисквалификацию игрока на ближайший матч его команды. */
         var banPlayer = function (teamId, player, targetId, details) {
             var current = stateOf(teamId, player);
@@ -2530,6 +2919,47 @@
             current.ban = { matchId: entry.matchId };
         };
 
+        /** Записывает ручной пропуск игрока на конкретный матч его команды. */
+        var banManual = function (teamId, player, card, targetId, offset) {
+            var team = findTeam(teams, teamId);
+            var entry = {
+                teamId: toInt(teamId),
+                teamName: team ? team.name : 'Неизвестная команда',
+                player: nameOf(player),
+                number: getPlayerInfo(data, teamId, player).number,
+                reason: 'manual',
+                reasonText: 'пропуск назначен администратором',
+                reasonNote: card.reason,
+                yellowLimit: settings.yellowLimit,
+                yellows: 0,
+                date: '',
+                sourceMatchId: null,
+                matchId: toInt(targetId),
+                manualMatches: card.matches,
+                manualRest: card.matches - offset - 1
+            };
+
+            if (!bans[entry.matchId]) {
+                bans[entry.matchId] = [];
+            }
+
+            bans[entry.matchId].push(entry);
+        };
+
+        // Ручные пропуски администратора собираются заранее: они не зависят
+        // от событий матчей и действуют на матчи команды подряд
+        teams.forEach(function (team) {
+            var teamId = toInt(team && team.id);
+
+            (team && Array.isArray(team.players) ? team.players : []).forEach(function (player) {
+                var card = getManualSuspension(data, teamId, player);
+
+                if (card.matches > 0) {
+                    manualCards[keyOf(teamId, player)] = card;
+                }
+            });
+        });
+
         order.forEach(function (match, index) {
             var matchId = toInt(match.id);
             var date = cleanText(match.date, 10);
@@ -2543,12 +2973,23 @@
 
                 squad.forEach(function (player) {
                     var current = stateOf(teamId, player);
+                    var key = keyOf(teamId, player);
+                    var manual = manualCards[key];
 
                     squadNames[nameOf(player).toLowerCase()] = true;
 
                     // Дисквалификация отбыта: этот матч игрок пропускал
                     if (current.ban && current.ban.matchId === matchId) {
                         current.ban = null;
+                    }
+
+                    // Ручной пропуск администратора действует независимо от карточек
+                    if (manual) {
+                        var offset = manualOffset(teamId, manual, matchId);
+
+                        if (offset >= 0 && offset < manual.matches) {
+                            banManual(teamId, player, manual, matchId, offset);
+                        }
                     }
                 });
 
@@ -2605,6 +3046,44 @@
         }
 
         return computeSuspensions(data).bans[id] || [];
+    }
+
+    /**
+     * Ближайшие матчи ручного пропуска команды: [{ id, date, opponentName }].
+     * Нужны админке, чтобы администратор видел, какие именно матчи игрок пропустит.
+     * Если матч «from» уже сыгран или удалён, пропуск начинается с ближайшего матча.
+     */
+    function manualBanMatches(data, teamId, fromId, count) {
+        var id = toInt(teamId);
+        var limit = toInt(count);
+        var teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+        var matches = (data && Array.isArray(data.matches)) ? data.matches : [];
+
+        if (id === null || limit === null || limit < 1) {
+            return [];
+        }
+
+        var upcoming = sortMatches(matches, 'asc').filter(function (match) {
+            return !isFinished(match) && (toInt(match.teamA) === id || toInt(match.teamB) === id);
+        });
+        var wanted = toInt(fromId);
+        var start = 0;
+
+        upcoming.forEach(function (match, position) {
+            if (wanted !== null && toInt(match.id) === wanted) {
+                start = position;
+            }
+        });
+
+        return upcoming.slice(start, start + limit).map(function (match) {
+            var opponent = findTeam(teams, toInt(match.teamA) === id ? match.teamB : match.teamA);
+
+            return {
+                id: toInt(match.id),
+                date: cleanText(match.date, 10),
+                opponentName: opponent ? opponent.name : 'Неизвестная команда'
+            };
+        });
     }
 
     /* ------------------------------------------------------------------ */
@@ -2691,6 +3170,7 @@
                     teamPhotos: {},
                     teamImages: {},
                     playerInfo: {},
+                    manualSuspensions: {},
                     settings: normalizeSettings(raw.settings)
                 },
                 repaired: repaired,
@@ -2778,6 +3258,7 @@
         var normalizedTeamPhotos = normalizeTeamPhotos(raw.teamPhotos, teams);
         var normalizedPlayerInfo = normalizePlayerInfo(raw.playerInfo, teams);
         var normalizedTeamImages = normalizeTeamImages(raw.teamImages, teams);
+        var normalizedManual = normalizeManualSuspensions(raw.manualSuspensions, teams);
         var normalizedSettings = normalizeSettings(raw.settings);
         var rawSettings = isPlainObject(raw.settings) ? raw.settings : null;
 
@@ -2800,7 +3281,8 @@
         }
 
         if (normalizedPhotos.repaired || normalizedTeamPhotos.repaired ||
-            normalizedPlayerInfo.repaired || normalizedTeamImages.repaired) {
+            normalizedPlayerInfo.repaired || normalizedTeamImages.repaired ||
+            normalizedManual.repaired) {
             repaired = true;
         }
 
@@ -2815,6 +3297,7 @@
                 teamPhotos: normalizedTeamPhotos.photos,
                 teamImages: normalizedTeamImages.images,
                 playerInfo: normalizedPlayerInfo.info,
+                manualSuspensions: normalizedManual.cards,
                 settings: normalizedSettings
             },
             repaired: repaired,
@@ -3006,6 +3489,18 @@
         renamePlayerInfo: renamePlayerInfo,
         validatePlayerInfo: validatePlayerInfo,
         normalizePlayerInfo: normalizePlayerInfo,
+        emptyManualSuspension: emptyManualSuspension,
+        normalizeManualBanMatches: normalizeManualBanMatches,
+        manualSuspensionKey: manualSuspensionKey,
+        getManualSuspension: getManualSuspension,
+        hasManualSuspension: hasManualSuspension,
+        setManualSuspension: setManualSuspension,
+        removeManualSuspension: removeManualSuspension,
+        removeTeamManualSuspensions: removeTeamManualSuspensions,
+        renameManualSuspension: renameManualSuspension,
+        validateManualSuspension: validateManualSuspension,
+        manualSuspensions: manualSuspensions,
+        normalizeManualSuspensions: normalizeManualSuspensions,
         getDisciplineSettings: getDisciplineSettings,
         setDisciplineSettings: setDisciplineSettings,
         normalizeDisciplineSettings: normalizeDisciplineSettings,
@@ -3021,6 +3516,7 @@
         themeList: themeList,
         computeSuspensions: computeSuspensions,
         matchSuspensions: matchSuspensions,
+        manualBanMatches: manualBanMatches,
         validateTeamName: validateTeamName,
         validatePlayerName: validatePlayerName,
         normalizeScore: normalizeScore,

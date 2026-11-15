@@ -47,11 +47,11 @@
 
     <!-- Стили: файл Tailwind собирается заранее (npm run build:css), шрифт Roboto — локальный.
          ?v= — метка версии: после обновления сайта браузеры сразу берут свежие файлы, а не кэш. -->
-    <link rel="stylesheet" href="assets/css/tailwind.css?v=59">
+    <link rel="stylesheet" href="assets/css/tailwind.css?v=60">
     <!-- Второй стиль «Афиша матча». Файл подключён всегда, но применяется только тогда,
          когда администратор включил этот стиль в панели: все правила внутри ограничены
          классом theme-afisha на <body> (см. applyTheme в assets/js/app.js). -->
-    <link rel="stylesheet" href="assets/css/theme-afisha.css?v=59">
+    <link rel="stylesheet" href="assets/css/theme-afisha.css?v=60">
 </head>
 <body class="font-sans bg-dark-50 text-dark-900 antialiased">
 
@@ -775,6 +775,10 @@
 
                     <!-- Данные игрока: игровой номер и принадлежность (открывается кнопкой у игрока) -->
                     <div id="admin-player-info" class="mt-4 border-t border-dark-200 pt-4" hidden></div>
+
+                    <!-- Ручной пропуск матчей: администратор назначает игроку команды
+                         число матчей, которые тот пропустит (без карточек) -->
+                    <div id="admin-player-ban" class="mt-4 border-t border-dark-200 pt-4" hidden></div>
                 </div>
             </div>
 
@@ -872,8 +876,11 @@
                     <!-- Голы и карточки игроков обеих команд -->
                     <div id="admin-match-events" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
 
-                    <!-- Кто пропускает этот матч из-за красных карточек -->
+                    <!-- Кто пропускает этот матч: по карточкам и по ручному назначению -->
                     <div id="admin-match-bans" class="mt-4 pt-4 border-t border-dark-700"></div>
+
+                    <!-- Назначить пропуск вручную: игрок любой команды и число матчей -->
+                    <div id="admin-match-ban-form" class="mt-4 pt-4 border-t border-dark-700" hidden></div>
 
                     <div id="admin-match-actions" class="flex flex-wrap gap-2 mt-4"></div>
                 </div>
@@ -939,12 +946,12 @@
          ?v= — метка версии, чтобы после обновления сайта не использовался старый кэш. -->
     <!-- На GitHub Pages заголовки ответа задать нельзя, поэтому страница сама проверяет,
          не встроена ли она в чужой iframe. Скрипт идёт первым, до кода приложения. -->
-    <script src="assets/js/frame-guard.js?v=59" defer></script>
-    <script src="assets/js/config.js?v=59" defer></script>
-    <script src="assets/js/splash.js?v=59" defer></script>
-    <script src="assets/js/logic.js?v=59" defer></script>
-    <script src="assets/js/sync.js?v=59" defer></script>
-    <script src="assets/js/photo.js?v=59" defer></script>
-    <script src="assets/js/app.js?v=59" defer></script>
+    <script src="assets/js/frame-guard.js?v=60" defer></script>
+    <script src="assets/js/config.js?v=60" defer></script>
+    <script src="assets/js/splash.js?v=60" defer></script>
+    <script src="assets/js/logic.js?v=60" defer></script>
+    <script src="assets/js/sync.js?v=60" defer></script>
+    <script src="assets/js/photo.js?v=60" defer></script>
+    <script src="assets/js/app.js?v=60" defer></script>
 </body>
 </html>

@@ -1120,6 +1120,136 @@ test('normalizeData: судья матча сохраняется, лишние 
     assert.equal(result.data.matches[2].referee, 'Петров Пётр Петрович', 'ФИО судьи не теряется при загрузке');
 });
 
+test('ручной пропуск: администратор назначает игроку число матчей, они идут подряд', () => {
+    const data = L.normalizeData({
+        teams: [
+            { id: 1, name: 'Спартак', players: ['Иванов А.', 'Петров П.'] },
+            { id: 2, name: 'Зенит', players: ['Сидоров С.'] },
+            { id: 3, name: 'Динамо', players: ['Кузнецов К.'] }
+        ],
+        matches: [
+            { id: 1, teamA: 1, teamB: 2, date: '2026-09-10', scoreA: 1, scoreB: 0 },
+            { id: 2, teamA: 2, teamB: 3, date: '2026-09-17' },
+            { id: 3, teamA: 1, teamB: 3, date: '2026-09-24' },
+            { id: 4, teamA: 1, teamB: 2, date: '2026-10-01' },
+            { id: 5, teamA: 2, teamB: 1, date: '2026-10-08' }
+        ]
+    }).data;
+
+    assert.deepEqual(data.manualSuspensions, {}, 'по умолчанию ручных пропусков нет');
+
+    L.setManualSuspension(data, 1, 'Иванов А.', { matches: 2, reason: 'решение лиги' });
+
+    assert.deepEqual(L.getManualSuspension(data, 1, 'Иванов А').matches, 2);
+    assert.equal(L.getManualSuspension(data, 1, 'Иванов А').reason, 'решение лиги');
+    assert.equal(L.hasManualSuspension(data, 1, 'Иванов А'), true);
+    assert.equal(L.hasManualSuspension(data, 1, 'Петров П.'), false, 'другим игрокам пропуск не достаётся');
+
+    // Матч 1 уже сыгран: пропуск начинается со следующего матча команды (3), затем 4
+    const bans = L.computeSuspensions(data).bans;
+
+    assert.deepEqual(Object.keys(bans), ['3', '4']);
+    assert.equal(bans['3'][0].reason, 'manual');
+    assert.equal(bans['3'][0].reasonNote, 'решение лиги');
+    assert.equal(bans['3'][0].manualRest, 1, 'после первого матча останется один');
+    assert.equal(bans['4'][0].manualRest, 0);
+
+    // Выбор «с какого матча» переносит пропуск на нужные матчи команды
+    L.setManualSuspension(data, 1, 'Иванов А.', { matches: 1, from: 4 });
+
+    assert.deepEqual(Object.keys(L.computeSuspensions(data).bans), ['4']);
+    assert.deepEqual(L.manualBanMatches(data, 1, 4, 2).map((match) => match.id), [4, 5]);
+
+    // Снятие пропуска возвращает игрока в состав
+    L.removeManualSuspension(data, 1, 'Иванов А.');
+
+    assert.deepEqual(data.manualSuspensions, {});
+    assert.deepEqual(L.computeSuspensions(data).bans, {});
+});
+
+test('ручной пропуск: складывается с карточками, удалённый игрок не попадает в список', () => {
+    const data = L.normalizeData({
+        teams: [
+            { id: 1, name: 'Спартак', players: ['Иванов А.'] },
+            { id: 2, name: 'Зенит', players: ['Сидоров С.'] }
+        ],
+        matches: [
+            {
+                id: 1, teamA: 1, teamB: 2, date: '2026-09-10', scoreA: 2, scoreB: 0,
+                events: [{ team: 1, player: 'Иванов А.', type: 'red' }]
+            },
+            { id: 2, teamA: 1, teamB: 2, date: '2026-09-17' },
+            { id: 3, teamA: 2, teamB: 1, date: '2026-09-24' }
+        ]
+    }).data;
+
+    L.setManualSuspension(data, 1, 'Иванов А.', { matches: 1, from: 3 });
+
+    const bans = L.computeSuspensions(data).bans;
+
+    // Красная карточка и ручной пропуск дают записи на два разных матча
+    assert.deepEqual(Object.keys(bans), ['2', '3']);
+    assert.equal(bans['2'][0].reason, 'red');
+    assert.equal(bans['3'][0].reason, 'manual');
+
+    // Пропуск «с этого матча» без выбора начинается с ближайшего: оба пропуска
+    // приходятся на один матч, и у зрителя видно обе причины
+    L.setManualSuspension(data, 1, 'Иванов А.', { matches: 1 });
+
+    const same = L.computeSuspensions(data).bans['2'];
+
+    assert.deepEqual(same.map((entry) => entry.reason), ['red', 'manual']);
+
+    // Удалённый из заявки игрок пропускать не может: запись живёт, но в список не попадает
+    data.teams[0].players = [];
+    assert.deepEqual(L.manualSuspensions(data), []);
+
+    // Переименование игрока переносит пропуск на новое имя
+    data.teams[0].players = ['Иванов А.', 'Иванов Алексей'];
+    L.renameManualSuspension(data, 1, 'Иванов А.', 'Иванов Алексей');
+
+    assert.equal(L.hasManualSuspension(data, 1, 'Иванов А.'), false);
+    assert.equal(L.hasManualSuspension(data, 1, 'Иванов Алексей'), true);
+
+    // Удаление команды снимает пропуски всех её игроков
+    L.removeTeamManualSuspensions(data, 1);
+    assert.deepEqual(data.manualSuspensions, {});
+});
+
+test('ручной пропуск: проверка формы и нормализация записей', () => {
+    assert.equal(L.validateManualSuspension({ teamId: '', player: 'Иванов А.', matches: 1 }).ok, false);
+    assert.match(L.validateManualSuspension({ teamId: 1, player: '', matches: 1 }).error, /Выберите игрока/);
+    assert.match(L.validateManualSuspension({ teamId: 1, player: 'Иванов А.', matches: 0 }).error,
+        /от 1 до 10/);
+    assert.match(L.validateManualSuspension({ teamId: 1, player: 'Иванов А.', matches: 11 }).error,
+        /от 1 до 10/);
+    assert.match(L.validateManualSuspension({
+        teamId: 1, player: 'Иванов А.', matches: 1, reason: 'я'.repeat(L.CONFIG.maxManualBanReasonLength + 1)
+    }).error, /не длиннее/);
+
+    const ok = L.validateManualSuspension({ teamId: '1', player: ' Иванов А. ', matches: '2', reason: ' лига ' });
+
+    assert.equal(ok.ok, true);
+    assert.deepEqual(ok.value, { teamId: 1, player: 'Иванов А.', matches: 2, reason: 'лига', from: '' });
+
+    // Записи чужих игроков, нулевые и битые значения отбрасываются при загрузке
+    const result = L.normalizeData({
+        teams: [{ id: 1, name: 'Спартак', players: ['Иванов А.'] }],
+        matches: [],
+        manualSuspensions: {
+            '1|иванов а.': { matches: 2, reason: 'лига', from: '' },
+            '1|петров п.': { matches: 1 },
+            '1|иванов а.2': { matches: 0 },
+            '2|иванов а.': { matches: 1 }
+        }
+    });
+
+    assert.deepEqual(Object.keys(result.data.manualSuspensions), ['1|иванов а.']);
+    assert.equal(result.repaired, true, 'мусор в ручных пропусках считается исправлением');
+    assert.equal(L.normalizeData({ teams: [{ id: 1, name: 'A', players: [] }], matches: [] }).repaired, false,
+        'отсутствие карты ручных пропусков — не исправление');
+});
+
 test('лучшие бомбардиры: сортировка по голам, при равенстве — по имени', () => {
     const data = {
         teams: [
