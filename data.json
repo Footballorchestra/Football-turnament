@@ -1,7 +1,7 @@
 {
   "version": 15,
-  "revision": 689,
-  "updatedAt": "2026-11-13T02:22:47.985Z",
+  "revision": 704,
+  "updatedAt": "2026-11-17T17:17:49.680Z",
   "teams": [
     {
       "id": 1,
@@ -1131,26 +1131,6 @@
       "events": [
         {
           "team": 8,
-          "player": "Кадыгроб Максим",
-          "type": "goal"
-        },
-        {
-          "team": 8,
-          "player": "Кадыгроб Максим",
-          "type": "goal"
-        },
-        {
-          "team": 8,
-          "player": "Кадыгроб Максим",
-          "type": "goal"
-        },
-        {
-          "team": 8,
-          "player": "Кадыгроб Максим",
-          "type": "goal"
-        },
-        {
-          "team": 8,
           "player": "Иванов Святослав",
           "type": "goal"
         },
@@ -1177,6 +1157,26 @@
         {
           "team": 6,
           "player": "Светлов Владислав",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Заморов Артемий",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Заморов Артемий",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Заморов Артемий",
+          "type": "goal"
+        },
+        {
+          "team": 8,
+          "player": "Заморов Артемий",
           "type": "goal"
         }
       ]
