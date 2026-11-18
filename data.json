@@ -1,7 +1,7 @@
 {
   "version": 15,
-  "revision": 710,
-  "updatedAt": "2026-11-18T20:48:45.883Z",
+  "revision": 712,
+  "updatedAt": "2026-11-18T20:56:21.405Z",
   "teams": [
     {
       "id": 1,
@@ -1186,19 +1186,32 @@
       "id": 24,
       "teamA": 2,
       "teamB": 5,
+      "scoreA": null,
+      "scoreB": null,
       "date": "2026-11-25",
       "time": "22:30",
       "referee": "",
-      "scoreA": null,
-      "scoreB": null,
-      "finished": false
+      "finished": false,
+      "events": []
     },
     {
       "id": 25,
       "teamA": 4,
       "teamB": 6,
+      "scoreA": null,
+      "scoreB": null,
       "date": "2026-11-20",
       "time": "22:00",
+      "referee": "",
+      "finished": false,
+      "events": []
+    },
+    {
+      "id": 26,
+      "teamA": 7,
+      "teamB": 3,
+      "date": "2026-11-25",
+      "time": "",
       "referee": "",
       "scoreA": null,
       "scoreB": null,
@@ -1482,6 +1495,14 @@
       "from": "",
       "reason": "Решение оргомитета",
       "createdAt": "2026-11-18T20:43:24.699Z"
+    },
+    "3|матвеев кирилл": {
+      "team": 3,
+      "player": "Матвеев Кирилл",
+      "matches": 1,
+      "from": "",
+      "reason": "Красная картока",
+      "createdAt": "2026-11-18T20:54:38.860Z"
     }
   },
   "settings": {
