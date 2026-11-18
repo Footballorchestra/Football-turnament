@@ -1,7 +1,7 @@
 {
   "version": 15,
-  "revision": 712,
-  "updatedAt": "2026-11-18T20:56:21.405Z",
+  "revision": 714,
+  "updatedAt": "2026-11-18T21:32:42.692Z",
   "teams": [
     {
       "id": 1,
@@ -97,7 +97,8 @@
         "Шевцов Игорь",
         "Зимин Михаил",
         "Гервассиев Глеб",
-        "Железняков Лев"
+        "Железняков Лев",
+        "Южаков Григорий"
       ]
     },
     {
@@ -1210,12 +1211,13 @@
       "id": 26,
       "teamA": 7,
       "teamB": 3,
+      "scoreA": null,
+      "scoreB": null,
       "date": "2026-11-25",
       "time": "",
       "referee": "",
-      "scoreA": null,
-      "scoreB": null,
-      "finished": false
+      "finished": false,
+      "events": []
     }
   ],
   "photos": {
@@ -1324,7 +1326,8 @@
     "7|капреллянц иаков": "assets/photos/kaprellyants-iakov-fd9a8b.jpg",
     "4|станкевич артем": "assets/photos/stankevich-artem-343f00.jpg",
     "8|ахметкиреев айдар": "assets/photos/akhmetkireev-aidar-089816.jpg",
-    "4|волошко константин": "assets/photos/voloshko-konstantin-2fd218.jpg"
+    "4|волошко константин": "assets/photos/voloshko-konstantin-2fd218.jpg",
+    "5|южаков григорий": "assets/photos/yuzhakov-grigorii-6da4c1.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
