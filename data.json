@@ -1,7 +1,7 @@
 {
   "version": 15,
-  "revision": 708,
-  "updatedAt": "2026-11-18T20:43:24.699Z",
+  "revision": 710,
+  "updatedAt": "2026-11-18T20:48:45.883Z",
   "teams": [
     {
       "id": 1,
@@ -1181,6 +1181,28 @@
           "type": "goal"
         }
       ]
+    },
+    {
+      "id": 24,
+      "teamA": 2,
+      "teamB": 5,
+      "date": "2026-11-25",
+      "time": "22:30",
+      "referee": "",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
+    },
+    {
+      "id": 25,
+      "teamA": 4,
+      "teamB": 6,
+      "date": "2026-11-20",
+      "time": "22:00",
+      "referee": "",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
     }
   ],
   "photos": {
