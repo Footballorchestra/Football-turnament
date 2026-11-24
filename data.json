@@ -1,7 +1,7 @@
 {
   "version": 15,
-  "revision": 754,
-  "updatedAt": "2026-11-24T11:50:06.073Z",
+  "revision": 758,
+  "updatedAt": "2026-11-24T11:51:39.043Z",
   "teams": [
     {
       "id": 1,
@@ -1244,6 +1244,21 @@
         {
           "team": 4,
           "player": "Файзулин Арсений",
+          "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Гамазов Владимир",
+          "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Гамазов Владимир",
+          "type": "goal"
+        },
+        {
+          "team": 6,
+          "player": "Мусин Дмитрий",
           "type": "goal"
         }
       ]
