@@ -1,7 +1,7 @@
 {
   "version": 15,
-  "revision": 726,
-  "updatedAt": "2026-11-21T14:42:30.667Z",
+  "revision": 754,
+  "updatedAt": "2026-11-24T11:50:06.073Z",
   "teams": [
     {
       "id": 1,
@@ -106,20 +106,20 @@
       "name": "ЦВО МО РФ",
       "players": [
         "Кора Степан",
-        "Анненков Никон",
-        "Бабичев Владилен",
+        "Гамазов Владимир",
+        "Гамазов Василий",
         "Башмет Грант",
         "Винник Андрей",
-        "Дроманов Тимофей",
+        "Томилин Денис",
         "Аитбаев Ирек",
         "Корнилов Глеб",
-        "Кузнецов Иван",
+        "Гуров Даниил",
         "Кубышкин Дмитрий",
-        "Мелкумов Александр",
+        "Мусин Дмитрий",
         "Брусанов Тимофей",
-        "Попов Евгений",
+        "Пиляев Никита",
         "Светлов Владислав",
-        "Федоров Артемий"
+        "Середин Александр"
       ]
     },
     {
@@ -1245,21 +1245,6 @@
           "team": 4,
           "player": "Файзулин Арсений",
           "type": "goal"
-        },
-        {
-          "team": 6,
-          "player": "Кора Степан",
-          "type": "goal"
-        },
-        {
-          "team": 6,
-          "player": "Кора Степан",
-          "type": "goal"
-        },
-        {
-          "team": 6,
-          "player": "Кора Степан",
-          "type": "goal"
         }
       ]
     },
@@ -1329,17 +1314,7 @@
     "6|башмет грант": "assets/photos/bashmet-grant-38e8cf.jpg",
     "6|аитбаев ирек": "assets/photos/aitbaev-irek-4451d5.jpg",
     "6|кубышкин дмитрий": "assets/photos/kubyshkin-dmitrii-82b2f6.jpg",
-    "6|попов евгений": "assets/photos/popov-evgenii-62acf5.jpg",
-    "6|анненков никон": "assets/photos/annenkov-nikon-043850.jpg",
-    "6|винник андрей": "assets/photos/vinnik-andrei-3c8677.jpg",
-    "6|корнилов глеб": "assets/photos/kornilov-gleb-5c5dda.jpg",
-    "6|мелкумов александр": "assets/photos/melkumov-aleksandr-403a69.jpg",
     "6|светлов владислав": "assets/photos/svetlov-vladislav-498c2f.jpg",
-    "6|бабичев владилен": "assets/photos/babichev-vladilen-6510df.jpg",
-    "6|дроманов тимофей": "assets/photos/dromanov-timofei-db9527.jpg",
-    "6|кузнецов иван": "assets/photos/kuznetsov-ivan-07337f.jpg",
-    "6|федоров артемий": "assets/photos/fedorov-artemii-3ca56e.jpg",
-    "4|саитов ринат": "assets/photos/saitov-rinat-67c875.jpg",
     "4|баймулдин аким": "assets/photos/baimuldin-akim-2a4a38.jpg",
     "4|жуков влад": "assets/photos/zhukov-vlad-03b07e.jpg",
     "4|лазарев алексей": "assets/photos/lazarev-aleksei-a103d3.jpg",
@@ -1383,7 +1358,18 @@
     "4|станкевич артем": "assets/photos/stankevich-artem-343f00.jpg",
     "8|ахметкиреев айдар": "assets/photos/akhmetkireev-aidar-089816.jpg",
     "4|волошко константин": "assets/photos/voloshko-konstantin-2fd218.jpg",
-    "5|южаков григорий": "assets/photos/yuzhakov-grigorii-6da4c1.jpg"
+    "5|южаков григорий": "assets/photos/yuzhakov-grigorii-6da4c1.jpg",
+    "6|гамазов владимир": "assets/photos/gamazov-vladimir-d1e768.jpg",
+    "6|гамазов василий": "assets/photos/gamazov-vasilii-baa63f.jpg",
+    "6|брусанов тимофей": "assets/photos/brusanov-timofei-3ea8b6.jpg",
+    "6|томилин денис": "assets/photos/tomilin-denis-7ebd3b.jpg",
+    "6|гуров даниил": "assets/photos/gurov-daniil-f8d06e.jpg",
+    "6|мусин дмитрий": "assets/photos/musin-dmitrii-128516.jpg",
+    "6|пиляев никита": "assets/photos/pilyaev-nikita-7713ff.jpg",
+    "6|винник андрей": "assets/photos/vinnik-andrei-3c8677.jpg",
+    "6|корнилов глеб": "assets/photos/kornilov-gleb-5c5dda.jpg",
+    "6|середин александр": "assets/photos/seredin-aleksandr-d37de6.jpg",
+    "4|саитов ринат": "assets/photos/saitov-rinat-67c875.jpg"
   },
   "teamPhotos": {
     "1": "assets/photos/team-veterany-mgk-7745ca.jpg",
@@ -1517,10 +1503,6 @@
       "note": "",
       "number": 13
     },
-    "4|саитов ринат": {
-      "note": "",
-      "number": 1
-    },
     "4|бахарев клим": {
       "note": "",
       "number": 3
@@ -1544,6 +1526,10 @@
     "4|демин андрей": {
       "note": "",
       "number": 21
+    },
+    "4|саитов ринат": {
+      "note": "",
+      "number": 1
     }
   },
   "manualSuspensions": {
