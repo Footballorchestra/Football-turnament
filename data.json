@@ -1,7 +1,7 @@
 {
   "version": 15,
-  "revision": 758,
-  "updatedAt": "2026-11-24T11:51:39.043Z",
+  "revision": 759,
+  "updatedAt": "2026-11-25T11:44:34.332Z",
   "teams": [
     {
       "id": 1,
@@ -1274,6 +1274,17 @@
       "referee": "",
       "finished": false,
       "events": []
+    },
+    {
+      "id": 27,
+      "teamA": 8,
+      "teamB": 1,
+      "date": "2026-11-26",
+      "time": "22:30",
+      "referee": "Александр Кемпо",
+      "scoreA": null,
+      "scoreB": null,
+      "finished": false
     }
   ],
   "photos": {
