@@ -1200,6 +1200,12 @@ test('ручной пропуск: складывается с карточка�
 
     assert.deepEqual(same.map((entry) => entry.reason), ['red', 'manual']);
 
+    const combined = L.matchSuspensions(data, 2);
+    assert.equal(combined.length, 1, 'игрок в общем списке матча указан один раз');
+    assert.equal(combined[0].reason, 'manual', 'ручной пропуск можно снять в админке');
+    assert.equal(combined[0].manualRest, 0);
+    assert.deepEqual(combined[0].reasons.map((entry) => entry.reason), ['red', 'manual']);
+
     // Удалённый из заявки игрок пропускать не может: запись живёт, но в список не попадает
     data.teams[0].players = [];
     assert.deepEqual(L.manualSuspensions(data), []);

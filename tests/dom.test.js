@@ -1377,6 +1377,40 @@ test('автогол: отмечается как гол, но мяч у нег�
     assert.match(app.id('player-card').textContent, /В турнире: голы — 1, автоголы — 1/);
 });
 
+test('дисциплина: общий список обеих команд без дублей сохраняет причины и экранирует их', () => {
+    const data = L.normalizeData({
+        teams: [
+            { id: 1, name: 'Спартак', players: ['Иванов А.'] },
+            { id: 2, name: 'Зенит', players: ['Иванов А.'] }
+        ],
+        matches: [
+            { id: 1, teamA: 1, teamB: 2, date: '2026-09-10', scoreA: 0, scoreB: 0,
+                events: [1, 2].map((team) => ({ team, player: 'Иванов А.', type: 'red' })) },
+            { id: 2, teamA: 1, teamB: 2, date: '2026-09-17' }
+        ]
+    }).data;
+    const reason = 'решение " onmouseover="alert(1)';
+    [1, 2].forEach((team) => L.setManualSuspension(data, team, 'Иванов А.', { matches: 1, reason }));
+    const app = boot({ seed: { [DATA_KEY]: JSON.stringify(data) } });
+    app.navigate('matches');
+    const card = app.id('matches-list').querySelector('.match-card[data-id="2"]');
+    assert.equal(card.querySelectorAll('.match-bans').length, 1);
+    const names = card.querySelectorAll('.ban-name');
+    assert.equal(names.length, 2, 'однофамильцы разных команд не объединяются');
+    for (const name of names) {
+        assert.match(name.title, /красная карточка/);
+        assert.ok(name.title.includes(reason), 'ручная причина сохранена как текст');
+        assert.equal(name.hasAttribute('onmouseover'), false, 'причина не создаёт HTML-атрибут');
+    }
+    app.login();
+    app.openMatch(2);
+    assert.equal(app.id('admin-match-bans').querySelectorAll('.admin-ban-item').length, 2);
+    app.click(app.button('match-ban-clear'));
+    assert.equal(app.id('admin-match-bans').querySelectorAll('.admin-ban-item').length, 2,
+        'после снятия ручного пропуска дисквалификация по карточке сохраняется');
+    assert.equal(Object.keys(app.storedData().manualSuspensions).length, 1);
+});
+
 test('дисциплина: лимит жёлтых карточек превращается в красную, игрок пропускает следующий матч', () => {
     const app = boot();
     app.login();

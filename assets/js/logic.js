@@ -3037,7 +3037,11 @@
         return { settings: settings, bans: bans };
     }
 
-    /** Игроки, которые пропускают указанный матч (пустой список — никто). */
+    /**
+     * Общий список пропускающих матч: одна запись на игрока команды.
+     * При нескольких основаниях reasons сохраняет их все; ручной пропуск
+     * остаётся основной записью, чтобы его можно было снять в админке.
+     */
     function matchSuspensions(data, matchId) {
         var id = toInt(matchId);
 
@@ -3045,7 +3049,24 @@
             return [];
         }
 
-        return computeSuspensions(data).bans[id] || [];
+        var entries = computeSuspensions(data).bans[id] || [];
+        var groups = new Map();
+
+        entries.forEach(function (entry) {
+            var key = entry.teamId + '|' + cleanText(entry.player, CONFIG.maxPlayerNameLength).toLowerCase();
+            var group = groups.get(key) || [];
+            group.push(entry);
+            groups.set(key, group);
+        });
+
+        return Array.from(groups.values()).map(function (group) {
+            if (group.length === 1) {
+                return group[0];
+            }
+
+            var primary = group.filter(function (entry) { return entry.reason === 'manual'; })[0] || group[0];
+            return Object.assign({}, primary, { reasons: group });
+        });
     }
 
     /**

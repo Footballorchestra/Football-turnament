@@ -2631,6 +2631,12 @@
      * Показывается подсказкой к имени игрока — так строка списка остаётся короткой.
      */
     function banReasonText(entry) {
+        if (entry.reasons) {
+            return entry.reasons.map(banReasonText).filter(function (reason, index, reasons) {
+                return reasons.indexOf(reason) === index;
+            }).join('; ');
+        }
+
         if (entry.reason === 'manual') {
             return 'Пропуск назначен вручную' + (entry.reasonNote ? ': ' + entry.reasonNote : '');
         }
