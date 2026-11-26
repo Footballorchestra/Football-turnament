@@ -1,7 +1,7 @@
 {
   "version": 15,
-  "revision": 770,
-  "updatedAt": "2026-11-26T12:11:20.965Z",
+  "revision": 777,
+  "updatedAt": "2026-11-26T21:59:41.940Z",
   "teams": [
     {
       "id": 1,
@@ -1325,13 +1325,39 @@
       "id": 27,
       "teamA": 8,
       "teamB": 1,
-      "scoreA": null,
-      "scoreB": null,
+      "scoreA": 1,
+      "scoreB": 2,
       "date": "2026-11-26",
       "time": "22:30",
       "referee": "Александр Кемпо",
-      "finished": false,
-      "events": []
+      "finished": true,
+      "events": [
+        {
+          "team": 8,
+          "player": "Шарифзода Дониер",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Желтов Александр",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Абдрахманов Олег",
+          "type": "goal"
+        },
+        {
+          "team": 1,
+          "player": "Желтов Александр",
+          "type": "yellow"
+        },
+        {
+          "team": 8,
+          "player": "Дживага Андрей",
+          "type": "yellow"
+        }
+      ]
     }
   ],
   "photos": {
