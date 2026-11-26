@@ -2170,13 +2170,15 @@ test('дисквалификации: жёлтые карточки превра
         return {
             badges: document.querySelectorAll('#admin-match-events .event-ban').length,
             badgeWidth: Math.round(box.width),
+            heading: document.querySelector('#admin-match-bans h3').textContent.trim(),
             bans: document.querySelector('#admin-match-bans').textContent.replace(/\s+/g, ' ').trim()
         };
     });
 
     assert.equal(adminMatch.badges, 1, 'значок «пропуск» только у дисквалифицированного игрока');
     assert.ok(adminMatch.badgeWidth > 0, 'значок виден: ' + adminMatch.badgeWidth + 'px');
-    assert.match(adminMatch.bans, /Пропустят матч по карточкам/);
+    assert.equal(adminMatch.heading, 'Пропустят матч');
+    assert.match(adminMatch.bans, /4-я жёлтая карточка, получена 08\.09\.2026/);
     assert.match(adminMatch.bans, /Шорохов Александр/);
 
     // 4. Настройки: правило из данных подставлено, сохранение пересчитывает дисквалификации

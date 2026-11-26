@@ -484,13 +484,18 @@ npm run serve          # http://127.0.0.1:8080
 
 ## Разработка и проверка
 
+Для dev-зависимостей нужен Node.js 22.22.2+ (ветка 22), 24.15.0+ (ветка 24) или 26+;
+рекомендуется Node.js 24 LTS. Эти требования задаёт jsdom; для опубликованного статического сайта
+Node.js не нужен. Уязвимые dev-зависимости обновлены в lock-файле без изменения стека и CSS.
+
 ```bash
 npm ci                 # dev-зависимости: tailwindcss, jsdom, puppeteer-core
 npm run build:css      # пересобрать assets/css/tailwind.css после правок классов
 npm run build:theme    # пересобрать assets/css/theme-afisha.css после правок второго стиля
 npm run watch:css      # то же в режиме наблюдения
-npm test               # 164 теста: логика, фото, синхронизация, интерфейс (jsdom)
+npm test               # 173 теста: логика, фото, синхронизация, интерфейс (jsdom)
 npm run test:browser   # 29 e2e-тестов в настоящем Chrome (включая публикацию, фото, заставку и оформление)
+npm audit              # проверка уязвимостей, включая dev-зависимости
 ```
 
 Chrome для браузерных тестов ищется в `CHROME_PATH`, кэше puppeteer (`PUPPETEER_CACHE_DIR`, затем обычные
