@@ -1,7 +1,7 @@
 {
   "version": 15,
-  "revision": 759,
-  "updatedAt": "2026-11-25T11:44:34.332Z",
+  "revision": 769,
+  "updatedAt": "2026-11-26T07:25:38.565Z",
   "teams": [
     {
       "id": 1,
@@ -1187,13 +1187,59 @@
       "id": 24,
       "teamA": 2,
       "teamB": 5,
-      "scoreA": null,
-      "scoreB": null,
+      "scoreA": 2,
+      "scoreB": 5,
       "date": "2026-11-25",
       "time": "22:30",
       "referee": "",
-      "finished": false,
-      "events": []
+      "finished": true,
+      "events": [
+        {
+          "team": 5,
+          "player": "Железняков Лев",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Железняков Лев",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Железняков Лев",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Зимин Михаил",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Зимин Михаил",
+          "type": "goal"
+        },
+        {
+          "team": 5,
+          "player": "Железняков Лев",
+          "type": "yellow"
+        },
+        {
+          "team": 2,
+          "player": "Зенин Константин",
+          "type": "yellow"
+        },
+        {
+          "team": 2,
+          "player": "Корявичев Сергей",
+          "type": "goal"
+        },
+        {
+          "team": 2,
+          "player": "Хамитов Тимур",
+          "type": "goal"
+        }
+      ]
     },
     {
       "id": 25,
@@ -1279,12 +1325,13 @@
       "id": 27,
       "teamA": 8,
       "teamB": 1,
+      "scoreA": null,
+      "scoreB": null,
       "date": "2026-11-26",
       "time": "22:30",
       "referee": "Александр Кемпо",
-      "scoreA": null,
-      "scoreB": null,
-      "finished": false
+      "finished": false,
+      "events": []
     }
   ],
   "photos": {
